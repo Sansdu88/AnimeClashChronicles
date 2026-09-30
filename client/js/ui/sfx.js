@@ -29,7 +29,8 @@ function tone(frequency, { start = 0, duration = 0.15, type = 'sine', gain = 0.1
   osc.stop(t + duration + 0.05);
 }
 
-function noise({ start = 0, duration = 0.3, gain = 0.2, from = 3000, to = 600 } = {}) {
+/** Filtered white noise. `swell`: the volume rises instead of falling (a reversed cymbal). */
+function noise({ start = 0, duration = 0.3, gain = 0.2, from = 3000, to = 600, swell = false } = {}) {
   const ctx = audio();
   const t = ctx.currentTime + start;
   const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * duration), ctx.sampleRate);
@@ -43,8 +44,8 @@ function noise({ start = 0, duration = 0.3, gain = 0.2, from = 3000, to = 600 } 
   filter.frequency.setValueAtTime(from, t);
   filter.frequency.exponentialRampToValueAtTime(to, t + duration);
   const volume = ctx.createGain();
-  volume.gain.setValueAtTime(gain, t);
-  volume.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+  volume.gain.setValueAtTime(swell ? 0.0001 : gain, t);
+  volume.gain.exponentialRampToValueAtTime(swell ? gain : 0.0001, t + duration);
   source.connect(filter).connect(volume).connect(ctx.destination);
   source.start(t);
 }
@@ -91,6 +92,17 @@ const SOUNDS = {
     noise({ duration: 1.1, gain: 0.35, from: 2500, to: 150 });
     arpeggio([523, 659, 784, 1047, 1319], { start: 0.35, duration: 0.5, type: 'square', gain: 0.04, step: 0.07 });
     [523, 659, 784, 1047].forEach((note) => tone(note, { start: 0.8, duration: 1.6, type: 'triangle', gain: 0.06 }));
+  },
+  // A Reversed card: two heartbeats, a reversed swell, then the world flips
+  // (deep impact, tape rewinding) and an eerie chord. The flip comes at 0.85 s.
+  reverse: () => {
+    tone(55, { duration: 0.18, type: 'sine', gain: 0.5, slideTo: 40 });
+    tone(55, { start: 0.28, duration: 0.22, type: 'sine', gain: 0.55, slideTo: 38 });
+    noise({ start: 0.35, duration: 0.5, gain: 0.22, from: 600, to: 9000, swell: true });
+    tone(45, { start: 0.85, duration: 1.4, type: 'sine', gain: 0.55, slideTo: 25 });
+    noise({ start: 0.85, duration: 0.9, gain: 0.3, from: 3000, to: 200 });
+    tone(1400, { start: 0.9, duration: 0.9, type: 'sawtooth', gain: 0.035, slideTo: 90 });
+    [311, 370, 466, 554].forEach((note, i) => tone(note, { start: 1.1 + i * 0.05, duration: 2.6, type: 'triangle', gain: 0.05 }));
   },
   fanfare: () => {
     arpeggio([392, 523, 659, 784], { duration: 0.22, type: 'square', gain: 0.045, step: 0.11 });

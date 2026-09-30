@@ -114,6 +114,50 @@ export function onomatopoeia(text, { x, y, color = '#fff', size = 'l', tilt = -8
   setTimeout(() => element.remove(), 1300);
 }
 
+let reversing = false;
+
+/**
+ * "REVERSE" (Reversed cards only): the whole screen turns negative for a few
+ * seconds, under a giant title whose letters start mirrored and flip back.
+ * With reduced motion, only the title is shown. Does nothing if already running.
+ */
+export function reverseWorld({ title, subtitle, duration = 4600 }) {
+  if (reversing) return;
+  reversing = true;
+  const still = prefersReducedMotion();
+  const layers = [];
+  if (!still) {
+    const overlay = document.createElement('div');
+    overlay.className = 'fx-reverse';
+    overlay.style.setProperty('--duration', `${duration}ms`);
+    layers.push(overlay);
+  }
+  const banner = document.createElement('div');
+  banner.className = `fx-reverse-title${still ? ' is-still' : ''}`;
+  banner.style.setProperty('--duration', `${duration}ms`);
+  const word = document.createElement('span');
+  word.className = 'fx-reverse-title__word';
+  [...title].forEach((letter, i) => {
+    const span = document.createElement('span');
+    span.textContent = letter;
+    span.style.setProperty('--i', i);
+    word.append(span);
+  });
+  const sub = document.createElement('span');
+  sub.className = 'fx-reverse-title__sub';
+  sub.textContent = subtitle;
+  banner.append(word, sub);
+  layers.push(banner);
+  for (const layer of layers) {
+    layer.setAttribute('aria-hidden', 'true');
+    document.body.append(layer);
+  }
+  setTimeout(() => {
+    for (const layer of layers) layer.remove();
+    reversing = false;
+  }, duration);
+}
+
 /** Shakes the booster stage (shaking <body> would break its fixed positioning). */
 export function shakeScreen(target = document.querySelector('.stage__content')) {
   if (!target || prefersReducedMotion()) return;
