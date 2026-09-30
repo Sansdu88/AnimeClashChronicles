@@ -1,0 +1,16 @@
+{
+  "name": "anime-clash-chronicles",
+  "version": "1.0.0",
+  "description": "Manga-style trading card booster game: open infinite 5-card boosters of anime cards built from Wikipedia (REST API + web UI, zero dependencies).",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "sync": "node scripts/sync-wikipedia.js"
+  },
+  "license": "MIT"
+}
