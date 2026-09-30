@@ -49,8 +49,8 @@ function noise({ start = 0, duration = 0.3, gain = 0.2, from = 3000, to = 600 } 
   source.start(t);
 }
 
-const arpeggio = (notes, { step = 0.08, ...options } = {}) =>
-  notes.forEach((note, i) => tone(note, { start: i * step, ...options }));
+const arpeggio = (notes, { step = 0.08, start = 0, ...options } = {}) =>
+  notes.forEach((note, i) => tone(note, { start: start + i * step, ...options }));
 
 const SOUNDS = {
   click: () => tone(1400, { duration: 0.04, type: 'square', gain: 0.025 }),
@@ -79,6 +79,22 @@ const SOUNDS = {
     arpeggio([1568, 1319, 1047, 784, 659, 523], { duration: 0.55, type: 'square', gain: 0.045, step: 0.09 });
     [392, 494, 587].forEach((note) => tone(note, { start: 0.6, duration: 1.4, type: 'triangle', gain: 0.07 }));
     noise({ start: 0.5, duration: 1.2, gain: 0.06, from: 5000, to: 9000 });
+  },
+  // ×10 show
+  whoosh: () => noise({ duration: 0.35, gain: 0.12, from: 400, to: 5000 }),
+  crack: () => {
+    noise({ duration: 0.18, gain: 0.3, from: 7000, to: 1500 });
+    tone(110, { duration: 0.3, type: 'sine', gain: 0.3, slideTo: 50 });
+  },
+  boom: () => {
+    tone(70, { duration: 1.2, type: 'sine', gain: 0.5, slideTo: 28 });
+    noise({ duration: 1.1, gain: 0.35, from: 2500, to: 150 });
+    arpeggio([523, 659, 784, 1047, 1319], { start: 0.35, duration: 0.5, type: 'square', gain: 0.04, step: 0.07 });
+    [523, 659, 784, 1047].forEach((note) => tone(note, { start: 0.8, duration: 1.6, type: 'triangle', gain: 0.06 }));
+  },
+  fanfare: () => {
+    arpeggio([392, 523, 659, 784], { duration: 0.22, type: 'square', gain: 0.045, step: 0.11 });
+    [523, 659, 784, 1047].forEach((note) => tone(note, { start: 0.48, duration: 1, type: 'triangle', gain: 0.07 }));
   },
 };
 
