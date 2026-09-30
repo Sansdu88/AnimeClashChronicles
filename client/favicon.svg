@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <polygon fill="#ffd23f" stroke="#141414" stroke-width="3" stroke-linejoin="round"
+    points="32,2 39,18 56,10 48,27 62,34 46,40 52,58 35,48 26,62 23,45 5,50 15,35 2,24 20,21 14,5 29,15"/>
+  <rect x="21" y="17" width="22" height="30" rx="3" fill="#e63946" stroke="#141414" stroke-width="3" transform="rotate(-8 32 32)"/>
+  <text x="32" y="39" font-family="Impact, Arial Black, sans-serif" font-size="17" fill="#fff" text-anchor="middle" transform="rotate(-8 32 32)">A</text>
+</svg>
