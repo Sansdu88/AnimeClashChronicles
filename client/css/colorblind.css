@@ -1,0 +1,103 @@
+/* ==========================================================================
+   Colorblind mode (👁 button in the header, off by default).
+   Rarity colors switch to a palette that stays distinct with every kind of
+   color blindness (Okabe–Ito), and every rarity also gets a symbol, like in
+   card games: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR.
+   ========================================================================== */
+
+.r-N { --rsym: '●'; }
+.r-R { --rsym: '◆'; }
+.r-SR { --rsym: '★'; }
+.r-SSR { --rsym: '★★'; }
+.r-UR { --rsym: '★★★'; }
+
+/* Face-down cards in a booster: only rare ones give a hint (like their glow). */
+.flip[data-rarity='SR'] { --rsym: '★'; }
+.flip[data-rarity='SSR'] { --rsym: '★★'; }
+.flip[data-rarity='UR'] { --rsym: '★★★'; }
+
+.cb-mode {
+  --r-N: #8c8c8c;
+  --r-R: #0072b2;
+  --r-SR: #d55e00;
+  --r-SSR: #f0e442;
+  --r-UR: #cc79a7;
+}
+
+/* ── Symbols next to every rarity label ─────────────────────────────────── */
+
+.cb-mode :is(.card__rarity, .rarity-badge, .tally-chip, .locked__rarity, .tag--rarity, .rarity-text)::after,
+.cb-mode .mini-chip b::after {
+  content: '\00a0' var(--rsym);
+}
+
+/* Label and symbol on one line (the badge is a grid box otherwise). */
+.cb-mode .rarity-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.cb-mode .rarity-bars li {
+  grid-template-columns: 78px 1fr 52px;
+}
+
+.cb-mode .luck__row {
+  grid-template-columns: 82px 1fr 128px;
+}
+
+.cb-mode .flip:not(.is-flipped) .flip__back::after {
+  content: var(--rsym, none);
+  position: absolute;
+  top: 4%;
+  right: 6%;
+  z-index: 2;
+  padding: 0.1em 0.5em;
+  font-size: clamp(13px, 1.6vw, 22px);
+  line-height: 1.3;
+  color: #fff;
+  background: #000;
+  border: 2px solid #fff;
+  border-radius: 99px;
+}
+
+/* ── Card frames in the colorblind palette ──────────────────────────────── */
+
+.cb-mode .card.r-N {
+  --foil: linear-gradient(135deg, #e3e3e3, #8c8c8c 45%, #f0f0f0 70%, #6e6e6e);
+}
+
+.cb-mode .card.r-R {
+  --foil: linear-gradient(135deg, #8cc4ea, #0072b2 45%, #bfdcf2 70%, #004f7c);
+}
+
+.cb-mode .card.r-SR {
+  --foil: linear-gradient(135deg, #f7b98f, #d55e00 40%, #f3a46b 60%, #9c4500);
+}
+
+.cb-mode .card.r-SSR {
+  --foil: linear-gradient(135deg, #fffbd0, #f0e442 35%, #fff59a 55%, #c9b800 80%, #fffbd0);
+  filter: drop-shadow(0 0 5px rgba(240, 228, 66, 0.75));
+}
+
+.cb-mode .flip[data-rarity='SR']:not(.is-flipped) .card-back__rays {
+  box-shadow: 0 0 0 0.7cqw var(--ink), 0 0 18px 5px rgba(213, 94, 0, 0.9);
+}
+
+/* ── Messages: an icon as well as a color ───────────────────────────────── */
+
+.cb-mode .toast--success::before {
+  content: '✔ ';
+}
+
+.cb-mode .toast--error::before {
+  content: '✖ ';
+}
+
+/* ── The header button ──────────────────────────────────────────────────── */
+
+.icon-btn--toggle[aria-pressed='true'] {
+  background: var(--yellow);
+  box-shadow: inset 0 0 0 2px var(--ink), 2px 2px 0 var(--ink);
+}
