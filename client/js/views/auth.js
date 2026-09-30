@@ -1,6 +1,5 @@
 /** Log in / create account screen, shown while no one is logged in. */
 import { $, html, mount } from '../dom.js';
-import { isLocalMode } from '../api.js';
 import { errorText, t } from '../i18n.js';
 import { byRarity, hasLegacyPlayer, login, register, state } from '../state.js';
 import { cardHTML } from '../components/card.js';
@@ -52,9 +51,7 @@ export function renderAuth(main, { onSuccess }) {
               </span>
               ${!isLogin && html`<span class="field__hint">${t('auth.passwordHint')}</span>`}
             </label>
-            ${!isLogin && hasLegacyPlayer() && html`<p class="auth__legacy">🎁 ${t('auth.legacy')}</p>`}
-            ${isLocalMode() && html`<p class="auth__legacy">💾 ${t('auth.localNote')}</p>`}
-            <p class="form-error" role="alert"></p>
+            ${!isLogin && hasLegacyPlayer() && html`<p class="auth__legacy">🎁 ${t('auth.legacy')}</p>`}            <p class="form-error" role="alert"></p>
             <button class="btn btn--primary btn--big auth__submit" type="submit">
               ${isLogin ? t('auth.submitLogin') : t('auth.submitRegister')}
             </button>

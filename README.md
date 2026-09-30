@@ -21,20 +21,18 @@ project has no dependencies).
 
 - Requirement: **Node.js 22.13 or newer** (developed with Node 24).
 - If port 3000 is busy, the server uses the next free port and prints the address.
-- Stop with `Ctrl+C`. Your progress is saved in `storage/anime-clash-chronicles.db`.
+- It needs a Supabase database, set in `.env` (see [Database: Supabase](#database-supabase)).
+- Stop with `Ctrl+C`. Your progress is saved in the database.
 - Card pictures load from Wikimedia, so you need an internet connection to see them.
 
 ## Play online
 
-The game is also published on **GitHub Pages**: https://sansdu88.github.io/AnimeClashChronicles/
+The game is hosted on **Render**: https://anime-clash-chronicles.onrender.com
 
-GitHub Pages only hosts static files, so the online version runs without the Node.js server:
-the game logic runs in the browser ([client/js/local-api.js](client/js/local-api.js)) and your
-account and cards are saved in your browser only (so friends can only be added between
-accounts created in the same browser). `npm run build:pages` builds this version in
-`dist/`, and [.github/workflows/pages.yml](.github/workflows/pages.yml) deploys it at every push
-on `main`. The build reads the cards from Supabase: add `SUPABASE_URL` and
-`SUPABASE_PUBLISHABLE_KEY` as repository secrets (**Settings → Secrets and variables → Actions**).
+[render.yaml](render.yaml) describes the service (Render dashboard → New → Blueprint). Render
+redeploys it at every push on `main`; `SUPABASE_URL` and `SUPABASE_SECRET_KEY` are set in the
+Render dashboard, never in the repository. The free plan sleeps when unused, so the first visit
+can take a minute.
 
 ## What's inside
 
@@ -109,17 +107,16 @@ To set it up (once):
 1. In the Supabase dashboard, open **SQL Editor → New query**, paste
    [supabase/schema.sql](supabase/schema.sql) and click **Run** (it creates the tables and the
    booster sets; it can be run again safely, for example after an update).
-2. Copy `.env.example` to `.env` and fill in your project URL and keys
+2. Copy `.env.example` to `.env` and fill in your project URL and secret key
    (**Project Settings → API Keys**). `.env` is in `.gitignore`: it is never committed.
-3. Fill the cards: `npm run sync` (from Wikipedia), or `npm run db:import` to copy a
-   `data/cards.json` file made by an older version. `npm run db:import -- --sql` writes
-   `supabase/seed-cards.sql` instead, to paste in the SQL Editor.
+3. Fill the cards: `npm run sync` (from Wikipedia), or `npm run db:import -- cards.json` to
+   copy a catalog JSON file made by an older version (`--sql` writes `supabase/seed-cards.sql`
+   instead, to paste in the SQL Editor).
 4. `npm start` — the startup message shows `Database: Supabase (…)`.
 
 Only the server uses the database, with the **secret** key (it never reaches the browser).
-Row Level Security is enabled on every table. The card catalog is public and read-only (the
-publishable key can read it, used by the GitHub Pages build); nothing else is readable with
-the publishable key.
+Row Level Security is enabled on every table: the public (publishable) key can only read the
+card catalog, nothing else.
 
 ## Score and rankings
 

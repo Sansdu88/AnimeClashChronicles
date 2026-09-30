@@ -24,7 +24,7 @@ function splitParagraph(text) {
 }
 
 /** Splits a text into sentences; a paragraph break always ends a sentence. */
-export function splitSentences(text) {
+function splitSentences(text) {
   return String(text ?? '')
     .split(/\n+/)
     .flatMap((paragraph) => splitParagraph(paragraph.trim()));
@@ -41,7 +41,7 @@ export function truncate(text, max) {
 const DROPPED_PARENTHESES =
   /[぀-ヿ㐀-鿿＀-￯]|Japanese|Hepburn|styli[sz]ed|romani[sz]ed|\blit\.|abbreviated|also known|known in Japan|short for|Korean|Chinese|pronounced|\b(?:French|Spanish|Italian|German|Portuguese):|japonais|littéralement|r[ōo]maji|abrégé|anglais\s*:|coréen/i;
 
-export function removeParentheticals(text) {
+function removeParentheticals(text) {
   let out = '';
   let group = '';
   let depth = 0;
@@ -66,7 +66,7 @@ export function removeParentheticals(text) {
 }
 
 /** Intro paragraphs without the Japanese spelling parentheses. */
-export function cleanParagraphs(extract) {
+function cleanParagraphs(extract) {
   return String(extract ?? '')
     .split(/\n+/)
     .map((paragraph) =>

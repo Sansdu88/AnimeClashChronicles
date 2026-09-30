@@ -8,7 +8,7 @@ import { HttpError } from './http.js';
 
 const scrypt = promisify(scryptCallback);
 
-export const SESSION_COOKIE = 'mb_session';
+const SESSION_COOKIE = 'mb_session';
 export const SESSION_DAYS = 30;
 const SCRYPT = { N: 16384, r: 8, p: 1, keyLength: 64 };
 

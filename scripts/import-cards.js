@@ -2,9 +2,8 @@
 /**
  * npm run db:import — copies a card catalog JSON file into Supabase.
  *
- *   npm run db:import                         sends data/cards.json to Supabase (needs .env)
- *   npm run db:import -- other.json           sends another file
- *   npm run db:import -- --sql                writes supabase/seed-cards.sql instead, to paste
+ *   npm run db:import -- cards.json           sends the file to Supabase (needs .env)
+ *   npm run db:import -- cards.json --sql     writes supabase/seed-cards.sql instead, to paste
  *                                             in the Supabase SQL Editor (no .env needed)
  *
  * The file has the format written by the old `npm run sync`:
@@ -20,7 +19,8 @@ import { openStore } from './supabase-env.js';
 const args = process.argv.slice(2);
 const asSql = args.includes('--sql');
 const file = args.find((arg) => !arg.startsWith('--'));
-const inputFile = file ? resolve(file) : new URL('../data/cards.json', import.meta.url);
+if (!file) throw new Error('Usage: npm run db:import -- <cards.json> [--sql]');
+const inputFile = resolve(file);
 const SQL_FILE = new URL('../supabase/seed-cards.sql', import.meta.url);
 
 const { generatedAt = null, popularity = null, license = null, cards } = JSON.parse(readFileSync(inputFile, 'utf8'));

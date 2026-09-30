@@ -26,12 +26,12 @@ const NAME_MAX_LENGTH = 24;
 const ADJECTIVES = ['Brave', 'Sleepy', 'Mighty', 'Shy', 'Lucky', 'Swift', 'Silent', 'Wild', 'Clever', 'Fierce', 'Cosmic', 'Golden', 'Crimson', 'Tiny'];
 const NOUNS = ['Ronin', 'Shinobi', 'Mangaka', 'Kitsune', 'Senpai', 'Samurai', 'Tanuki', 'Pilot', 'Otaku', 'Oni', 'Idol', 'Ninja', 'Kaiju', 'Hero'];
 
-export function randomPlayerName(rng = Math.random) {
+function randomPlayerName(rng = Math.random) {
   const pick = (list) => list[Math.floor(rng() * list.length)];
   return `${pick(ADJECTIVES)} ${pick(NOUNS)} ${100 + Math.floor(rng() * 900)}`;
 }
 
-export function cleanPlayerName(value) {
+function cleanPlayerName(value) {
   if (typeof value !== 'string') throw new HttpError(400, 'The name must be a string', null, 'invalid_name');
   const name = value.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim();
   if (name.length === 0 || [...name].length > NAME_MAX_LENGTH) {
