@@ -74,7 +74,6 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   const publicSet = (set) => ({
     id: set.id,
     name: set.name,
-    jp: set.jp,
     tagline: set.tagline,
     era: set.era,
     colors: set.colors,
@@ -304,7 +303,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
         (!type || card.type === type) &&
         (!era || card.era === era) &&
         (!search ||
-          `${card.name} ${card.nameJa ?? ''} ${card.description} ${card.fr?.name ?? ''}`.toLowerCase().includes(search)),
+          `${card.name} ${card.description} ${card.fr?.name ?? ''}`.toLowerCase().includes(search)),
     );
     return { total: cards.length, cards: [...cards].sort(SORTS[sort]) };
   });

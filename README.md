@@ -1,4 +1,4 @@
-# Anime Clash Chronicles · アニメ・クラッシュ・クロニクル
+# Anime Clash Chronicles
 
 A manga-style trading card game in the browser: open **a booster of 5 anime cards every 2 minutes**,
 Pokémon-TCG style. There are **about 1,000 cards**, one per anime or manga, each built from its
@@ -39,8 +39,8 @@ can take a minute.
 | | |
 |---|---|
 | **Boosters** | 4 boosters: *All-Stars* (every card) and one per Japanese era: *Shōwa* (before 1989), *Heisei* (1989–2018), *Reiwa* (2019+). One booster every 2 minutes: the server enforces the wait and the page shows a countdown. |
-| **Opening** | Shake and tear the pack, then flip 5 face-down cards. Rare cards glow before you flip them, and SSR/UR/REV reveals trigger manga effects (ゴゴゴ, ドーン!!, 反転!!), confetti and sounds (synthesized, can be muted). |
-| **Cards** | Picture, Japanese title, type (Action, Mecha, Romance…), year, power level, and a one-sentence summary from Wikipedia. SSR, UR and REV are full-art cards with a holographic effect that follows your mouse; REV (Reversed) cards have inverted colors. |
+| **Opening** | Shake and tear the pack, then flip 5 face-down cards. Rare cards glow before you flip them, and SSR/UR/REV reveals trigger manga effects (RUMBLE, BOOM!!, REVERSE!!), confetti and sounds (synthesized, can be muted). |
+| **Cards** | Picture, type (Action, Mecha, Romance…), year, power level, and a one-sentence summary from Wikipedia. SSR, UR and REV are full-art cards with a holographic effect that follows your mouse; REV (Reversed) cards have inverted colors. |
 | **Collection** | A pokédex-style grid: missing cards show up as `???`. Filters, sorting, and completion per rarity. Click a card for its full Wikipedia summary. |
 | **Friends** | Every player has a friend code (e.g. `#K7Q2XM`). Send friend requests by code or e-mail, accept or decline them, look at your friends' collections, and compete in the friends ranking. |
 | **Trades** | Offer one copy of a card to a friend: they choose one of their cards to give back (or decline), then you accept the swap (or cancel it). Each player gives one copy: with ×5 you keep ×4, and trading your only copy removes the card from your collection. The picker shows which cards your friend is missing. |
@@ -51,7 +51,7 @@ can take a minute.
 
 ## Rarity: how it works
 
-Rarities use gacha tiers: **N → R → SR → SSR → UR → REV**. **REV** (*Reversed*, リバース) is the
+Rarities use gacha tiers: **N → R → SR → SSR → UR → REV**. **REV** (*Reversed*) is the
 rarest: full-art cards with inverted colors, about 10 of them in the whole catalog.
 
 - **Card rarity comes from popularity.** Every card gets a popularity score that mixes how much
@@ -240,7 +240,6 @@ website to identify yourself and sync much faster
   [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) license. Each card links to its article.
 - Pictures (manga covers, posters) belong to their respective owners. They are displayed from
   Wikimedia's servers and are not included in this project. Each card links to its picture's source page.
-- Japanese titles come from [Wikidata](https://www.wikidata.org).
-- Fonts: Bangers, Dela Gothic One and Nunito from Google Fonts.
+- Fonts: Bangers and Nunito from Google Fonts.
 
 This is a fan-made, non-commercial project.

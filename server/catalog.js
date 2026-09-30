@@ -40,7 +40,6 @@ function toPublicCard(card) {
     id: card.id,
     number: card.number,
     name: card.name,
-    nameJa: card.nameJa,
     rarity: card.rarity,
     type: card.type,
     year: card.year,

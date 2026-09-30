@@ -58,7 +58,7 @@ function visibleCards() {
       if (query) {
         if (!isOwned) return false;
         const text = cardText(card);
-        const haystack = `${card.name} ${card.fr?.name ?? ''} ${card.nameJa ?? ''} ${text.description}`.toLowerCase();
+        const haystack = `${card.name} ${card.fr?.name ?? ''} ${text.description}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
       return true;
@@ -78,7 +78,6 @@ export function renderCollection(main, options) {
       <header class="view-head">
         <div>
           ${friend && html`<a class="link" href="#/friends">${t('friends.back')}</a>`}
-          <p class="view-kicker" lang="ja">図鑑</p>
           <h1 class="view-title">${friend ? t('friends.collectionOf', { name: player.name }) : t('collection.title')}</h1>
           <p class="view-sub">${friend
             ? t('friends.collectionSub', { code: player.friendCode, score: fmt.number(player.stats.score) })
@@ -116,7 +115,7 @@ export function renderCollection(main, options) {
           <span class="field__label">${t('collection.era')}</span>
           <select class="input" name="era">
             ${option('', t('collection.anyEra'), filters.era)}
-            ${meta.eras.map((era) => option(era.id, `${era.kanji} ${eraName(era.id)}`, filters.era))}
+            ${meta.eras.map((era) => option(era.id, eraName(era.id), filters.era))}
           </select>
         </label>
         <label class="field">

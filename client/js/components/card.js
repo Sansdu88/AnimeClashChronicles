@@ -4,7 +4,7 @@
  */
 import { fmt, html, prefersReducedMotion, raw } from '../dom.js';
 import { cardText, eraName, rarityName, t, typeName } from '../i18n.js';
-import { eraOf, state, typeOf } from '../state.js';
+import { state, typeOf } from '../state.js';
 
 const FULL_ART = new Set(['SSR', 'UR', 'REV']);
 
@@ -26,7 +26,6 @@ function nameSize(name) {
 export function cardHTML(card, { count = 0, isNew = false, tilt = false, interactive = true, lazy = true } = {}) {
   const type = typeOf(card.type);
   const text = cardText(card);
-  const era = eraOf(card.era);
   const classes = ['card', `r-${card.rarity}`, FULL_ART.has(card.rarity) && 'is-fullart', !card.image && 'no-image']
     .filter(Boolean)
     .join(' ');
@@ -38,7 +37,6 @@ export function cardHTML(card, { count = 0, isNew = false, tilt = false, interac
       <div class="card__art">
         ${card.image && html`<img class="card__img" src="${card.image.src}" alt="${text.name}" loading="${lazy ? 'lazy' : 'eager'}" decoding="async" draggable="false">`}
         <span class="card__art-fallback" aria-hidden="true">${type.icon}</span>
-        ${card.nameJa && html`<span class="card__ja" lang="ja">${card.nameJa}</span>`}
       </div>
       <header class="card__head">
         <span class="card__name" data-size="${nameSize(text.name)}">${text.name}</span>
@@ -54,7 +52,7 @@ export function cardHTML(card, { count = 0, isNew = false, tilt = false, interac
         <footer class="card__foot">
           <span class="card__num">#${fmt.pad(card.number)}/${state.cards.length}</span>
           <span class="card__power">PWR ${card.power}</span>
-          <span class="card__era" lang="ja" title="${t('card.era', { era: eraName(card.era) })}">${era.kanji}</span>
+          <span class="card__era" title="${t('card.era', { era: eraName(card.era) })}">${eraName(card.era)}</span>
         </footer>
       </div>
       <div class="card__shine" aria-hidden="true"></div>
@@ -83,7 +81,7 @@ export function cardBackHTML() {
     <div class="card-back__rays"></div>
     <div class="card-back__seal">
       <span class="card-back__logo">ANIME<br>CLASH</span>
-      <span class="card-back__jp" lang="ja">クロニクル</span>
+      <span class="card-back__name">CHRONICLES</span>
     </div>
   </div>`;
 }

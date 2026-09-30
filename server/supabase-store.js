@@ -89,7 +89,7 @@ export function createSupabaseStore({ url, secretKey }) {
     async loadCatalog() {
       const [rows, sets, [info]] = await Promise.all([
         getAll('cards?select=*&order=number,id'),
-        get('booster_sets?select=id,position,name,jp,tagline,era,colors&order=position'),
+        get('booster_sets?select=id,position,name,tagline,era,colors&order=position'),
         get('catalog_info?select=generated_at,popularity,license'),
       ]);
       return {

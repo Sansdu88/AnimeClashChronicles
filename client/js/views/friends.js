@@ -76,7 +76,6 @@ function paint(main, data) {
     html`<section class="view view-friends">
       <header class="view-head">
         <div>
-          <p class="view-kicker" lang="ja">友達</p>
           <h1 class="view-title">${t('friends.title')}</h1>
           <p class="view-sub">${t('friends.sub')}</p>
         </div>

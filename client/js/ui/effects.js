@@ -1,6 +1,6 @@
 /**
  * Visual effects for rare pulls: particle bursts, screen flashes, manga
- * onomatopoeia ("ドーン!!") and screen shake.
+ * onomatopoeia ("BOOM!!") and screen shake.
  */
 import { prefersReducedMotion } from '../dom.js';
 
@@ -104,7 +104,6 @@ export function onomatopoeia(text, { x, y, color = '#fff', size = 'l', tilt = -8
   const element = document.createElement('div');
   element.className = `fx-sfx fx-sfx--${size}`;
   element.textContent = text;
-  element.lang = 'ja';
   element.setAttribute('aria-hidden', 'true');
   // Keep the lettering on screen even for the cards at the edges.
   element.style.left = `${Math.min(Math.max(x, window.innerWidth * 0.22), window.innerWidth * 0.78)}px`;

@@ -9,12 +9,12 @@
  * REV ("Reversed") cards are full-art cards with inverted colors.
  */
 export const RARITIES = [
-  { id: 'N', name: 'Normal', jp: 'ノーマル', color: '#8d99ae', share: 0.35 },
-  { id: 'R', name: 'Rare', jp: 'レア', color: '#3a86ff', share: 0.27 },
-  { id: 'SR', name: 'Super Rare', jp: 'スーパーレア', color: '#9d4edd', share: 0.2 },
-  { id: 'SSR', name: 'Super Special Rare', jp: 'スペシャル', color: '#f4a100', share: 0.12 },
-  { id: 'UR', name: 'Ultra Rare', jp: 'ウルトラレア', color: '#ff2e88', share: 0.05 },
-  { id: 'REV', name: 'Reversed', jp: 'リバース', color: '#00d177', share: 0.01 },
+  { id: 'N', name: 'Normal', color: '#8d99ae', share: 0.35 },
+  { id: 'R', name: 'Rare', color: '#3a86ff', share: 0.27 },
+  { id: 'SR', name: 'Super Rare', color: '#9d4edd', share: 0.2 },
+  { id: 'SSR', name: 'Super Special Rare', color: '#f4a100', share: 0.12 },
+  { id: 'UR', name: 'Ultra Rare', color: '#ff2e88', share: 0.05 },
+  { id: 'REV', name: 'Reversed', color: '#00d177', share: 0.01 },
 ];
 
 export const RARITY_IDS = RARITIES.map((r) => r.id);
@@ -38,25 +38,25 @@ export const BOOSTER = {
 
 /** Card types, like Pokémon energy types. */
 export const TYPES = {
-  action: { name: 'Action', jp: 'アクション', icon: '⚔️', color: '#e63946' },
-  adventure: { name: 'Adventure', jp: '冒険', icon: '🧭', color: '#f77f00' },
-  mecha: { name: 'Mecha', jp: 'メカ', icon: '🤖', color: '#577590' },
-  scifi: { name: 'Sci-Fi', jp: 'SF', icon: '🚀', color: '#0096c7' },
-  fantasy: { name: 'Fantasy', jp: 'ファンタジー', icon: '🔮', color: '#7b2cbf' },
-  romance: { name: 'Romance', jp: '恋愛', icon: '💘', color: '#ff4d8d' },
-  comedy: { name: 'Comedy', jp: 'コメディ', icon: '😂', color: '#e9a800' },
-  slice: { name: 'Slice of Life', jp: '日常', icon: '🍵', color: '#6a994e' },
-  sports: { name: 'Sports', jp: 'スポーツ', icon: '🏆', color: '#2a9d8f' },
-  mystery: { name: 'Mystery', jp: 'ミステリー', icon: '🔍', color: '#4361ee' },
-  dark: { name: 'Dark', jp: 'ダーク', icon: '💀', color: '#6a040f' },
-  drama: { name: 'Drama', jp: 'ドラマ', icon: '🎭', color: '#1b998b' },
+  action: { name: 'Action', icon: '⚔️', color: '#e63946' },
+  adventure: { name: 'Adventure', icon: '🧭', color: '#f77f00' },
+  mecha: { name: 'Mecha', icon: '🤖', color: '#577590' },
+  scifi: { name: 'Sci-Fi', icon: '🚀', color: '#0096c7' },
+  fantasy: { name: 'Fantasy', icon: '🔮', color: '#7b2cbf' },
+  romance: { name: 'Romance', icon: '💘', color: '#ff4d8d' },
+  comedy: { name: 'Comedy', icon: '😂', color: '#e9a800' },
+  slice: { name: 'Slice of Life', icon: '🍵', color: '#6a994e' },
+  sports: { name: 'Sports', icon: '🏆', color: '#2a9d8f' },
+  mystery: { name: 'Mystery', icon: '🔍', color: '#4361ee' },
+  dark: { name: 'Dark', icon: '💀', color: '#6a040f' },
+  drama: { name: 'Drama', icon: '🎭', color: '#1b998b' },
 };
 
 /** Japanese imperial eras, used to split the cards into themed boosters. */
 export const ERAS = [
-  { id: 'showa', name: 'Shōwa', kanji: '昭和', from: 0, to: 1988 },
-  { id: 'heisei', name: 'Heisei', kanji: '平成', from: 1989, to: 2018 },
-  { id: 'reiwa', name: 'Reiwa', kanji: '令和', from: 2019, to: 9999 },
+  { id: 'showa', name: 'Shōwa', from: 0, to: 1988 },
+  { id: 'heisei', name: 'Heisei', from: 1989, to: 2018 },
+  { id: 'reiwa', name: 'Reiwa', from: 2019, to: 9999 },
 ];
 
 export function eraForYear(year) {

@@ -104,7 +104,6 @@ export async function renderStats(main) {
     html`<section class="view view-stats">
       <header class="view-head">
         <div>
-          <p class="view-kicker" lang="ja">記録</p>
           <h1 class="view-title">${t('stats.title')}</h1>
           <p class="view-sub">${raw(tHtml('stats.playing', { name: player.name, date: fmt.date(player.createdAt) }))}</p>
         </div>

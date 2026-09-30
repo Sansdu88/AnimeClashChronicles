@@ -212,7 +212,6 @@ function paint(main, data) {
     html`<section class="view view-trades">
       <header class="view-head">
         <div>
-          <p class="view-kicker" lang="ja">交換</p>
           <h1 class="view-title">${t('trades.title')}</h1>
           <p class="view-sub">${t('trades.sub')}</p>
         </div>

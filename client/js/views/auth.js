@@ -18,7 +18,6 @@ export function renderAuth(main, { onSuccess }) {
     html`<section class="view view-auth">
       <div class="auth">
         <div class="auth__intro">
-          <p class="hero__kicker" lang="ja">${t('auth.kicker')}</p>
           <h1 class="auth__title">${t('auth.title')}</h1>
           <p class="auth__pitch">${t('auth.pitch')}</p>
           <div class="auth__fan" aria-hidden="true">

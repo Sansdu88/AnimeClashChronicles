@@ -19,15 +19,6 @@
   overflow: hidden;
 }
 
-.hero__kicker {
-  margin: 0;
-  font-family: var(--font-jp);
-  font-size: 18px;
-  letter-spacing: 4px;
-  color: var(--yellow);
-  text-shadow: 2px 2px 0 var(--ink);
-}
-
 .hero__title {
   margin: 4px 0 8px;
   font-family: var(--font-display);
@@ -210,13 +201,6 @@
   font-size: clamp(34px, 4.5vw, 48px);
   letter-spacing: 1.5px;
   line-height: 1;
-}
-
-.detail__ja {
-  margin: 4px 0 0;
-  font-family: var(--font-jp);
-  font-size: 18px;
-  color: var(--red);
 }
 
 .detail__tags {
@@ -604,18 +588,11 @@
   gap: 14px;
 }
 
-.set-list__kanji {
-  display: grid;
-  place-items: center;
+/* The colors of the booster. */
+.set-list__swatch {
   flex-shrink: 0;
-  min-width: 64px;
+  width: 52px;
   height: 52px;
-  padding: 0 8px;
-  font-family: var(--font-jp);
-  font-size: 16px;
-  color: #fff;
-  -webkit-text-stroke: 3px var(--ink);
-  paint-order: stroke fill;
   background: linear-gradient(135deg, var(--c1), var(--c2));
   border: var(--border);
   border-radius: 10px;
