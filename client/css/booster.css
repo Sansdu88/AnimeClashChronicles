@@ -1722,3 +1722,124 @@
     right: 4%;
   }
 }
+
+/* ── REVERSE (Reversed cards) ───────────────────────────────────────────── */
+/* The whole screen turns negative for a few seconds (the layer inverts what
+   is behind it), under a giant title whose letters start mirrored. */
+
+.fx-reverse {
+  position: fixed;
+  inset: 0;
+  z-index: 78;
+  pointer-events: none;
+  -webkit-backdrop-filter: invert(1) hue-rotate(180deg);
+  backdrop-filter: invert(1) hue-rotate(180deg);
+  animation: reverse-world var(--duration, 4600ms) linear both;
+}
+
+/* Fade in, one short blink (the world hesitates), then back at the end. */
+@keyframes reverse-world {
+  0% {
+    opacity: 0;
+  }
+  5%,
+  13% {
+    opacity: 1;
+  }
+  15% {
+    opacity: 0;
+  }
+  18%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.fx-reverse-title {
+  position: fixed;
+  inset: 0;
+  z-index: 82;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 16px;
+  pointer-events: none;
+  text-align: center;
+  animation: reverse-title var(--duration, 4600ms) both;
+}
+
+@keyframes reverse-title {
+  0%,
+  90% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+.fx-reverse-title__word {
+  display: flex;
+  font-family: var(--font-display);
+  font-size: clamp(72px, 17vw, 230px);
+  line-height: 0.9;
+  letter-spacing: 0.04em;
+}
+
+/* Each letter slams in mirrored, then flips back the right way. */
+.fx-reverse-title__word span {
+  display: inline-block;
+  color: #111;
+  -webkit-text-stroke: 3px #fff;
+  paint-order: stroke fill;
+  text-shadow: 0.05em 0.05em 0 #00d177, -0.03em -0.03em 0 #f9295f;
+  animation: letter-flip 0.9s calc(0.1s + var(--i) * 80ms) cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+@keyframes letter-flip {
+  0% {
+    transform: scaleX(-1) scale(2.4) rotate(-14deg);
+    opacity: 0;
+  }
+  35% {
+    transform: scaleX(-1) scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: scaleX(-1) scale(1);
+  }
+  100% {
+    transform: scaleX(1) scale(1);
+  }
+}
+
+.fx-reverse-title__sub {
+  padding: 8px 20px 6px;
+  font-size: clamp(15px, 2.2vw, 24px);
+  font-weight: 900;
+  color: #000;
+  background: #fff;
+  border: 3px solid #000;
+  border-radius: 99px;
+  box-shadow: 5px 5px 0 #00d177;
+  animation: pop-sub 0.45s 1s cubic-bezier(0.2, 0.9, 0.3, 1.5) both;
+}
+
+@keyframes pop-sub {
+  from {
+    transform: scale(0.3) rotate(-6deg);
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: no inversion, the title is shown still. */
+.fx-reverse-title.is-still,
+.fx-reverse-title.is-still * {
+  animation: none;
+}

@@ -13,7 +13,7 @@ import { boosterStock, byRarity, openBoosters, reloadPlayer, setOf, state } from
 import { cardBackHTML, cardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
 import { confettiStorm, cutIn, scatterPacks, showFor } from '../components/booster-show.js';
-import { RARITY_COLORS, burst, flash, onomatopoeia, shakeScreen } from '../ui/effects.js';
+import { RARITY_COLORS, burst, flash, onomatopoeia, reverseWorld, shakeScreen } from '../ui/effects.js';
 import { pushLayer } from '../ui/layers.js';
 import { sfx } from '../ui/sfx.js';
 import { toast } from '../ui/toast.js';
@@ -353,12 +353,16 @@ function showReveal(stage, set, booster, run) {
     sfx.play('flip');
     await wait(260);
     if (stale()) return;
-    celebrate(flip.getBoundingClientRect(), card.rarity);
+    const pause = celebrate(flip.getBoundingClientRect(), card.rarity);
     if (card.isNew) flip.classList.add('show-new');
     flip.dataset.state = 'revealed';
     const params = { name: cardText(card).name, rarity: rarityName(card.rarity) };
     flip.setAttribute('aria-label', t('stage.revealed', { ...params, isNew: card.isNew ? t('stage.revealedNew') : '' }));
     stage.announce(t('stage.announce', { ...params, isNew: card.isNew ? t('stage.announceNew') : '' }));
+    if (pause) {
+      await wait(pause); // the REVERSE moment
+      if (stale()) return;
+    }
     revealed += 1;
     if (revealed === cards.length) finish();
   }
@@ -635,7 +639,7 @@ function showManyReveal(stage, set, boosters, run, show = null) {
     await wait(quick ? 140 : 240);
     if (stale()) return;
     // Skipping: only the rarest cards still get their effects.
-    if (!quick || big) celebrate(flip.getBoundingClientRect(), card.rarity);
+    const pause = !quick || big ? celebrate(flip.getBoundingClientRect(), card.rarity) : 0;
     if (card.isNew) flip.classList.add('show-new');
     flip.dataset.state = 'revealed';
     flip.setAttribute('aria-label', t('stage.revealed', {
@@ -646,6 +650,10 @@ function showManyReveal(stage, set, boosters, run, show = null) {
     tally[card.rarity] += 1;
     bump(card.rarity, tally[card.rarity]);
     if (card.isNew) bump('new', ++newCount);
+    if (pause && !quick) {
+      await wait(pause); // the REVERSE moment (the cascade waits for it)
+      if (stale()) return;
+    }
     revealed += 1;
     if (revealed === cards.length) finish();
   }
@@ -745,12 +753,18 @@ function finale(rarity, count) {
   onomatopoeia(t('mega.boom', { count }), { x: width / 2, y: height * 0.32, color: '#ffd23f', size: 'xl', tilt: -6 });
 }
 
-/** Sound + particles + lettering for a revealed card, centered on `box`. */
+/** Time (ms) the "REVERSE" moment of a Reversed card lasts; the reveal waits for it. */
+const REVERSE_MS = 5300;
+
+/**
+ * Sound + particles + lettering for a revealed card, centered on `box`.
+ * Returns how long (ms) the reveal should wait before going on (the REVERSE moment).
+ */
 function celebrate(box, rarity) {
   const x = box.left + box.width / 2;
   const y = box.top + box.height / 2;
   const colors = RARITY_COLORS[rarity];
-  sfx.play(rarity);
+  sfx.play(rarity === 'REV' ? 'reverse' : rarity);
   switch (rarity) {
     case 'R':
       burst(x, y, { colors, count: 14, power: 0.7 });
@@ -771,15 +785,26 @@ function celebrate(box, rarity) {
       setTimeout(() => burst(x, y, { colors, count: 60, power: 1.2 }), 280);
       onomatopoeia(t('fx.boom'), { x, y: box.top - 20, color: '#ff2e88', size: 'xl' });
       break;
-    case 'REV':
-      flash('#000', 700);
-      setTimeout(() => flash('#fff', 500), 350);
-      shakeScreen();
-      burst(x, y, { colors, count: 150, power: 1.9 });
-      setTimeout(() => burst(x, y, { colors, count: 80, power: 1.3 }), 300);
-      onomatopoeia(t('fx.reverse'), { x, y: box.top - 20, color: '#00d177', size: 'xl' });
-      break;
+    case 'REV': {
+      // The rarest card: the heart skips twice (in time with the sound), then the
+      // whole screen turns negative under a giant "REVERSE".
+      onomatopoeia(t('fx.heartbeat'), { x, y: box.top - 10, color: '#fff', size: 'm', tilt: -5 });
+      setTimeout(() => onomatopoeia(t('fx.heartbeat'), { x, y: box.top - 40, color: '#00d177', size: 'l', tilt: 6 }), 280);
+      setTimeout(() => {
+        flash('#000', 500);
+        shakeScreen();
+        burst(x, y, { colors, count: 160, power: 2 });
+        setTimeout(() => burst(x, y, { colors, count: 90, power: 1.4 }), 300);
+        const rev = state.meta.rarities.find((rarity) => rarity.id === 'REV');
+        reverseWorld({
+          title: t('reverse.title'),
+          subtitle: t('reverse.sub', { count: rev?.cardCount ?? 0, total: state.meta.totalCards }),
+        });
+      }, 850);
+      return REVERSE_MS;
+    }
     default:
       break;
   }
+  return 0;
 }
