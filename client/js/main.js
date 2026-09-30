@@ -11,21 +11,32 @@ import { renderOpen } from './views/open.js';
 import { renderCollection } from './views/collection.js';
 import { renderStats } from './views/stats.js';
 import { renderRules } from './views/rules.js';
+import { renderFriendCollection, renderFriends } from './views/friends.js';
+import { fetchFriends } from './state.js';
 
 const ROUTES = {
   open: renderOpen,
   collection: renderCollection,
   stats: renderStats,
   rules: renderRules,
+  // #/friends, or #/friends/<id> for a friend's collection
+  friends: (main, friendId) => (friendId ? renderFriendCollection(main, friendId) : renderFriends(main)),
 };
 
 const main = $('#main');
 /** 'loading' → 'auth' (logged out) or 'app' (logged in). */
 let screen = 'loading';
 
+/** [route name, parameter] from the URL hash, e.g. "#/friends/abc" → ['friends', 'abc']. */
 function currentRoute() {
-  const name = location.hash.replace(/^#\/?/, '').split(/[?/]/)[0];
-  return ROUTES[name] ? name : 'open';
+  const [name, param] = location.hash.replace(/^#\/?/, '').split(/[?]/)[0].split('/');
+  return ROUTES[name] ? [name, param ? decodeURIComponent(param) : null] : ['open', null];
+}
+
+function paintFriendBadge(count) {
+  const badge = $('#friends-badge');
+  badge.textContent = count;
+  badge.hidden = !count;
 }
 
 // ── Header & static texts ────────────────────────────────────────────────────
@@ -79,14 +90,14 @@ function setupHeader() {
 
 function render({ scroll = true } = {}) {
   if (screen !== 'app') return;
-  const name = currentRoute();
+  const [name, param] = currentRoute();
   for (const link of $$('.nav a')) {
     if (link.dataset.route === name) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
   document.title = `${t(`titles.${name}`)} · Anime Clash Chronicles`;
   main.dataset.view = name;
-  ROUTES[name](main);
+  ROUTES[name](main, param);
   if (scroll) {
     window.scrollTo(0, 0);
     main.focus({ preventScroll: true });
@@ -112,6 +123,9 @@ function enterApp() {
   document.body.classList.remove('is-logged-out');
   updateHeader();
   render();
+  fetchFriends()
+    .then((data) => paintFriendBadge(data.incoming.length))
+    .catch(() => {});
 }
 
 async function doLogout() {
@@ -164,6 +178,7 @@ async function start() {
     else if (screen === 'auth') showAuth();
   });
   window.addEventListener('mb:logout', doLogout);
+  window.addEventListener('mb:friend-requests', (event) => paintFriendBadge(event.detail));
   window.addEventListener('mb:unauthorized', () => {
     if (screen !== 'app') return;
     state.player = null;

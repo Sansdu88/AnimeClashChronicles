@@ -1,7 +1,7 @@
 /**
  * Booster opening rules (pure functions, no I/O, so they are easy to test).
  */
-import { BOOSTER, RARITY_IDS, RARITY_RANK } from './config.js';
+import { BOOSTER, RARITY_IDS, RARITY_RANK, SCORE } from './config.js';
 
 /** Picks a key of `weights` ({ key: relativeWeight }) at random. */
 export function weightedPick(weights, rng = Math.random) {
@@ -68,4 +68,26 @@ export function boosterOdds(rules = BOOSTER) {
   });
   const expected = Object.fromEntries(RARITY_IDS.map((id) => [id, slots.reduce((sum, odds) => sum + odds[id], 0)]));
   return { normalSlot, rareSlot, atLeastOne, expected };
+}
+
+/**
+ * Score of a collection: `entries` = [{ cardId, count }], `rarityOf(cardId)`
+ * gives a card's rarity (unknown cards are ignored).
+ * Returns { score, uniqueCards, cardsPulled, byRarity: { N: owned, … } }.
+ */
+export function collectionScore(entries, rarityOf, rules = SCORE) {
+  const byRarity = Object.fromEntries(RARITY_IDS.map((id) => [id, 0]));
+  let score = 0;
+  let uniqueCards = 0;
+  let cardsPulled = 0;
+  for (const { cardId, count } of entries) {
+    const rarity = rarityOf(cardId);
+    if (!rarity || count < 1) continue;
+    const points = rules.points[rarity];
+    score += points + (count - 1) * points * rules.duplicateShare;
+    byRarity[rarity] += 1;
+    uniqueCards += 1;
+    cardsPulled += count;
+  }
+  return { score: Math.round(score), uniqueCards, cardsPulled, byRarity };
 }

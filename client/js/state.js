@@ -158,3 +158,15 @@ export async function resetCollection() {
 
 export const fetchHistory = (limit = 12) => api(playerPath(`/boosters?limit=${limit}`));
 export const fetchLeaderboard = () => api('/leaderboard?limit=10');
+
+// ── Friends ──────────────────────────────────────────────────────────────────
+
+const friendPath = (id, suffix = '') => playerPath(`/friends/${encodeURIComponent(id)}${suffix}`);
+
+/** { friendCode, friends, incoming, outgoing, ranking, scoring } */
+export const fetchFriends = () => api(playerPath('/friends'));
+export const addFriend = (code) => api(playerPath('/friends'), { method: 'POST', body: { code } });
+export const acceptFriend = (id) => api(friendPath(id, '/accept'), { method: 'POST' });
+export const declineFriend = (id) => api(friendPath(id, '/decline'), { method: 'POST' });
+export const removeFriend = (id) => api(friendPath(id), { method: 'DELETE' });
+export const fetchFriendCollection = (id) => api(friendPath(id, '/collection'));

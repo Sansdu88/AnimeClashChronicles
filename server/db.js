@@ -4,7 +4,7 @@
  */
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
 const SCHEMA = `
@@ -15,6 +15,16 @@ const SCHEMA = `
     email         TEXT,
     password_hash TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS friendships (
+    requester_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    addressee_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    status       TEXT NOT NULL CHECK (status IN ('pending', 'accepted')),
+    created_at   TEXT NOT NULL,
+    responded_at TEXT,
+    PRIMARY KEY (requester_id, addressee_id)
+  );
+  CREATE INDEX IF NOT EXISTS friendships_by_addressee ON friendships (addressee_id, status);
 
   CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
@@ -44,12 +54,20 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS pulls_by_player ON pulls (player_id, card_id);
 `;
 
-/** Databases created before accounts existed get the new columns. */
+// Friend codes avoid look-alike characters (no I, O, 0, 1).
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const newFriendCode = () => Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
+
+/** Databases created by older versions get the new columns. */
 function migrate(db) {
   const columns = db.prepare('PRAGMA table_info(players)').all().map((column) => column.name);
   if (!columns.includes('email')) db.exec('ALTER TABLE players ADD COLUMN email TEXT');
   if (!columns.includes('password_hash')) db.exec('ALTER TABLE players ADD COLUMN password_hash TEXT');
+  if (!columns.includes('friend_code')) db.exec('ALTER TABLE players ADD COLUMN friend_code TEXT');
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS players_by_email ON players (email) WHERE email IS NOT NULL');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS players_by_friend_code ON players (friend_code) WHERE friend_code IS NOT NULL');
+  const setCode = db.prepare('UPDATE players SET friend_code = ? WHERE id = ?');
+  for (const { id } of db.prepare('SELECT id FROM players WHERE friend_code IS NULL').all()) setCode.run(newFriendCode(), id);
 }
 
 export function openStore(file) {
@@ -62,8 +80,11 @@ export function openStore(file) {
   migrate(db);
 
   const sql = {
-    insertPlayer: db.prepare('INSERT INTO players (id, name, created_at, email, password_hash) VALUES (?, ?, ?, ?, ?)'),
-    getPlayer: db.prepare('SELECT id, name, email, created_at AS createdAt FROM players WHERE id = ?'),
+    insertPlayer: db.prepare(
+      'INSERT INTO players (id, name, created_at, email, password_hash, friend_code) VALUES (?, ?, ?, ?, ?, ?)',
+    ),
+    getPlayer: db.prepare('SELECT id, name, email, friend_code AS friendCode, created_at AS createdAt FROM players WHERE id = ?'),
+    playerByCode: db.prepare('SELECT id FROM players WHERE friend_code = ?'),
     getLogin: db.prepare('SELECT id, password_hash AS passwordHash FROM players WHERE email = ?'),
     getPasswordHash: db.prepare('SELECT password_hash AS passwordHash FROM players WHERE id = ?'),
     renamePlayer: db.prepare('UPDATE players SET name = ? WHERE id = ?'),
@@ -73,7 +94,7 @@ export function openStore(file) {
     ),
     insertSession: db.prepare('INSERT INTO sessions (token_hash, player_id, created_at, expires_at) VALUES (?, ?, ?, ?)'),
     sessionPlayer: db.prepare(`
-      SELECT p.id, p.name, p.email, p.created_at AS createdAt
+      SELECT p.id, p.name, p.email, p.friend_code AS friendCode, p.created_at AS createdAt
       FROM sessions s JOIN players p ON p.id = s.player_id
       WHERE s.token_hash = ? AND s.expires_at > ?`),
     deleteSession: db.prepare('DELETE FROM sessions WHERE token_hash = ?'),
@@ -100,15 +121,39 @@ export function openStore(file) {
       SELECT booster_id AS boosterId, position, card_id AS cardId, rarity, is_new AS isNew
       FROM pulls WHERE player_id = ? AND booster_id >= ? ORDER BY booster_id, position`),
     deleteBoosters: db.prepare('DELETE FROM boosters WHERE player_id = ?'),
-    leaderboard: db.prepare(`
-      SELECT pl.id, pl.name,
-             COUNT(DISTINCT pu.card_id) AS uniqueCards,
-             COUNT(*) AS cardsPulled,
+    collectors: db.prepare(`
+      SELECT pl.id, pl.name, pl.created_at AS createdAt,
              (SELECT COUNT(*) FROM boosters b WHERE b.player_id = pl.id) AS boostersOpened
-      FROM players pl JOIN pulls pu ON pu.player_id = pl.id
-      GROUP BY pl.id
-      ORDER BY uniqueCards DESC, boostersOpened ASC, pl.created_at ASC
-      LIMIT ?`),
+      FROM players pl WHERE EXISTS (SELECT 1 FROM pulls pu WHERE pu.player_id = pl.id)`),
+    allCollections: db.prepare(
+      'SELECT player_id AS playerId, card_id AS cardId, COUNT(*) AS count FROM pulls GROUP BY player_id, card_id',
+    ),
+    friendship: db.prepare(`
+      SELECT requester_id AS requesterId, addressee_id AS addresseeId, status FROM friendships
+      WHERE (requester_id = ? AND addressee_id = ?) OR (requester_id = ? AND addressee_id = ?)`),
+    insertFriendship: db.prepare(
+      "INSERT INTO friendships (requester_id, addressee_id, status, created_at) VALUES (?, ?, 'pending', ?)",
+    ),
+    acceptFriendship: db.prepare(
+      "UPDATE friendships SET status = 'accepted', responded_at = ? WHERE requester_id = ? AND addressee_id = ? AND status = 'pending'",
+    ),
+    deleteFriendship: db.prepare(
+      'DELETE FROM friendships WHERE (requester_id = ? AND addressee_id = ?) OR (requester_id = ? AND addressee_id = ?)',
+    ),
+    friends: db.prepare(`
+      SELECT p.id, p.name, p.friend_code AS friendCode, f.responded_at AS since
+      FROM friendships f
+      JOIN players p ON p.id = CASE WHEN f.requester_id = ? THEN f.addressee_id ELSE f.requester_id END
+      WHERE f.status = 'accepted' AND (f.requester_id = ? OR f.addressee_id = ?)
+      ORDER BY p.name`),
+    incomingRequests: db.prepare(`
+      SELECT p.id, p.name, p.friend_code AS friendCode, f.created_at AS sentAt
+      FROM friendships f JOIN players p ON p.id = f.requester_id
+      WHERE f.addressee_id = ? AND f.status = 'pending' ORDER BY f.created_at DESC`),
+    outgoingRequests: db.prepare(`
+      SELECT p.id, p.name, p.friend_code AS friendCode, f.created_at AS sentAt
+      FROM friendships f JOIN players p ON p.id = f.addressee_id
+      WHERE f.requester_id = ? AND f.status = 'pending' ORDER BY f.created_at DESC`),
   };
 
   let closed = false;
@@ -132,9 +177,22 @@ export function openStore(file) {
 
     /** Creates a player; `email`/`passwordHash` are null for players created before accounts. */
     createPlayer(name, { email = null, passwordHash = null } = {}) {
-      const player = { id: randomUUID(), name, email, createdAt: now() };
-      sql.insertPlayer.run(player.id, player.name, player.createdAt, email, passwordHash);
-      return player;
+      for (let attempt = 0; ; attempt++) {
+        const player = { id: randomUUID(), name, email, friendCode: newFriendCode(), createdAt: now() };
+        try {
+          sql.insertPlayer.run(player.id, player.name, player.createdAt, email, passwordHash, player.friendCode);
+          return player;
+        } catch (err) {
+          // Retry on the (very unlikely) friend code collision; anything else is a real error.
+          if (!/friend_code/.test(err.message) || attempt >= 5) throw err;
+        }
+      }
+    },
+
+    /** Player id for a friend code ("#K7Q2XM", "k7q2xm"…), or null. */
+    findByFriendCode(code) {
+      const normalized = String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      return sql.playerByCode.get(normalized)?.id ?? null;
     },
 
     getPlayer(id) {
@@ -244,8 +302,54 @@ export function openStore(file) {
       return Number(sql.deleteBoosters.run(playerId).changes);
     },
 
-    leaderboard(limit) {
-      return sql.leaderboard.all(limit).map((row) => ({ ...row }));
+    /** Players who pulled at least one card: [{ id, name, createdAt, boostersOpened }] */
+    collectors() {
+      return sql.collectors.all().map((row) => ({ ...row }));
+    },
+
+    /** Map(playerId → [{ cardId, count }]) for every player. */
+    allCollections() {
+      const byPlayer = new Map();
+      for (const { playerId, cardId, count } of sql.allCollections.all()) {
+        if (!byPlayer.has(playerId)) byPlayer.set(playerId, []);
+        byPlayer.get(playerId).push({ cardId, count });
+      }
+      return byPlayer;
+    },
+
+    // ── Friends ──────────────────────────────────────────────────────────────
+
+    /** { requesterId, addresseeId, status } between two players, or null. */
+    friendship(a, b) {
+      const row = sql.friendship.get(a, b, b, a);
+      return row ? { ...row } : null;
+    },
+
+    requestFriend(fromId, toId) {
+      sql.insertFriendship.run(fromId, toId, now());
+    },
+
+    /** Accepts the pending request of `requesterId` to `addresseeId`. False if there is none. */
+    acceptFriend(requesterId, addresseeId) {
+      return Number(sql.acceptFriendship.run(now(), requesterId, addresseeId).changes) === 1;
+    },
+
+    /** Removes a friend, or a request in either direction. False if there was nothing. */
+    removeFriendship(a, b) {
+      return Number(sql.deleteFriendship.run(a, b, b, a).changes) > 0;
+    },
+
+    /** [{ id, name, friendCode, since }] */
+    friends(playerId) {
+      return sql.friends.all(playerId, playerId, playerId).map((row) => ({ ...row }));
+    },
+
+    /** { incoming: [{ id, name, friendCode, sentAt }], outgoing: [...] } */
+    friendRequests(playerId) {
+      return {
+        incoming: sql.incomingRequests.all(playerId).map((row) => ({ ...row })),
+        outgoing: sql.outgoingRequests.all(playerId).map((row) => ({ ...row })),
+      };
     },
 
     close() {

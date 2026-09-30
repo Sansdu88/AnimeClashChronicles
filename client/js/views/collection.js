@@ -9,7 +9,9 @@ import { toast } from '../ui/toast.js';
 // Kept between visits of the page.
 const filters = { q: '', show: 'all', rarity: '', type: '', era: '', sort: 'number' };
 
-const ownedEntry = (card) => state.owned.get(card.id);
+// The collection on screen: yours, or a friend's (see renderCollection's options).
+let owned = new Map();
+const ownedEntry = (card) => owned.get(card.id);
 const SORTS = {
   number: (a, b) => a.number - b.number,
   rarity: byRarity,
@@ -22,8 +24,8 @@ const SORTS = {
 
 const option = (value, label, current) => html`<option value="${value}" ${raw(value === current ? 'selected' : '')}>${label}</option>`;
 
-function progressHTML() {
-  const { stats } = state.player;
+function progressHTML(player) {
+  const { stats } = player;
   const percent = stats.completion * 100;
   return html`<div class="progress">
     <div class="ring" style="--p:${percent.toFixed(1)}" role="img" aria-label="${t('collection.complete', { percent: fmt.percent(stats.completion) })}">
@@ -46,15 +48,15 @@ function visibleCards() {
   const query = filters.q.trim().toLowerCase();
   return state.cards
     .filter((card) => {
-      const owned = state.owned.has(card.id);
-      if (filters.show === 'owned' && !owned) return false;
-      if (filters.show === 'missing' && owned) return false;
+      const isOwned = owned.has(card.id);
+      if (filters.show === 'owned' && !isOwned) return false;
+      if (filters.show === 'missing' && isOwned) return false;
       if (filters.rarity && card.rarity !== filters.rarity) return false;
       if (filters.type && card.type !== filters.type) return false;
       if (filters.era && card.era !== filters.era) return false;
       // Missing cards keep their name secret, so they never match a search.
       if (query) {
-        if (!owned) return false;
+        if (!isOwned) return false;
         const text = cardText(card);
         const haystack = `${card.name} ${card.fr?.name ?? ''} ${card.nameJa ?? ''} ${text.description}`.toLowerCase();
         if (!haystack.includes(query)) return false;
@@ -64,18 +66,24 @@ function visibleCards() {
     .sort(SORTS[filters.sort] ?? SORTS.number);
 }
 
-export function renderCollection(main) {
+/** `player` / `owned` show a friend's collection instead of yours. */
+export function renderCollection(main, { player = state.player, owned: shown = state.owned } = {}) {
   const { meta } = state;
+  const friend = player.id !== state.player.id;
+  owned = shown;
   mount(
     main,
     html`<section class="view view-collection">
       <header class="view-head">
         <div>
+          ${friend && html`<a class="link" href="#/friends">${t('friends.back')}</a>`}
           <p class="view-kicker" lang="ja">図鑑</p>
-          <h1 class="view-title">${t('collection.title')}</h1>
-          <p class="view-sub">${raw(tHtml('collection.sub'))}</p>
+          <h1 class="view-title">${friend ? t('friends.collectionOf', { name: player.name }) : t('collection.title')}</h1>
+          <p class="view-sub">${friend
+            ? t('friends.collectionSub', { code: player.friendCode, score: fmt.number(player.stats.score) })
+            : raw(tHtml('collection.sub'))}</p>
         </div>
-        <div class="panel progress-panel">${progressHTML()}</div>
+        <div class="panel progress-panel">${progressHTML(player)}</div>
       </header>
 
       <form class="filters panel" role="search" aria-label="${t('collection.filterLabel')}">
@@ -131,7 +139,7 @@ export function renderCollection(main) {
 
   function renderGrid() {
     const cards = visibleCards();
-    ownedList = cards.filter((card) => state.owned.has(card.id));
+    ownedList = cards.filter((card) => owned.has(card.id));
     count.textContent = cards.length
       ? t('collection.count', { count: cards.length, owned: ownedList.length, missing: cards.length - ownedList.length })
       : '';
@@ -139,14 +147,14 @@ export function renderCollection(main) {
       grid,
       cards.length
         ? cards.map((card) =>
-            state.owned.has(card.id)
+            owned.has(card.id)
               ? cardHTML(card, { count: ownedEntry(card).count, tilt: true })
               : lockedCardHTML(card),
           )
         : html`<div class="empty panel">
             <p class="empty__title">${t('collection.emptyTitle')}</p>
-            <p>${state.owned.size ? t('collection.emptyFiltered') : t('collection.emptyStart')}</p>
-            <a class="btn btn--primary" href="#/">${t('collection.openBooster')}</a>
+            <p>${owned.size ? t('collection.emptyFiltered') : t('collection.emptyStart')}</p>
+            ${!friend && html`<a class="btn btn--primary" href="#/">${t('collection.openBooster')}</a>`}
           </div>`,
     );
   }
