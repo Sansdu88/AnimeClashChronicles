@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Anime Clash Chronicles</title>
+    <meta name="description" content="Open unlimited manga-style booster packs of anime cards built from Wikipedia.">
+    <meta name="theme-color" content="#e63946">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Dela+Gothic+One&family=Nunito:wght@400;600;800;900&display=swap">
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/card.css">
+    <link rel="stylesheet" href="/css/booster.css">
+    <link rel="stylesheet" href="/css/views.css">
+    <script type="module" src="/js/main.js"></script>
+  </head>
+  <body class="is-logged-out">
+    <a class="skip-link" href="#main" data-i18n="app.skip">Skip to content</a>
+
+    <header class="topbar">
+      <a class="logo" href="#/" aria-label="Anime Clash Chronicles">
+        <span class="logo__main">ANIME CLASH<span class="logo__accent">CHRONICLES</span></span>
+        <span class="logo__jp" lang="ja">アニメ・クラッシュ・クロニクル</span>
+      </a>
+      <nav class="nav" aria-label="Main" data-i18n-aria="nav.main">
+        <a href="#/" data-route="open"><span class="nav__jp" lang="ja">開封</span><span data-i18n="nav.open">Open</span></a>
+        <a href="#/collection" data-route="collection"><span class="nav__jp" lang="ja">図鑑</span><span data-i18n="nav.collection">Collection</span></a>
+        <a href="#/stats" data-route="stats"><span class="nav__jp" lang="ja">記録</span><span data-i18n="nav.stats">Stats</span></a>
+        <a href="#/rules" data-route="rules"><span class="nav__jp" lang="ja">ルール</span><span data-i18n="nav.rules">Rules</span></a>
+      </nav>
+      <div class="topbar__side">
+        <div class="lang-switch" role="group" aria-label="Language" data-i18n-aria="header.language">
+          <button type="button" data-lang="en" lang="en" aria-pressed="false">EN</button>
+          <button type="button" data-lang="fr" lang="fr" aria-pressed="false">FR</button>
+        </div>
+        <button class="player-chip" id="player-chip" type="button" data-i18n-title="header.rename">
+          <span aria-hidden="true">👤</span>
+          <span class="player-chip__name" id="player-name">…</span>
+          <span class="player-chip__progress" id="player-progress" data-i18n-title="header.progress"></span>
+        </button>
+        <button class="icon-btn" id="sound-toggle" type="button" aria-pressed="true" data-i18n-aria="header.sound">🔊</button>
+        <button class="icon-btn icon-btn--logout" id="logout" type="button" data-i18n-aria="header.logout" data-i18n-title="header.logout">⏻</button>
+      </div>
+    </header>
+
+    <main id="main" class="page" tabindex="-1"></main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+  </body>
+</html>
