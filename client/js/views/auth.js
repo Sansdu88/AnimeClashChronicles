@@ -11,7 +11,7 @@ const draft = { email: '', name: '' };
 /** `onSuccess(player, mode)` is called once logged in. */
 export function renderAuth(main, { onSuccess }) {
   const isLogin = mode === 'login';
-  const preview = state.cards.filter((card) => card.rarity === 'UR').sort(byRarity).slice(0, 3);
+  const preview = [...state.cards].sort(byRarity).slice(0, 3);
 
   mount(
     main,

@@ -1,0 +1,3 @@
+# Supabase CLI and GitHub integration: the SQL files of supabase/migrations are
+# applied to the database in order (settings not written here keep their default).
+project_id = "anime-clash-chronicles"

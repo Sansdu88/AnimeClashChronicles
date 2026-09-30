@@ -1,8 +1,9 @@
 -- ============================================================================
 -- Anime Clash Chronicles — database schema for Supabase (PostgreSQL)
 --
--- Run it once: Supabase dashboard → SQL Editor → New query → paste → Run.
--- It can be run again safely (it only creates what is missing).
+-- The files of supabase/migrations are applied in order by the Supabase GitHub
+-- integration (or pasted one by one in the SQL Editor). This first one can be
+-- run again safely (it only creates what is missing).
 --
 -- Only the Node.js server talks to these tables, with the SECRET key (which
 -- bypasses Row Level Security). RLS is enabled with no policy, so the public

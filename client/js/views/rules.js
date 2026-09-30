@@ -6,7 +6,8 @@ import { state } from '../state.js';
 function atLeastOneLabel(rarityId, chance) {
   if (rarityId === 'N') return '—';
   if (chance > 0.9999) return t('rules.guaranteed');
-  return `${fmt.percent(chance, 1)}${rarityId === 'UR' ? '' : ` ${t('rules.orBetter')}`}`;
+  const isRarest = rarityId === state.meta.rarities.at(-1).id;
+  return `${fmt.percent(chance, 1)}${isRarest ? '' : ` ${t('rules.orBetter')}`}`;
 }
 
 export function renderRules(main) {
@@ -32,7 +33,7 @@ export function renderRules(main) {
         <li class="panel step"><span class="step__num">2</span><h2>${t('rules.step2Title')}</h2>
           <p>${raw(tHtml('rules.step2', { size: booster.size, minutes: booster.cooldownSeconds / 60 }))}</p></li>
         <li class="panel step"><span class="step__num">3</span><h2>${t('rules.step3Title')}</h2>
-          <p>${t('rules.step3', { ur: meta.rarities.find((r) => r.id === 'UR').cardCount })}</p></li>
+          <p>${t('rules.step3', { rev: meta.rarities.find((r) => r.id === 'REV').cardCount })}</p></li>
       </ol>
 
       <section class="panel">
@@ -64,8 +65,8 @@ export function renderRules(main) {
           tHtml('rules.where', {
             days: popularity?.days ?? 60,
             until: popularity?.until ? fmt.day(popularity.until) : '—',
+            rev: share('REV'),
             ur: share('UR'),
-            ssr: share('SSR'),
           }),
         )}</p>
       </section>

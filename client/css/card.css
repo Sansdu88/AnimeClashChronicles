@@ -1,7 +1,8 @@
 /* ==========================================================================
    Cards. Sizes use container query units (cqw = 1% of the card width), so a
    card looks identical at any size: in a grid, in a booster or in a modal.
-   N / R / SR: classic frame · SSR / UR: full-art · UR: animated rainbow foil.
+   N / R / SR: classic frame · SSR / UR / REV: full-art · UR: animated rainbow
+   foil · REV (Reversed): UR-style card with inverted colors.
    ========================================================================== */
 
 @property --angle {
@@ -303,7 +304,7 @@
   border-radius: 1cqw;
 }
 
-/* ── Full-art layout (SSR, UR) ──────────────────────────────────────────── */
+/* ── Full-art layout (SSR, UR, REV) ──────────────────────────────────────────── */
 
 .card.is-fullart .card__frame {
   padding: 0;
@@ -431,6 +432,34 @@
   animation: holo-drift 6s ease-in-out infinite alternate;
 }
 
+/* ── Reversed (REV): a full-art card with every color inverted ──────────── */
+
+.card.r-REV {
+  --foil: conic-gradient(from var(--angle), #ff2e88, #ffbe0b, #06d6a0, #3a86ff, #8338ec, #ff2e88);
+  filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 8px rgba(0, 209, 119, 0.85));
+}
+
+.card.r-REV .card__frame {
+  filter: invert(1);
+  animation: foil-spin 4s linear infinite;
+}
+
+.card.r-REV .card__rarity {
+  background: var(--rainbow);
+  background-size: 200% 100%;
+  animation: rainbow-slide 3s linear infinite;
+}
+
+.card.r-REV .card__shine {
+  display: block;
+  background-image:
+    repeating-linear-gradient(115deg, #ff2e88 0%, #ffbe0b 7%, #06d6a0 14%, #3a86ff 21%, #8338ec 28%, #ff2e88 35%),
+    radial-gradient(circle, rgba(255, 255, 255, 0.95) 0.3cqw, transparent 0.45cqw);
+  background-size: 400% 400%, 5cqw 5cqw;
+  opacity: 0.3;
+  animation: holo-drift 5s ease-in-out infinite alternate-reverse;
+}
+
 .card.is-active .card__shine {
   opacity: 0.5;
   animation: none;
@@ -544,6 +573,10 @@
 
 .card--locked.r-UR .locked__rarity {
   background: var(--rainbow);
+}
+
+.card--locked.r-REV .locked__rarity {
+  background: #111 var(--rainbow-rev);
 }
 
 /* ── Card back ──────────────────────────────────────────────────────────── */

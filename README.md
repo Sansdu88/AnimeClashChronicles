@@ -1,8 +1,8 @@
 # Anime Clash Chronicles · アニメ・クラッシュ・クロニクル
 
 A manga-style trading card game in the browser: open **a booster of 5 anime cards every 2 minutes**,
-Pokémon-TCG style. There are **151 cards**, one per anime, each built from the anime's
-**Wikipedia page**: a picture, a short summary, and a **rarity based on how popular the page is**.
+Pokémon-TCG style. There are **about 1,000 cards**, one per anime or manga, each built from its
+**Wikipedia page**: a picture, a short summary, and a **rarity based on how popular it is**.
 Play in **English or French** (the card texts come from the English or the French Wikipedia),
 with an **account** (e-mail + password) that keeps your collection.
 
@@ -39,29 +39,34 @@ can take a minute.
 | | |
 |---|---|
 | **Boosters** | 4 boosters: *All-Stars* (every card) and one per Japanese era: *Shōwa* (before 1989), *Heisei* (1989–2018), *Reiwa* (2019+). One booster every 2 minutes: the server enforces the wait and the page shows a countdown. |
-| **Opening** | Shake and tear the pack, then flip 5 face-down cards. Rare cards glow before you flip them, and SSR/UR reveals trigger manga effects (ゴゴゴ, ドーン!!), confetti and sounds (synthesized, can be muted). |
-| **Cards** | Picture, Japanese title, type (Action, Mecha, Romance…), year, power level, and a one-sentence summary from Wikipedia. SSR and UR are full-art cards with a holographic effect that follows your mouse. |
+| **Opening** | Shake and tear the pack, then flip 5 face-down cards. Rare cards glow before you flip them, and SSR/UR/REV reveals trigger manga effects (ゴゴゴ, ドーン!!, 反転!!), confetti and sounds (synthesized, can be muted). |
+| **Cards** | Picture, Japanese title, type (Action, Mecha, Romance…), year, power level, and a one-sentence summary from Wikipedia. SSR, UR and REV are full-art cards with a holographic effect that follows your mouse; REV (Reversed) cards have inverted colors. |
 | **Collection** | A pokédex-style grid: missing cards show up as `???`. Filters, sorting, and completion per rarity. Click a card for its full Wikipedia summary. |
 | **Friends** | Every player has a friend code (e.g. `#K7Q2XM`). Send friend requests by code or e-mail, accept or decline them, look at your friends' collections, and compete in the friends ranking. |
 | **Stats** | Luck meter (your pulls compared with the official odds), booster history, global leaderboard. |
 | **Accounts** | Sign up with an e-mail and a password, log in from any browser, rename yourself, change your password, log out. Several people on the same network can play on one server (see `HOST` below). |
-| **Colorblind mode** | The 👁 button (off by default) switches rarities to colors that stay distinct with every kind of color blindness and adds card-game symbols: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR. |
+| **Colorblind mode** | The 👁 button (off by default) switches rarities to colors that stay distinct with every kind of color blindness and adds card-game symbols: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR · ☆☆☆ REV. |
 | **Languages** | An **EN / FR** switch in the header translates the whole interface, and French cards use their French Wikipedia title and text (*Goldorak*, *Ken le Survivant*, *Capitaine Albator*…). The first visit follows the browser's language. |
 
 ## Rarity: how it works
 
-Rarities use gacha tiers: **N → R → SR → SSR → UR**.
+Rarities use gacha tiers: **N → R → SR → SSR → UR → REV**. **REV** (*Reversed*, リバース) is the
+rarest: full-art cards with inverted colors, about 10 of them in the whole catalog.
 
-- **Card rarity comes from Wikipedia.** Within each era, the anime whose English Wikipedia page
-  was read the most (page views over the last 60 days) get the rarest tiers: top 6% → UR,
-  next 12% → SSR, next 20% → SR, next 27% → R, the rest → N. The **PWR** number on a card is that
-  popularity rank (9999 = the most-read page of its era). Every booster set contains every rarity.
+- **Card rarity comes from popularity.** Every card gets a popularity score that mixes how much
+  its English Wikipedia page was read (page views over the last 60 days) and in how many
+  languages Wikipedia covers it (both as ranks, half each). The most popular cards get the
+  rarest tiers, whatever their era: top 1% → REV, next 5% → UR, next 12% → SSR, next 20% → SR,
+  next 27% → R, the rest → N. The **PWR** number on a card is that popularity rank (9999 = the
+  most popular card). When a booster set has no card of the rarity a slot rolled (an era
+  without REV cards, for example), that slot rolls again among the rarities the set has.
 - **Booster odds.** A booster has 5 different cards. Each card rolls its own rarity, and the last
   card is the "rare slot" (never a Normal):
 
   | Rarity | Cards 1–4 | Card 5 | At least one per booster |
   |---|---|---|---|
-  | UR | 1% | 3% | 6.8% |
+  | REV | 0.1% | 0.5% | 0.9% |
+  | UR | 0.9% | 2.5% | 6.8% (or better) |
   | SSR | 4% | 10% | 29.1% (or better) |
   | SR | 10% | 25% | 67.6% (or better) |
   | R | 27% | 62% | guaranteed |
@@ -88,9 +93,10 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 │   ├── css/                base, card, booster, views
 │   └── js/                 main.js (router), i18n (EN/FR), state, api, components/, views/, ui/
 ├── data/
-│   └── anime-list.js       the 151 anime (input of npm run sync)
+│   └── anime-list.js       the anime and manga that become cards (input of npm run sync)
 ├── supabase/
-│   └── schema.sql          creates the Supabase tables (run it in the SQL Editor)
+│   ├── config.toml         Supabase CLI / GitHub integration settings
+│   └── migrations/         the database: tables, then the card catalog (applied in order)
 ├── scripts/
 │   ├── sync-wikipedia.js   rebuilds the cards in Supabase from Wikipedia
 │   ├── import-cards.js     copies a cards JSON file into Supabase (npm run db:import)
@@ -102,17 +108,14 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 
 Everything is stored in a **Supabase** (PostgreSQL) database: the card catalog (`cards`,
 `booster_sets`, `catalog_info`) and the players, sessions, boosters and friends.
-To set it up (once):
+The database is described by the SQL files of [supabase/migrations/](supabase/migrations/): the
+tables first, then the card catalog. The project is linked to Supabase with the **GitHub
+integration**, which applies new migrations when they are pushed on `main`. Without it, paste the
+files in the **SQL Editor** in order.
 
-1. In the Supabase dashboard, open **SQL Editor → New query**, paste
-   [supabase/schema.sql](supabase/schema.sql) and click **Run** (it creates the tables and the
-   booster sets; it can be run again safely, for example after an update).
-2. Copy `.env.example` to `.env` and fill in your project URL and secret key
-   (**Project Settings → API Keys**). `.env` is in `.gitignore`: it is never committed.
-3. Fill the cards: `npm run sync` (from Wikipedia), or `npm run db:import -- cards.json` to
-   copy a catalog JSON file made by an older version (`--sql` writes `supabase/seed-cards.sql`
-   instead, to paste in the SQL Editor).
-4. `npm start` — the startup message shows `Database: Supabase (…)`.
+To run the game locally, copy `.env.example` to `.env` and fill in your project URL and secret
+key (**Project Settings → API Keys**), then `npm start`: the startup message shows
+`Database: Supabase (…)`. `.env` is in `.gitignore`: it is never committed.
 
 Only the server uses the database, with the **secret** key (it never reaches the browser).
 Row Level Security is enabled on every table: the public (publishable) key can only read the
@@ -122,7 +125,7 @@ card catalog, nothing else.
 
 Rankings (between friends, and the global leaderboard) use a **collection score** that grows
 with both the number and the rarity of your cards: each different card is worth
-**N 10 · R 25 · SR 60 · SSR 150 · UR 400** points, and each extra copy adds 10% of that.
+**N 10 · R 25 · SR 60 · SSR 150 · UR 400 · REV 1000** points, and each extra copy adds 10% of that.
 The values are in `SCORE` in [server/config.js](server/config.js).
 
 ## Accounts and security
@@ -201,23 +204,25 @@ In PowerShell: `$env:PORT=4000; npm start`. In bash: `PORT=4000 npm start`.
 ## Refreshing or adding cards
 
 The card catalog lives in the Supabase table `cards`. To rebuild it from the English and French
-Wikipedia (new summaries, pictures, and rarities from the latest page views), then restart the
+Wikipedia (new summaries, pictures, and rarities from the latest popularity), then restart the
 server:
 
 ```bash
-npm run sync
+npm run sync                                    # straight into Supabase (needs .env)
+npm run sync -- --json cards.json               # or into a file…
+npm run db:import -- cards.json --sql           # …turned into a new migration to push on main
 ```
 
-To **add an anime**, add a line to [data/anime-list.js](data/anime-list.js) (the English
-Wikipedia page title, the year of its first anime release, and a type), then run `npm run sync`.
+To **add an anime or a manga**, add a line to [data/anime-list.js](data/anime-list.js) (the
+English Wikipedia page title, the year of its first release, and a type), then sync.
 
 The French page is found automatically through Wikipedia's language links (`frTitle` and
 `nameFr` in the list let you override it).
 
 When an intro does not tell the story (common on French Wikipedia), the sync also reads the
 article's "Plot"/"Synopsis" section. Wikimedia limits anonymous scripts to 10 requests per
-minute, so the first sync takes about 15–20 minutes; later syncs reuse the sections of the
-articles that did not change and take a few minutes. Set `WIKIMEDIA_CONTACT` to your e-mail or
+minute, so a sync of the ~1,000 cards takes hours without `WIKIMEDIA_CONTACT`; later syncs reuse
+the sections of the articles that did not change. Set `WIKIMEDIA_CONTACT` to your e-mail or
 website to identify yourself and sync much faster
 (`$env:WIKIMEDIA_CONTACT="you@example.com"; npm run sync`).
 

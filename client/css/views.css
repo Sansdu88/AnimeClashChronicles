@@ -394,6 +394,10 @@
   background: var(--rainbow);
 }
 
+.r-REV .luck__bar--you {
+  background: var(--rainbow-rev);
+}
+
 .luck__bar--expected {
   height: 6px;
   background: repeating-linear-gradient(90deg, var(--ink) 0 4px, transparent 4px 7px);

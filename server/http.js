@@ -5,6 +5,7 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
+import { gzipSync } from 'node:zlib';
 
 /** `code` is a stable identifier the UI uses to show a translated message. */
 export class HttpError extends Error {
@@ -91,11 +92,15 @@ export async function readJson(req, limit = 16 * 1024) {
 }
 
 export function sendJson(req, res, status, data, headers = {}) {
-  const body = status === 204 ? '' : JSON.stringify(data);
+  let body = status === 204 ? '' : JSON.stringify(data);
+  // Big answers (the card list is a few MB) are gzipped: about 4 times smaller.
+  const gzip = body.length > 1024 && /\bgzip\b/.test(req.headers['accept-encoding'] ?? '');
+  if (gzip) body = gzipSync(body);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(body),
     'Cache-Control': 'no-store',
+    ...(gzip && { 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' }),
     ...headers,
   });
   res.end(req.method === 'HEAD' ? undefined : body);
