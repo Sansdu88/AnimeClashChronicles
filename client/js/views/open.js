@@ -1,10 +1,11 @@
 /**
  * "Open" page: the booster shelf and the opening stage
  * (shake → tear → 5 face-down cards → flip them one by one).
+ * A player can open one booster every 2 minutes (BOOSTER.cooldownSeconds).
  */
 import { $, $$, escapeHtml, fmt, html, mount, raw, wait } from '../dom.js';
 import { cardText, errorText, rarityName, setName, setTagline, t, tHtml } from '../i18n.js';
-import { byRarity, openBoosters, setOf, state } from '../state.js';
+import { boosterWait, byRarity, openBoosters, setOf, state } from '../state.js';
 import { cardBackHTML, cardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
 import { RARITY_COLORS, burst, flash, onomatopoeia, shakeScreen } from '../ui/effects.js';
@@ -43,9 +44,21 @@ function packTileHTML(set) {
     </div>
     <div class="pack-tile__actions">
       <button class="btn btn--primary" type="button" data-open="${set.id}">${t('open.open')}</button>
-      <button class="btn btn--secondary" type="button" data-open="${set.id}" data-count="10" title="${t('open.openTen')}">×10</button>
     </div>
   </div>`;
+}
+
+/**
+ * Calls `paint(seconds)` now and every second while the wait before the next
+ * booster runs (the last call has 0). `paint` returns false to stop.
+ */
+function countdown(paint) {
+  const tick = () => {
+    const seconds = boosterWait();
+    if (paint(seconds) === false || seconds === 0) return;
+    setTimeout(tick, 1000);
+  };
+  tick();
 }
 
 export function renderOpen(main) {
@@ -56,8 +69,9 @@ export function renderOpen(main) {
       <div class="hero">
         <p class="hero__kicker" lang="ja">ブースターを開けよう！</p>
         <h1 class="hero__title">${t('open.title')}</h1>
-        <p class="hero__sub">${raw(tHtml('open.sub'))}</p>
+        <p class="hero__sub">${raw(tHtml('open.sub', { minutes: meta.booster.cooldownSeconds / 60 }))}</p>
       </div>
+      <p class="cooldown" role="status" hidden></p>
       <div class="shelf">${meta.sets.map(packTileHTML)}</div>
       <p class="open-footer">
         <span>${t('open.collection')} <strong>${player.stats.uniqueCards}/${player.stats.totalCards}</strong>
@@ -72,9 +86,24 @@ export function renderOpen(main) {
     const button = event.target.closest('[data-open]');
     if (!button) return;
     sfx.play('click');
-    const count = Number(button.dataset.count ?? 1);
-    if (count > 1) openBulk(button.dataset.open, count);
-    else openSingle(button.dataset.open);
+    openSingle(button.dataset.open);
+  });
+
+  // While waiting: countdown banner and disabled buttons, then "ready!".
+  const banner = $('.cooldown', main);
+  const buttons = $$('[data-open]', main);
+  let waited = false;
+  countdown((seconds) => {
+    if (!banner.isConnected) return false; // the page was left or redrawn
+    banner.hidden = seconds === 0;
+    banner.textContent = `⏳ ${t('open.cooldown', { time: fmt.duration(seconds) })}`;
+    for (const button of buttons) button.disabled = seconds > 0;
+    if (seconds > 0) waited = true;
+    else if (waited && !document.querySelector('.stage')) {
+      sfx.play('R');
+      toast(t('open.ready'), 'success');
+    }
+    return true;
   });
 }
 
@@ -259,18 +288,26 @@ function showReveal(stage, set, booster, run) {
         </p>
         <div class="btn-row">
           <button class="btn btn--primary btn--big" type="button" data-action="again">${t('stage.again')}</button>
-          <button class="btn btn--secondary" type="button" data-action="bulk">${t('stage.openTen')}</button>
           <a class="btn btn--ghost-light" href="#/collection">${t('stage.myCollection')}</a>
         </div>`,
     );
-    $('[data-action="again"]', stage.content).focus({ preventScroll: true });
+    const again = $('[data-action="again"]', stage.content);
+    let waited = false;
+    countdown((seconds) => {
+      if (!again.isConnected) return false;
+      again.disabled = seconds > 0;
+      again.textContent = seconds > 0 ? `⏳ ${t('open.cooldown', { time: fmt.duration(seconds) })}` : t('stage.again');
+      if (seconds > 0) waited = true;
+      else if (waited) sfx.play('R');
+      return true;
+    });
+    (again.disabled ? $('.btn-row a', stage.content) : again).focus({ preventScroll: true });
   }
 
   stage.content.onclick = (event) => {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'reveal-all') revealAll();
     else if (action === 'again') openSingle(set.id, stage);
-    else if (action === 'bulk') openBulk(set.id, 10, stage);
     const flip = event.target.closest('.flip');
     if (!flip) return;
     if (flip.dataset.state === 'revealed') openCardModal(cards[Number(flip.dataset.index)], { list: cards });
@@ -315,81 +352,4 @@ function celebrate(box, rarity) {
     default:
       break;
   }
-}
-
-// ── ×10 boosters ────────────────────────────────────────────────────────────
-
-async function openBulk(setId, count, stage = createStage()) {
-  const set = setOf(setId);
-  const run = ++stage.run;
-  stage.element.dataset.phase = 'bulk';
-  stage.element.style.cssText = packStyle(set);
-  mount(
-    stage.content,
-    html`<div class="bulk-loading">
-      <div class="bulk-loading__packs">${[0, 1, 2].map((i) => html`<span class="pack pack--mini" style="--i:${i}">${packHTML(set)}</span>`)}</div>
-      <p class="stage__hint bubble">${t('stage.bulkOpening', { count })}</p>
-    </div>`,
-  );
-  sfx.play('shake');
-
-  let boosters;
-  try {
-    [boosters] = await Promise.all([openBoosters(setId, count), wait(900)]);
-  } catch (err) {
-    toast(errorText(err), 'error');
-    stage.close();
-    return;
-  }
-  if (stage.closed || stage.run !== run) return;
-
-  const cards = boosters.flatMap((booster) => booster.cards).sort(byRarity);
-  const newCount = cards.filter((card) => card.isNew).length;
-  const tally = [...state.meta.rarities].reverse().map((rarity) => ({
-    rarity,
-    count: cards.filter((card) => card.rarity === rarity.id).length,
-  }));
-
-  sfx.play('tear');
-  mount(
-    stage.content,
-    html`<div class="bulk">
-      <h2 class="bulk__title">${t('stage.bulkTitle', { count, cards: cards.length })}</h2>
-      <div class="bulk__tally">
-        ${tally.map(({ rarity, count: n }) => html`<span class="tally-chip r-${rarity.id} ${n ? '' : 'is-zero'}">${rarity.id} <b>×${n}</b></span>`)}
-        <span class="tally-chip tally-chip--new">${t('stage.bulkNew')} <b>×${newCount}</b></span>
-      </div>
-      <div class="bulk__grid">
-        ${cards.map(
-          (card, i) => html`<button class="bulk__item" type="button" data-index="${i}" style="--i:${i}"
-              aria-label="${t('stage.revealed', { name: cardText(card).name, rarity: rarityName(card.rarity), isNew: card.isNew ? t('stage.revealedNew') : '' })}">
-            ${cardHTML(card, { isNew: card.isNew, interactive: false })}
-          </button>`,
-        )}
-      </div>
-      <div class="btn-row">
-        <button class="btn btn--primary btn--big" type="button" data-action="bulk">${t('stage.bulkAgain', { count })}</button>
-        <button class="btn btn--secondary" type="button" data-action="single">${t('stage.bulkOne')}</button>
-        <a class="btn btn--ghost-light" href="#/collection">${t('stage.myCollection')}</a>
-      </div>
-    </div>`,
-  );
-  stage.announce(
-    t('stage.bulkAnnounce', { cards: cards.length, count: newCount, best: `${cards[0].rarity} ${cardText(cards[0]).name}` }),
-  );
-
-  if (['SR', 'SSR', 'UR'].includes(cards[0].rarity)) {
-    const title = $('.bulk__title', stage.content).getBoundingClientRect();
-    setTimeout(() => celebrate(title, cards[0].rarity), 300);
-  }
-
-  stage.content.onclick = (event) => {
-    const action = event.target.closest('[data-action]')?.dataset.action;
-    if (action === 'bulk') openBulk(set.id, count, stage);
-    else if (action === 'single') openSingle(set.id, stage);
-    const item = event.target.closest('.bulk__item');
-    if (item) openCardModal(cards[Number(item.dataset.index)], { list: cards });
-  };
-  stage.content.onkeydown = null;
-  $('[data-action="bulk"]', stage.content).focus({ preventScroll: true });
 }

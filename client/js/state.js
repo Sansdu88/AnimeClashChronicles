@@ -27,6 +27,17 @@ function emit() {
   for (const listener of listeners) listener(state);
 }
 
+// The server tells how many seconds are left before the next booster.
+let nextBoosterAt = 0;
+
+function setPlayer(player) {
+  state.player = player;
+  nextBoosterAt = Date.now() + (player?.nextBoosterIn ?? 0) * 1000;
+}
+
+/** Seconds before the next booster can be opened (0 = now). */
+export const boosterWait = () => Math.max(0, Math.ceil((nextBoosterAt - Date.now()) / 1000));
+
 export const rarityOf = (id) => state.meta.rarities.find((r) => r.id === id);
 export const typeOf = (id) => state.meta.types.find((t) => t.id === id);
 export const setOf = (id) => state.meta.sets.find((s) => s.id === id);
@@ -67,7 +78,7 @@ function forgetLegacyPlayer() {
 export const hasLegacyPlayer = () => Boolean(legacyPlayerId());
 
 async function signedIn(player) {
-  state.player = player;
+  setPlayer(player);
   await refreshCollection();
   return player;
 }
@@ -115,7 +126,7 @@ export async function refreshCollection() {
 }
 
 export async function reloadPlayer() {
-  state.player = await api(playerPath());
+  setPlayer(await api(playerPath()));
   emit();
   return state.player;
 }
@@ -123,7 +134,7 @@ export async function reloadPlayer() {
 /** Opens `count` boosters of a set. Returns the boosters (cards in reveal order, with isNew). */
 export async function openBoosters(setId, count = 1) {
   const result = await api(playerPath('/boosters'), { method: 'POST', body: { setId, count } });
-  state.player = result.player;
+  setPlayer(result.player);
   for (const booster of result.boosters) {
     for (const card of booster.cards) {
       const entry = state.owned.get(card.id);
@@ -145,13 +156,13 @@ export async function openBoosters(setId, count = 1) {
 }
 
 export async function renamePlayer(name) {
-  state.player = await api(playerPath(), { method: 'PATCH', body: { name } });
+  setPlayer(await api(playerPath(), { method: 'PATCH', body: { name } }));
   emit();
 }
 
 export async function resetCollection() {
   const result = await api(playerPath('/collection'), { method: 'DELETE' });
-  state.player = result.player;
+  setPlayer(result.player);
   state.owned = new Map();
   emit();
 }

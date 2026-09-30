@@ -117,6 +117,11 @@ export async function createLocalApi() {
       .map(([cardId, entry]) => ({ cardId, ...entry }));
   const rarityOfCard = (cardId) => cardsById.get(cardId)?.rarity;
 
+  const boosterWait = (player) =>
+    player.lastBoosterAt
+      ? Math.max(0, Math.ceil((BOOSTER.cooldownSeconds * 1000 - (Date.now() - new Date(player.lastBoosterAt).getTime())) / 1000))
+      : 0;
+
   function profile(player) {
     const cardsPulled = Object.values(player.pullsByRarity).reduce((sum, n) => sum + n, 0);
     return {
@@ -133,6 +138,7 @@ export async function createLocalApi() {
         ...summary(player),
         score: collectionScore(entriesOf(player), rarityOfCard).score,
       },
+      nextBoosterIn: boosterWait(player),
     };
   }
 
@@ -301,7 +307,9 @@ export async function createLocalApi() {
         const setId = body.setId ?? 'all-stars';
         const set = sets.get(setId) ?? fail(400, `Unknown setId "${setId}"`);
         const count = intParam(body.count, 1, BOOSTER.maxPerRequest, 1, 'count');
+        if (boosterWait(player) > 0) fail(429, 'You can open one booster every 2 minutes', 'booster_cooldown');
         const openedAt = new Date().toISOString();
+        player.lastBoosterAt = openedAt;
         const boosters = Array.from({ length: count }, () => {
           const pulled = openBooster(set).map((card) => {
             const isNew = !player.collection[card.id];
@@ -372,7 +380,7 @@ export async function createLocalApi() {
       ({ params }) => {
         const player = requireSelf(params[0]);
         const deletedBoosters = player.boostersOpened;
-        Object.assign(player, { boostersOpened: 0, boostersBySet: {}, pullsByRarity: {}, collection: {}, history: [] });
+        Object.assign(player, { boostersOpened: 0, boostersBySet: {}, pullsByRarity: {}, collection: {}, history: [], lastBoosterAt: null });
         save();
         return { deletedBoosters, player: profile(player) };
       },

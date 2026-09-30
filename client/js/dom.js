@@ -69,6 +69,7 @@ export const fmt = {
   date: (iso) => new Intl.DateTimeFormat(locale(), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)),
   day: (iso) => new Intl.DateTimeFormat(locale(), { dateStyle: 'long' }).format(new Date(`${iso}T12:00:00Z`)),
   pad: (n) => String(n).padStart(3, '0'),
+  duration: (seconds) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`,
   timeAgo(iso) {
     const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
     const relative = new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' });

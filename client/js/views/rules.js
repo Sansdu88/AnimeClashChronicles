@@ -30,7 +30,7 @@ export function renderRules(main) {
       <ol class="steps">
         <li class="panel step"><span class="step__num">1</span><h2>${t('rules.step1Title')}</h2><p>${t('rules.step1')}</p></li>
         <li class="panel step"><span class="step__num">2</span><h2>${t('rules.step2Title')}</h2>
-          <p>${raw(tHtml('rules.step2', { size: booster.size }))}</p></li>
+          <p>${raw(tHtml('rules.step2', { size: booster.size, minutes: booster.cooldownSeconds / 60 }))}</p></li>
         <li class="panel step"><span class="step__num">3</span><h2>${t('rules.step3Title')}</h2>
           <p>${t('rules.step3', { ur: meta.rarities.find((r) => r.id === 'UR').cardCount })}</p></li>
       </ol>
