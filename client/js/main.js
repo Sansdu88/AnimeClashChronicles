@@ -12,7 +12,8 @@ import { renderCollection } from './views/collection.js';
 import { renderStats } from './views/stats.js';
 import { renderRules } from './views/rules.js';
 import { renderFriendCollection, renderFriends } from './views/friends.js';
-import { fetchFriends } from './state.js';
+import { renderTrades } from './views/trades.js';
+import { fetchFriends, fetchTrades, syncCollection } from './state.js';
 
 const ROUTES = {
   open: renderOpen,
@@ -21,6 +22,8 @@ const ROUTES = {
   rules: renderRules,
   // #/friends, or #/friends/<id> for a friend's collection
   friends: (main, friendId) => (friendId ? renderFriendCollection(main, friendId) : renderFriends(main)),
+  // #/trades, or #/trades/<friendId> to start a trade with that friend
+  trades: renderTrades,
 };
 
 const main = $('#main');
@@ -33,11 +36,14 @@ function currentRoute() {
   return ROUTES[name] ? [name, param ? decodeURIComponent(param) : null] : ['open', null];
 }
 
-function paintFriendBadge(count) {
-  const badge = $('#friends-badge');
+function paintBadge(selector, count) {
+  const badge = $(selector);
   badge.textContent = count;
   badge.hidden = !count;
 }
+
+const paintFriendBadge = (count) => paintBadge('#friends-badge', count);
+const paintTradeBadge = (count) => paintBadge('#trades-badge', count);
 
 // ── Header & static texts ────────────────────────────────────────────────────
 
@@ -127,6 +133,12 @@ function render({ scroll = true } = {}) {
   document.title = `${t(`titles.${name}`)} · Anime Clash Chronicles`;
   main.dataset.view = name;
   ROUTES[name](main, param ?? undefined);
+  // A friend may have accepted a trade since your cards were loaded: show your latest collection.
+  if (name === 'collection') {
+    syncCollection()
+      .then((changed) => changed && screen === 'app' && currentRoute()[0] === 'collection' && render({ scroll: false }))
+      .catch(() => {});
+  }
   if (scroll) {
     window.scrollTo(0, 0);
     main.focus({ preventScroll: true });
@@ -154,6 +166,9 @@ function enterApp() {
   render();
   fetchFriends()
     .then((data) => paintFriendBadge(data.incoming.length))
+    .catch(() => {});
+  fetchTrades()
+    .then((data) => paintTradeBadge(data.trades.filter((trade) => trade.yourTurn).length))
     .catch(() => {});
 }
 
@@ -208,6 +223,7 @@ async function start() {
   });
   window.addEventListener('mb:logout', doLogout);
   window.addEventListener('mb:friend-requests', (event) => paintFriendBadge(event.detail));
+  window.addEventListener('mb:trades-waiting', (event) => paintTradeBadge(event.detail));
   window.addEventListener('mb:unauthorized', () => {
     if (screen !== 'app') return;
     state.player = null;

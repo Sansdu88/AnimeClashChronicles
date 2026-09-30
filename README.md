@@ -43,6 +43,7 @@ can take a minute.
 | **Cards** | Picture, Japanese title, type (Action, Mecha, Romance…), year, power level, and a one-sentence summary from Wikipedia. SSR, UR and REV are full-art cards with a holographic effect that follows your mouse; REV (Reversed) cards have inverted colors. |
 | **Collection** | A pokédex-style grid: missing cards show up as `???`. Filters, sorting, and completion per rarity. Click a card for its full Wikipedia summary. |
 | **Friends** | Every player has a friend code (e.g. `#K7Q2XM`). Send friend requests by code or e-mail, accept or decline them, look at your friends' collections, and compete in the friends ranking. |
+| **Trades** | Offer one copy of a card to a friend: they choose one of their cards to give back (or decline), then you accept the swap (or cancel it). Each player gives one copy: with ×5 you keep ×4, and trading your only copy removes the card from your collection. The picker shows which cards your friend is missing. |
 | **Stats** | Luck meter (your pulls compared with the official odds), booster history, global leaderboard. |
 | **Accounts** | Sign up with an e-mail and a password, log in from any browser, rename yourself, change your password, log out. Several people on the same network can play on one server (see `HOST` below). |
 | **Colorblind mode** | The 👁 button (off by default) switches rarities to colors that stay distinct with every kind of color blindness and adds card-game symbols: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR · ☆☆☆ REV. |
@@ -86,7 +87,7 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 │   ├── http.js             tiny router, JSON helpers, static file server
 │   ├── booster.js          booster opening logic (pure functions)
 │   ├── catalog.js          builds the card catalog and booster sets (read from Supabase)
-│   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, friends
+│   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, friends, trades
 │   └── config.js           rarities, drop rates, types, eras
 ├── client/                 web UI (HTML/CSS/JS modules, no build step)
 │   ├── index.html
@@ -107,7 +108,7 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 ## Database: Supabase
 
 Everything is stored in a **Supabase** (PostgreSQL) database: the card catalog (`cards`,
-`booster_sets`, `catalog_info`) and the players, sessions, boosters and friends.
+`booster_sets`, `catalog_info`) and the players, sessions, boosters, friends and trades.
 The database is described by the SQL files of [supabase/migrations/](supabase/migrations/): the
 tables first, then the card catalog. The project is linked to Supabase with the **GitHub
 integration**, which applies new migrations when they are pushed on `main`. Without it, paste the
@@ -170,6 +171,12 @@ with the token returned by register/login.
 | POST | `/api/players/:playerId/friends/:friendId/decline` | Decline a friend request |
 | DELETE | `/api/players/:playerId/friends/:friendId` | Remove a friend, or cancel a request you sent |
 | GET | `/api/players/:playerId/friends/:friendId/collection` | A friend's collection (friends only) |
+| GET | `/api/players/:playerId/trades` | Your open trades (`yourTurn` when one waits for your answer), the latest closed ones, the copies promised in open trades and your friends |
+| POST | `/api/players/:playerId/trades` | Offer a card to a friend. Body: `{ "friendId", "cardId" }` (a copy not already promised in another trade) |
+| POST | `/api/players/:playerId/trades/:tradeId/propose` | The friend chooses the card they give back. Body: `{ "cardId" }` |
+| POST | `/api/players/:playerId/trades/:tradeId/accept` | The player who offered accepts: both cards change hands in one transaction |
+| POST | `/api/players/:playerId/trades/:tradeId/decline` | The friend declines the trade, or takes back the card they chose |
+| DELETE | `/api/players/:playerId/trades/:tradeId` | The player who offered cancels the trade |
 | GET | `/api/leaderboard?limit=10` | Best collectors by score |
 
 Routes under `/api/players/:playerId` require being logged in as that player.

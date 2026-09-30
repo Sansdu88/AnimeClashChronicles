@@ -223,6 +223,56 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return store.getPlayer(friendId);
   }
 
+  // ── Trades ─────────────────────────────────────────────────────────────────
+
+  /** cardId → copies the player has promised in open trades (the card they offered, or chose to give back). */
+  function promisedCards(openTrades, playerId) {
+    const promised = new Map();
+    const add = (cardId) => promised.set(cardId, (promised.get(cardId) ?? 0) + 1);
+    for (const trade of openTrades) {
+      if (trade.from.id === playerId) add(trade.fromCardId);
+      else if (trade.status === 'proposed') add(trade.toCardId);
+    }
+    return promised;
+  }
+
+  /** Whose answer an open trade is waiting for: the friend chooses a card, then the player who offered accepts. */
+  const yourTurn = (trade, playerId) =>
+    trade.status === 'pending' ? trade.to.id === playerId : trade.from.id === playerId;
+
+  async function tradesOf(player) {
+    const [{ open, closed }, friends] = await Promise.all([store.trades(player.id, 20), store.friends(player.id)]);
+    return {
+      trades: open.map((trade) => ({ ...trade, yourTurn: yourTurn(trade, player.id) })),
+      history: closed,
+      promised: Object.fromEntries(promisedCards(open, player.id)),
+      friends: friends.map(({ id, name, friendCode }) => ({ id, name, friendCode })),
+    };
+  }
+
+  function tradeCard(cardId) {
+    if (typeof cardId !== 'string' || !catalog.getCard(cardId)) throw new HttpError(404, 'Card not found', null, 'card_not_found');
+    return cardId;
+  }
+
+  /** Throws unless the player has a copy of the card that is not already promised in another open trade. */
+  async function requireSpareCopy(playerId, cardId) {
+    const [copies, { open }] = await Promise.all([store.copies(playerId, cardId), store.trades(playerId, 0)]);
+    if (copies === 0) throw new HttpError(409, 'You do not own this card', null, 'card_not_owned');
+    if (copies <= (promisedCards(open, playerId).get(cardId) ?? 0)) {
+      throw new HttpError(409, 'All your copies of this card are already in other trades', null, 'card_in_trade');
+    }
+  }
+
+  /** An open trade of the player: `side` 'from' = they offered it, 'to' = a friend offered it to them. */
+  async function openTrade(player, tradeId, side, statuses) {
+    const trade = /^\d{1,15}$/.test(tradeId) ? await store.getTrade(Number(tradeId)) : null;
+    if (!trade || trade[side].id !== player.id || !statuses.includes(trade.status)) {
+      throw new HttpError(404, 'No such trade waiting for you', null, 'trade_not_found');
+    }
+    return trade;
+  }
+
   // ── Catalog ────────────────────────────────────────────────────────────────
   router.get('/api/health', () => ({ status: 'ok', cards: totalCards, uptime: Math.round(process.uptime()) }));
 
@@ -481,6 +531,69 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     const friend = await requireFriend(await requireSelf(req, params.playerId), params.friendId);
     const [player, { entries }] = await Promise.all([publicProfile(friend), collectionOf(friend.id)]);
     return { player, cards: entries };
+  });
+
+  // ── Trades (with your friends) ─────────────────────────────────────────────
+  // 1. You offer a card to a friend · 2. they choose a card to give back, or decline ·
+  // 3. you accept (the cards are swapped) or cancel.
+
+  /** Your open trades (with `yourTurn`), the latest closed ones, the copies you promised and your friends. */
+  router.get('/api/players/:playerId/trades', async ({ req, params }) => tradesOf(await requireSelf(req, params.playerId)));
+
+  /** Body: { friendId, cardId } — offers one copy of your card. */
+  router.post('/api/players/:playerId/trades', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
+    await requireFriend(player, typeof body.friendId === 'string' ? body.friendId : '');
+    const cardId = tradeCard(body.cardId);
+    await requireSpareCopy(player.id, cardId);
+    const id = await store.createTrade(player.id, body.friendId, cardId);
+    return reply(201, { id, ...(await tradesOf(player)) });
+  });
+
+  /** Body: { cardId } — the friend chooses the card they give back. */
+  router.post('/api/players/:playerId/trades/:tradeId/propose', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
+    const trade = await openTrade(player, params.tradeId, 'to', ['pending']);
+    await requireFriend(player, trade.from.id);
+    const cardId = tradeCard(body.cardId);
+    if (cardId === trade.fromCardId) throw new HttpError(400, 'Choose another card than the one you are offered', null, 'same_card');
+    await requireSpareCopy(player.id, cardId);
+    if (!(await store.proposeTrade(trade.id, player.id, cardId))) {
+      throw new HttpError(404, 'No such trade waiting for you', null, 'trade_not_found');
+    }
+    return tradesOf(player);
+  });
+
+  /** The player who offered the card accepts the friend's card: both cards change hands. */
+  router.post('/api/players/:playerId/trades/:tradeId/accept', async ({ req, params }) => {
+    const player = await requireSelf(req, params.playerId);
+    const trade = await openTrade(player, params.tradeId, 'from', ['proposed']);
+    await requireFriend(player, trade.to.id);
+    const result = await store.completeTrade(trade.id, player.id);
+    if (result === 'from_card_missing') throw new HttpError(409, 'You do not own the card you offered anymore', null, 'card_not_owned');
+    if (result === 'to_card_missing') throw new HttpError(409, 'Your friend does not own their card anymore', null, 'friend_card_gone');
+    if (result !== 'accepted') throw new HttpError(404, 'No such trade waiting for you', null, 'trade_not_found');
+    return { ...(await tradesOf(player)), player: await profile(player) };
+  });
+
+  /** The friend declines a trade (or takes back the card they chose). */
+  router.post('/api/players/:playerId/trades/:tradeId/decline', async ({ req, params }) => {
+    const player = await requireSelf(req, params.playerId);
+    const trade = await openTrade(player, params.tradeId, 'to', ['pending', 'proposed']);
+    if (!(await store.closeTrade(trade.id, 'to', player.id, 'declined'))) {
+      throw new HttpError(404, 'No such trade waiting for you', null, 'trade_not_found');
+    }
+    return tradesOf(player);
+  });
+
+  /** The player who offered the card cancels the trade. */
+  router.delete('/api/players/:playerId/trades/:tradeId', async ({ req, params }) => {
+    const player = await requireSelf(req, params.playerId);
+    const trade = await openTrade(player, params.tradeId, 'from', ['pending', 'proposed']);
+    if (!(await store.closeTrade(trade.id, 'from', player.id, 'canceled'))) {
+      throw new HttpError(404, 'No such trade waiting for you', null, 'trade_not_found');
+    }
+    return tradesOf(player);
   });
 
   return router;

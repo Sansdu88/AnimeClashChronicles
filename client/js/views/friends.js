@@ -63,6 +63,7 @@ function friendCardHTML(friend) {
     </div>
     <div class="btn-row btn-row--start">
       <a class="btn btn--primary" href="#/friends/${encodeURIComponent(friend.id)}">${t('friends.see')}</a>
+      <a class="btn btn--secondary" href="#/trades/${encodeURIComponent(friend.id)}">${t('friends.trade')}</a>
       <button class="btn btn--ghost" type="button" data-action="remove" data-id="${friend.id}" data-name="${friend.name}">${t('friends.remove')}</button>
     </div>
   </li>`;
