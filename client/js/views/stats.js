@@ -11,7 +11,6 @@ import {
   state,
 } from '../state.js';
 import { confirmDialog, formDialog } from '../components/modal.js';
-import { isLocalMode } from '../api.js';
 import { toast } from '../ui/toast.js';
 
 let renderId = 0;
@@ -140,7 +139,7 @@ export async function renderStats(main) {
             <div><dt>${t('stats.player')}</dt><dd>${player.name}</dd></div>
             <div><dt>${t('stats.email')}</dt><dd>${player.email ?? '—'}</dd></div>
           </dl>
-          <p class="muted">${t(isLocalMode() ? 'auth.localNote' : 'stats.accountText')}</p>
+          <p class="muted">${t('stats.accountText')}</p>
           <div class="btn-row btn-row--start">
             <button class="btn btn--secondary" type="button" data-action="rename">${t('stats.rename')}</button>
             <button class="btn btn--secondary" type="button" data-action="password">${t('stats.changePassword')}</button>

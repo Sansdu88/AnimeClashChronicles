@@ -42,7 +42,7 @@ export const rarityOf = (id) => state.meta.rarities.find((r) => r.id === id);
 export const typeOf = (id) => state.meta.types.find((t) => t.id === id);
 export const setOf = (id) => state.meta.sets.find((s) => s.id === id);
 export const eraOf = (id) => state.meta.eras.find((e) => e.id === id);
-export const rarityRank = (id) => state.meta.rarities.findIndex((r) => r.id === id);
+const rarityRank = (id) => state.meta.rarities.findIndex((r) => r.id === id);
 
 /** Rarest first, then most popular. */
 export const byRarity = (a, b) =>
@@ -119,7 +119,7 @@ export const changePassword = (currentPassword, newPassword) =>
 
 const playerPath = (suffix = '') => `/players/${encodeURIComponent(state.player.id)}${suffix}`;
 
-export async function refreshCollection() {
+async function refreshCollection() {
   const collection = await api(playerPath('/collection'));
   state.owned = new Map(collection.cards.map((entry) => [entry.cardId, entry]));
   emit();

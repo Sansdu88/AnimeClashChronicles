@@ -6,7 +6,7 @@
  */
 
 const LANG_KEY = 'mangaBooster.lang';
-export const LANGUAGES = ['en', 'fr'];
+const LANGUAGES = ['en', 'fr'];
 
 const DICT = {
   en: {
@@ -275,7 +275,6 @@ const DICT = {
       created: 'Account created! Welcome, {name}!',
       loggedOut: 'See you soon!',
       required: 'Fill in your e-mail and password.',
-      localNote: 'Online version: your account and your cards are saved in this browser only.',
     },
     errors: {
       invalid_credentials: 'Wrong e-mail or password.',
@@ -566,9 +565,7 @@ const DICT = {
       welcomeBack: 'Content de te revoir, {name} !',
       created: 'Compte créé ! Bienvenue, {name} !',
       loggedOut: 'À bientôt !',
-      required: 'Remplis ton e-mail et ton mot de passe.',
-      localNote: 'Version en ligne : ton compte et tes cartes sont enregistrés uniquement dans ce navigateur.',
-    },
+      required: 'Remplis ton e-mail et ton mot de passe.',    },
     errors: {
       invalid_credentials: 'E-mail ou mot de passe incorrect.',
       email_taken: 'Un compte existe déjà avec cet e-mail.',

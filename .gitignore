@@ -1,8 +1,4 @@
 node_modules/
 .env
-dist/
 supabase/seed-cards.sql
-*.db
-*.db-shm
-*.db-wal
 .DS_Store

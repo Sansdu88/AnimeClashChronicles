@@ -11,7 +11,6 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "sync": "node scripts/sync-wikipedia.js",
-    "build:pages": "node scripts/build-static.js",
     "db:import": "node scripts/import-cards.js"
   },
   "license": "MIT"
