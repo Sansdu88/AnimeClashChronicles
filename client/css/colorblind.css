@@ -2,7 +2,7 @@
    Colorblind mode (👁 button in the header, off by default).
    Rarity colors switch to a palette that stays distinct with every kind of
    color blindness (Okabe–Ito), and every rarity also gets a symbol, like in
-   card games: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR.
+   card games: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR · ☆☆☆ REV.
    ========================================================================== */
 
 .r-N { --rsym: '●'; }
@@ -10,11 +10,13 @@
 .r-SR { --rsym: '★'; }
 .r-SSR { --rsym: '★★'; }
 .r-UR { --rsym: '★★★'; }
+.r-REV { --rsym: '☆☆☆'; }
 
 /* Face-down cards in a booster: only rare ones give a hint (like their glow). */
 .flip[data-rarity='SR'] { --rsym: '★'; }
 .flip[data-rarity='SSR'] { --rsym: '★★'; }
 .flip[data-rarity='UR'] { --rsym: '★★★'; }
+.flip[data-rarity='REV'] { --rsym: '☆☆☆'; }
 
 .cb-mode {
   --r-N: #8c8c8c;
@@ -22,6 +24,7 @@
   --r-SR: #d55e00;
   --r-SSR: #f0e442;
   --r-UR: #cc79a7;
+  --r-REV: #000;
 }
 
 /* ── Symbols next to every rarity label ─────────────────────────────────── */

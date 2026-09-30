@@ -1,7 +1,7 @@
 import { RARITY_IDS, RARITY_RANK } from './config.js';
 
 /**
- * Card fields ↔ columns of the Supabase table public.cards (supabase/schema.sql).
+ * Card fields ↔ columns of the Supabase table public.cards (supabase/migrations/).
  * The same card object is used by the sync script, the import script and the server.
  */
 const CARD_COLUMNS = {
@@ -15,6 +15,7 @@ const CARD_COLUMNS = {
   era: 'era',
   power: 'power',
   views: 'views',
+  languages: 'languages',
   description: 'description',
   short: 'short',
   summary: 'summary',
@@ -46,6 +47,7 @@ function toPublicCard(card) {
     era: card.era,
     power: card.power,
     views: card.views,
+    languages: card.languages,
     description: card.description,
     short: card.short,
     summary: card.summary,

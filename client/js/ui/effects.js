@@ -130,4 +130,5 @@ export const RARITY_COLORS = {
   SR: ['#9d4edd', '#e0aaff', '#c77dff', '#ffffff'],
   SSR: ['#ffd23f', '#f4a100', '#fff3b0', '#ffffff'],
   UR: ['#ff2e88', '#ffbe0b', '#3a86ff', '#8338ec', '#06d6a0', '#ffffff'],
+  REV: ['#00d177', '#0041f4', '#c57900', '#7cc713', '#f9295f', '#000000', '#ffffff'],
 };

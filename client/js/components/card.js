@@ -6,7 +6,7 @@ import { fmt, html, prefersReducedMotion, raw } from '../dom.js';
 import { cardText, eraName, rarityName, t, typeName } from '../i18n.js';
 import { eraOf, state, typeOf } from '../state.js';
 
-const FULL_ART = new Set(['SSR', 'UR']);
+const FULL_ART = new Set(['SSR', 'UR', 'REV']);
 
 function nameSize(name) {
   if (name.length > 30) return 'xs';

@@ -10,7 +10,7 @@ import { toast } from '../ui/toast.js';
 import { renderCollection } from './collection.js';
 
 let renderId = 0;
-const RARITIES_DESC = ['UR', 'SSR', 'SR', 'R', 'N'];
+const RARITIES_DESC = ['REV', 'UR', 'SSR', 'SR', 'R', 'N'];
 
 /** Tells the header how many requests are waiting (badge on the "Friends" link). */
 const announceRequests = (count) => window.dispatchEvent(new CustomEvent('mb:friend-requests', { detail: count }));

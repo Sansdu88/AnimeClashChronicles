@@ -116,7 +116,7 @@ export async function renderStats(main) {
         ${tile(t('stats.pulled'), fmt.number(stats.cardsPulled))}
         ${tile(t('stats.unique'), `${stats.uniqueCards}/${stats.totalCards}`, fmt.percent(stats.completion, 1))}
         ${tile(t('stats.duplicates'), fmt.number(duplicates))}
-        ${tile(t('stats.urPulled'), fmt.number(stats.pullsByRarity.UR ?? 0))}
+        ${tile(t('stats.urPulled'), fmt.number((stats.pullsByRarity.UR ?? 0) + (stats.pullsByRarity.REV ?? 0)))}
         ${tile(t('stats.best'), bestRarity ? bestRarity.id : '—', bestRarity ? rarityName(bestRarity.id) : '')}
       </div>
 

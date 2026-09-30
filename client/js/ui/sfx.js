@@ -74,6 +74,12 @@ const SOUNDS = {
     [523, 659, 784].forEach((note) => tone(note, { start: 0.6, duration: 1.2, type: 'triangle', gain: 0.07 }));
     noise({ start: 0.5, duration: 1, gain: 0.06, from: 9000, to: 5000 });
   },
+  REV: () => {
+    tone(60, { duration: 0.7, type: 'sine', gain: 0.4, slideTo: 30 });
+    arpeggio([1568, 1319, 1047, 784, 659, 523], { duration: 0.55, type: 'square', gain: 0.045, step: 0.09 });
+    [392, 494, 587].forEach((note) => tone(note, { start: 0.6, duration: 1.4, type: 'triangle', gain: 0.07 }));
+    noise({ start: 0.5, duration: 1.2, gain: 0.06, from: 5000, to: 9000 });
+  },
 };
 
 export const sfx = {

@@ -3,7 +3,7 @@
  * accounts, sessions, boosters, collections and friends. It talks to the Supabase REST API (PostgREST) with
  * fetch and the secret key from .env, so the project has no dependency.
  *
- * The tables are created by supabase/schema.sql.
+ * The tables are created by the SQL files of supabase/migrations/.
  */
 import { randomInt, randomUUID } from 'node:crypto';
 import { cardToRow, rowToCard } from './catalog.js';
@@ -186,7 +186,7 @@ export function createSupabaseStore({ url, secretKey }) {
 
     // ── Boosters & collection ────────────────────────────────────────────────
 
-    /** Saves opened boosters in one transaction (function record_boosters of schema.sql). */
+    /** Saves opened boosters in one transaction (function record_boosters, see supabase/migrations/). */
     async recordBoosters(playerId, setId, boosters) {
       const saved = await request('POST', 'rpc/record_boosters', {
         body: {

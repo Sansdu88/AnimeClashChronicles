@@ -246,10 +246,10 @@ function showReveal(stage, set, booster, run) {
     if (flip.dataset.state) return;
     flip.dataset.state = 'busy';
     const card = cards[Number(flip.dataset.index)];
-    if (card.rarity === 'UR' || card.rarity === 'SSR') {
+    if (['SSR', 'UR', 'REV'].includes(card.rarity)) {
       flip.classList.add('is-charging');
-      if (card.rarity === 'UR') sfx.play('charge');
-      await wait(card.rarity === 'UR' ? 950 : 500);
+      if (card.rarity !== 'SSR') sfx.play('charge');
+      await wait({ SSR: 500, UR: 950, REV: 1300 }[card.rarity]);
       if (stale()) return;
       flip.classList.remove('is-charging');
     }
@@ -348,6 +348,14 @@ function celebrate(box, rarity) {
       burst(x, y, { colors, count: 120, power: 1.7 });
       setTimeout(() => burst(x, y, { colors, count: 60, power: 1.2 }), 280);
       onomatopoeia('ドーン!!', { x, y: box.top - 20, color: '#ff2e88', size: 'xl' });
+      break;
+    case 'REV':
+      flash('#000', 700);
+      setTimeout(() => flash('#fff', 500), 350);
+      shakeScreen();
+      burst(x, y, { colors, count: 150, power: 1.9 });
+      setTimeout(() => burst(x, y, { colors, count: 80, power: 1.3 }), 300);
+      onomatopoeia('反転!!', { x, y: box.top - 20, color: '#00d177', size: 'xl' });
       break;
     default:
       break;

@@ -5,20 +5,25 @@
  *
  * For every anime listed in data/anime-list.js it reads, in batches:
  *   ① the English page: intro, short description, picture, French link
- *   ② the page views of the last 60 days (decides the rarity)
- *   ③ the Japanese title                              wikidata.org
+ *   ② the page views of the last 60 days
+ *   ③ the Japanese title and the number of Wikipedia languages   wikidata.org
  *   ④ the French page: intro and short description    fr.wikipedia.org
  *   ⑤ when an intro does not tell the story, the "Plot"/"Synopsis" section of
  *      the article (one request per article, cached by page revision)
- * Within each era, the anime whose English page is the most read get the
- * rarest tiers (see RARITIES in server/config.js).
+ * Popularity = half page views, half number of Wikipedia languages (as ranks).
+ * The most popular anime and manga get the rarest tiers (see RARITIES in
+ * server/config.js), whatever their era.
  *
  * Wikimedia allows 10 requests/minute to clients that do not identify
  * themselves, so requests are batched and paced. Set WIKIMEDIA_CONTACT to your
  * e-mail or website to be allowed to go faster.
  *
  * If a page cannot be fetched, the card already in the database is kept.
+ *
+ *   npm run sync -- --json cards.json   works on a JSON file instead of the database
+ *                                        (then: npm run db:import -- cards.json)
  */
+import { readFile, writeFile } from 'node:fs/promises';
 import { ANIME } from '../data/anime-list.js';
 import { ERAS, RARITIES, RARITY_IDS, TYPES, eraForYear } from '../server/config.js';
 import {
@@ -35,6 +40,8 @@ import {
 } from './text-utils.js';
 import { openStore } from './supabase-env.js';
 
+const jsonArg = process.argv.indexOf('--json');
+const JSON_FILE = jsonArg >= 0 ? process.argv[jsonArg + 1] : null;
 const SITES = { en: 'https://en.wikipedia.org', fr: 'https://fr.wikipedia.org' };
 const CONTACT = process.env.WIKIMEDIA_CONTACT?.trim();
 const USER_AGENT = `AnimeClashChronicles/1.0 (hobby trading-card game${CONTACT ? `; ${CONTACT}` : ''}) Node.js`;
@@ -140,6 +147,23 @@ function validateList() {
   }
 }
 
+/** The catalog is read from and saved to Supabase, or to a JSON file with --json. */
+function openCatalog() {
+  if (!JSON_FILE) return openStore();
+  return {
+    async loadCatalog() {
+      try {
+        return JSON.parse(await readFile(JSON_FILE, 'utf8'));
+      } catch {
+        return { cards: [] };
+      }
+    },
+    async saveCatalog(cards, meta) {
+      await writeFile(JSON_FILE, `${JSON.stringify({ ...meta, cards }, null, 2)}\n`);
+    },
+  };
+}
+
 async function loadPrevious(store) {
   const { cards } = await store.loadCatalog();
   return new Map(cards.map((card) => [card.source, card]));
@@ -201,13 +225,17 @@ async function fetchViews(titles) {
 }
 
 // ③ ───────────────────────────────────────────────────────────────────────────
-async function fetchJapaneseTitles(ids) {
+const NOT_A_LANGUAGE = new Set(['commonswiki', 'specieswiki', 'metawiki', 'mediawikiwiki', 'wikidatawiki', 'sourceswiki', 'simplewiki']);
+
+/** Japanese titles and number of Wikipedia languages, by Wikidata id. */
+async function fetchWikidata(ids) {
   const labels = new Map();
+  const languages = new Map();
   for (const group of chunk([...new Set(ids)], 50)) {
     const params = new URLSearchParams({
       action: 'wbgetentities',
       format: 'json',
-      props: 'labels',
+      props: 'labels|sitelinks',
       languages: 'ja',
       ids: group.join('|'),
     });
@@ -215,9 +243,11 @@ async function fetchJapaneseTitles(ids) {
     for (const [id, entity] of Object.entries(data?.entities ?? {})) {
       const label = cleanJapaneseTitle(entity.labels?.ja?.value);
       if (label) labels.set(id, label);
+      const wikis = Object.keys(entity.sitelinks ?? {}).filter((site) => site.endsWith('wiki') && !NOT_A_LANGUAGE.has(site));
+      languages.set(id, wikis.length);
     }
   }
-  return labels;
+  return { labels, languages };
 }
 
 // ④ ───────────────────────────────────────────────────────────────────────────
@@ -257,6 +287,11 @@ async function fetchStory(lang, title) {
   return storySection(data.query?.pages?.[0]?.extract ?? '', lang);
 }
 
+/** "TV series" → "série TV", "film" → "film"… for the names of cards that share a title. */
+function frenchQualifier(qualifier) {
+  return qualifier.replace(/TV series/, 'série TV').replace(/^original video animation$/i, 'OAV');
+}
+
 /** Card texts in one language: the short text and the long summary. */
 function cardTexts(intro, story, lang) {
   let summary = buildSummary(intro);
@@ -267,7 +302,25 @@ function cardTexts(intro, story, lang) {
 }
 
 // Rarity ──────────────────────────────────────────────────────────────────────
-/** `group` is sorted from most to least viewed. Rarest tiers first, at least one card per tier. */
+/** Sorts the cards from most to least popular: average of the page views rank and the languages rank. */
+function sortByPopularity(cards) {
+  const percentile = (key) => {
+    const sorted = [...cards].sort((a, b) => a[key] - b[key]);
+    const result = new Map();
+    sorted.forEach((card, i) => {
+      // Ties share the rank of their first card.
+      const first = sorted.findIndex((other) => other[key] === card[key]);
+      result.set(card, cards.length > 1 ? first / (cards.length - 1) : 1);
+    });
+    return result;
+  };
+  const views = percentile('views');
+  const languages = percentile('languages');
+  const score = (card) => (views.get(card) + languages.get(card)) / 2;
+  return cards.sort((a, b) => score(b) - score(a) || b.views - a.views || a.name.localeCompare(b.name));
+}
+
+/** `group` is sorted from most to least popular. Rarest tiers first, at least one card per tier. */
 function assignRarities(group) {
   const tiers = [...RARITIES].reverse();
   let cumulative = 0;
@@ -280,7 +333,7 @@ function assignRarities(group) {
   });
 }
 
-/** "Power level" printed on the card: 9999 for the most read page of the era, down to 1000. */
+/** "Power level" printed on the card: 9999 for the most popular card, down to 1000. */
 function assignPower(group) {
   group.forEach((card, index) => {
     const p = group.length > 1 ? 1 - index / (group.length - 1) : 1;
@@ -291,7 +344,7 @@ function assignPower(group) {
 // Main ────────────────────────────────────────────────────────────────────────
 async function main() {
   validateList();
-  const store = openStore();
+  const store = openCatalog();
   const previous = await loadPrevious(store);
   if (!CONTACT) console.log('(tip: set WIKIMEDIA_CONTACT=<your e-mail or website> to sync faster)\n');
 
@@ -314,8 +367,8 @@ async function main() {
   console.log('② Reading page views of the last 60 days…');
   const { views, lastDay } = await fetchViews([...valid.values()].map((page) => page.title));
 
-  console.log('③ Reading Japanese titles from Wikidata…');
-  const japaneseTitles = await fetchJapaneseTitles(
+  console.log('③ Reading Japanese titles and languages from Wikidata…');
+  const { labels: japaneseTitles, languages } = await fetchWikidata(
     [...valid.values()].map((page) => page.pageprops?.wikibase_item).filter(Boolean),
   );
 
@@ -362,7 +415,7 @@ async function main() {
     const page = valid.get(anime.title);
     if (!page) {
       const kept = previous.get(anime.title);
-      if (kept) cards.push({ ...kept, rarity: null, power: null });
+      if (kept) cards.push({ ...kept, languages: kept.languages ?? 1, rarity: null, power: null });
       console.warn(`   ! ${anime.title}: ${kept ? 'kept the previous version' : 'skipped (no data)'}`);
       continue;
     }
@@ -395,6 +448,7 @@ async function main() {
       era: eraForYear(anime.year),
       power: null,
       views: views.get(page.title) ?? 0,
+      languages: languages.get(page.pageprops?.wikibase_item) ?? 1,
       description: page.description ?? '',
       ...cardTexts(page.extract, storyEn, 'en'),
       image,
@@ -407,19 +461,38 @@ async function main() {
     });
   }
 
+  // Two titles of the list can lead to the same page (redirects), and two pages to the same name.
+  const pagesSeen = new Set();
   const ids = new Set();
-  for (const card of cards) {
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
+    if (pagesSeen.has(card.wikiTitle)) {
+      console.warn(`   ! ${card.source}: same page as another title (${card.wikiTitle}), skipped`);
+      cards.splice(i--, 1);
+      continue;
+    }
+    pagesSeen.add(card.wikiTitle);
+    if (ids.has(card.id)) {
+      // Same name as an earlier card (e.g. a manga and its anime): this one gets its
+      // Wikipedia qualifier, "One Piece (1999 TV series)" → "One Piece (TV series)".
+      const qualifier = card.wikiTitle.match(/\(([^)]+)\)$/)?.[1].replace(/^\d{4}\s+/, '') ?? String(card.year);
+      card.name = `${card.name} (${qualifier})`;
+      if (card.fr) card.fr.name = `${card.fr.name} (${frenchQualifier(qualifier)})`;
+      card.id = slugify(card.name);
+    }
     if (ids.has(card.id)) throw new Error(`Two cards have the id "${card.id}"`);
     ids.add(card.id);
   }
 
-  for (const era of ERAS) {
-    const group = cards
-      .filter((card) => card.era === era.id)
-      .sort((a, b) => b.views - a.views || a.name.localeCompare(b.name));
-    assignRarities(group);
-    assignPower(group);
+  // No usable picture: the picture of the card with the same name (the anime takes the manga's cover).
+  const baseOf = (card) => stripQualifier(card.wikiTitle).toLowerCase();
+  for (const card of cards.filter((c) => !c.image)) {
+    card.image = cards.find((other) => other !== card && other.image && baseOf(other) === baseOf(card))?.image ?? null;
   }
+
+  const byPopularity = sortByPopularity(cards);
+  assignRarities(byPopularity);
+  assignPower(byPopularity);
   for (const card of cards) {
     const forced = ANIME.find((anime) => anime.title === card.source)?.rarity;
     if (forced) card.rarity = forced;
@@ -432,13 +505,13 @@ async function main() {
 
   await store.saveCatalog(cards, {
     generatedAt: new Date().toISOString(),
-    popularity: { metric: 'English Wikipedia page views', days: 60, until: lastDay },
+    popularity: { metric: 'English Wikipedia page views and number of Wikipedia languages', days: 60, until: lastDay },
     license:
       'Card texts come from Wikipedia (CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/). ' +
       "Pictures belong to their respective owners, see each picture's file page on Wikipedia.",
   });
 
-  console.log(`\n✔ Saved ${cards.length} cards in Supabase (${cards.filter((c) => c.fr).length} in French)\n`);
+  console.log(`\n✔ Saved ${cards.length} cards in ${JSON_FILE ?? 'Supabase'} (${cards.filter((c) => c.fr).length} in French)\n`);
   const table = {};
   for (const era of ERAS) {
     table[era.name] = Object.fromEntries(

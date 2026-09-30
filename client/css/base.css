@@ -20,7 +20,10 @@
   --r-SR: #9d4edd;
   --r-SSR: #f4a100;
   --r-UR: #ff2e88;
+  --r-REV: #00d177;
   --rainbow: linear-gradient(90deg, #ff2e88, #ffbe0b, #06d6a0, #3a86ff, #8338ec, #ff2e88);
+  /* The rainbow with inverted colors, on a black background: Reversed (REV) rarity. */
+  --rainbow-rev: linear-gradient(90deg, #00d177, #0041f4, #f9295f, #c57900, #7cc713, #00d177);
 
   --border: 3px solid var(--ink);
   --shadow: 5px 5px 0 var(--ink);
@@ -592,6 +595,7 @@ body.is-logged-out .icon-btn--logout {
 .r-SR { --rc: var(--r-SR); }
 .r-SSR { --rc: var(--r-SSR); }
 .r-UR { --rc: var(--r-UR); }
+.r-REV { --rc: var(--r-REV); }
 
 .rarity-badge {
   display: inline-grid;
@@ -611,6 +615,14 @@ body.is-logged-out .icon-btn--logout {
 .r-UR .rarity-badge,
 .rarity-badge.r-UR {
   background: var(--rainbow);
+}
+
+.r-REV .rarity-badge,
+.rarity-badge.r-REV,
+.tag--rarity.r-REV {
+  background: #111 var(--rainbow-rev);
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--ink);
 }
 
 .rarity-text {
@@ -697,6 +709,11 @@ body.is-logged-out .icon-btn--logout {
 .r-UR .meter__fill {
   background-color: transparent;
   background-image: var(--rainbow);
+}
+
+.r-REV .meter__fill {
+  background-color: transparent;
+  background-image: var(--rainbow-rev);
 }
 
 /* ── Forms ──────────────────────────────────────────────────────────────── */

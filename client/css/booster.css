@@ -441,6 +441,15 @@
   animation: glow-rainbow 1.6s linear infinite;
 }
 
+/* Reversed: the face-down card itself turns negative, with the inverted rainbow. */
+.flip[data-rarity='REV']:not(.is-flipped) .card-back {
+  filter: invert(1);
+}
+
+.flip[data-rarity='REV']:not(.is-flipped) .card-back__rays {
+  animation: glow-rainbow 1.1s linear infinite reverse;
+}
+
 @keyframes glow-gold {
   from {
     box-shadow: 0 0 0 0.7cqw var(--ink), 0 0 14px 4px rgba(255, 210, 63, 0.7);
@@ -474,6 +483,10 @@
 
 .flip.is-charging[data-rarity='UR'] .card-back {
   filter: brightness(1.35);
+}
+
+.flip.is-charging[data-rarity='REV'] .card-back {
+  filter: invert(1) brightness(1.35);
 }
 
 @keyframes charge {
@@ -532,12 +545,17 @@
   text-shadow: 1px 1px 0 #000;
 }
 
-.stage .r-UR.rarity-text {
+.stage .r-UR.rarity-text,
+.stage .r-REV.rarity-text {
   background: var(--rainbow);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   text-shadow: none;
+}
+
+.stage .r-REV.rarity-text {
+  background-image: var(--rainbow-rev);
 }
 
 /* ── ×10 results ────────────────────────────────────────────────────────── */
@@ -597,6 +615,10 @@
 
 .tally-chip.r-UR {
   background: var(--rainbow);
+}
+
+.tally-chip.r-REV {
+  background: #111 var(--rainbow-rev);
 }
 
 .tally-chip.is-zero {

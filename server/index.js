@@ -67,7 +67,7 @@ async function openDatabase() {
     await store.check();
   } catch (err) {
     console.error(`\n  ✗ Cannot use the Supabase database: ${err.message}`);
-    console.error('    Create the tables first: run supabase/schema.sql in the Supabase SQL Editor.\n');
+    console.error('    Create the tables first: apply the SQL files of supabase/migrations/ (in order).\n');
     process.exit(1);
   }
   return { store, label: `Supabase (${new URL(SUPABASE_URL).host})` };
@@ -78,7 +78,7 @@ async function loadCatalog(store) {
   const { cards, sets, meta } = await store.loadCatalog();
   if (cards.length === 0 || sets.length === 0) {
     console.error('\n  ✗ The card catalog is empty in Supabase.');
-    console.error('    Run supabase/schema.sql, then "npm run db:import" (or "npm run sync").\n');
+    console.error('    Apply supabase/migrations/, or run "npm run sync".\n');
     process.exit(1);
   }
   return createCatalog(cards, sets, meta);

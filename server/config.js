@@ -3,16 +3,18 @@
  */
 
 /**
- * Rarity tiers, from the most common to the rarest (gacha style: N → UR).
- * `share` is the fraction of each era's cards that get this rarity: the anime
- * with the most-read Wikipedia pages of their era get the rarest tiers.
+ * Rarity tiers, from the most common to the rarest (gacha style: N → UR → REV).
+ * `share` is the fraction of all the cards that get this rarity: the most
+ * popular anime and manga get the rarest tiers (see scripts/sync-wikipedia.js).
+ * REV ("Reversed") cards are full-art cards with inverted colors.
  */
 export const RARITIES = [
   { id: 'N', name: 'Normal', jp: 'ノーマル', color: '#8d99ae', share: 0.35 },
   { id: 'R', name: 'Rare', jp: 'レア', color: '#3a86ff', share: 0.27 },
   { id: 'SR', name: 'Super Rare', jp: 'スーパーレア', color: '#9d4edd', share: 0.2 },
   { id: 'SSR', name: 'Super Special Rare', jp: 'スペシャル', color: '#f4a100', share: 0.12 },
-  { id: 'UR', name: 'Ultra Rare', jp: 'ウルトラレア', color: '#ff2e88', share: 0.06 },
+  { id: 'UR', name: 'Ultra Rare', jp: 'ウルトラレア', color: '#ff2e88', share: 0.05 },
+  { id: 'REV', name: 'Reversed', jp: 'リバース', color: '#00d177', share: 0.01 },
 ];
 
 export const RARITY_IDS = RARITIES.map((r) => r.id);
@@ -28,8 +30,8 @@ export const RARITY_RANK = Object.fromEntries(RARITY_IDS.map((id, i) => [id, i])
  */
 export const BOOSTER = {
   size: 5,
-  slotWeights: { N: 58, R: 27, SR: 10, SSR: 4, UR: 1 },
-  rareSlotWeights: { R: 62, SR: 25, SSR: 10, UR: 3 },
+  slotWeights: { N: 580, R: 270, SR: 100, SSR: 40, UR: 9, REV: 1 },
+  rareSlotWeights: { R: 620, SR: 250, SSR: 100, UR: 25, REV: 5 },
   maxPerRequest: 1,
   cooldownSeconds: 120,
 };
@@ -63,13 +65,13 @@ export function eraForYear(year) {
   return era.id;
 }
 
-// The booster sets the player can open are in the database (public.booster_sets, see supabase/schema.sql).
+// The booster sets the player can open are in the database (public.booster_sets, see supabase/migrations/).
 
 /**
  * Collection score used by the rankings: every different card is worth the
  * points of its rarity, and every extra copy adds `duplicateShare` of them.
  */
 export const SCORE = {
-  points: { N: 10, R: 25, SR: 60, SSR: 150, UR: 400 },
+  points: { N: 10, R: 25, SR: 60, SSR: 150, UR: 400, REV: 1000 },
   duplicateShare: 0.1,
 };
