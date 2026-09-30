@@ -30,7 +30,8 @@ The game is also published on **GitHub Pages**: https://sansdu88.github.io/Anime
 
 GitHub Pages only hosts static files, so the online version runs without the Node.js server:
 the game logic runs in the browser ([client/js/local-api.js](client/js/local-api.js)) and your
-account and cards are saved in your browser only. `npm run build:pages` builds this version in
+account and cards are saved in your browser only (so friends can only be added between
+accounts created in the same browser). `npm run build:pages` builds this version in
 `dist/`, and [.github/workflows/pages.yml](.github/workflows/pages.yml) deploys it at every push
 on `main`.
 
@@ -42,7 +43,8 @@ on `main`.
 | **Opening** | Shake and tear the pack, then flip 5 face-down cards. Rare cards glow before you flip them, and SSR/UR reveals trigger manga effects (ゴゴゴ, ドーン!!), confetti and sounds (synthesized, can be muted). |
 | **Cards** | Picture, Japanese title, type (Action, Mecha, Romance…), year, power level, and a one-sentence summary from Wikipedia. SSR and UR are full-art cards with a holographic effect that follows your mouse. |
 | **Collection** | A pokédex-style grid: missing cards show up as `???`. Filters, sorting, and completion per rarity. Click a card for its full Wikipedia summary. |
-| **Stats** | Luck meter (your pulls compared with the official odds), booster history, leaderboard. |
+| **Friends** | Every player has a friend code (e.g. `#K7Q2XM`). Send friend requests by code or e-mail, accept or decline them, look at your friends' collections, and compete in the friends ranking. |
+| **Stats** | Luck meter (your pulls compared with the official odds), booster history, global leaderboard. |
 | **Accounts** | Sign up with an e-mail and a password, log in from any browser, rename yourself, change your password, log out. Several people on the same network can play on one server (see `HOST` below). |
 | **Languages** | An **EN / FR** switch in the header translates the whole interface, and French cards use their French Wikipedia title and text (*Goldorak*, *Ken le Survivant*, *Capitaine Albator*…). The first visit follows the browser's language. |
 
@@ -94,6 +96,13 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 └── storage/                created at runtime: SQLite database (not versioned)
 ```
 
+## Score and rankings
+
+Rankings (between friends, and the global leaderboard) use a **collection score** that grows
+with both the number and the rarity of your cards: each different card is worth
+**N 10 · R 25 · SR 60 · SSR 150 · UR 400** points, and each extra copy adds 10% of that.
+The values are in `SCORE` in [server/config.js](server/config.js).
+
 ## Accounts and security
 
 - Passwords are hashed with **scrypt** (random salt) and never stored or returned in clear.
@@ -130,7 +139,13 @@ with the token returned by register/login.
 | GET | `/api/players/:playerId/boosters?limit=20` | Booster history, newest first |
 | GET | `/api/players/:playerId/collection` | Owned cards (with copies) and completion |
 | DELETE | `/api/players/:playerId/collection` | Reset the collection |
-| GET | `/api/leaderboard?limit=10` | Best collectors |
+| GET | `/api/players/:playerId/friends` | Your friend code, friends, requests received/sent and the friends ranking |
+| POST | `/api/players/:playerId/friends` | Send a friend request. Body: `{ "code": "#K7Q2XM" }` (a friend code or an e-mail) |
+| POST | `/api/players/:playerId/friends/:friendId/accept` | Accept a friend request |
+| POST | `/api/players/:playerId/friends/:friendId/decline` | Decline a friend request |
+| DELETE | `/api/players/:playerId/friends/:friendId` | Remove a friend, or cancel a request you sent |
+| GET | `/api/players/:playerId/friends/:friendId/collection` | A friend's collection (friends only) |
+| GET | `/api/leaderboard?limit=10` | Best collectors by score |
 
 Routes under `/api/players/:playerId` require being logged in as that player.
 

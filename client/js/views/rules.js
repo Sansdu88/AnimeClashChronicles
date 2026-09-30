@@ -22,6 +22,12 @@ const API_ROUTES = [
   ['GET', '/api/players/:playerId/boosters', 'history'],
   ['GET', '/api/players/:playerId/collection', 'collection'],
   ['DELETE', '/api/players/:playerId/collection', 'reset'],
+  ['GET', '/api/players/:playerId/friends', 'friends'],
+  ['POST', '/api/players/:playerId/friends', 'addFriend'],
+  ['POST', '/api/players/:playerId/friends/:friendId/accept', 'acceptFriend'],
+  ['POST', '/api/players/:playerId/friends/:friendId/decline', 'declineFriend'],
+  ['DELETE', '/api/players/:playerId/friends/:friendId', 'removeFriend'],
+  ['GET', '/api/players/:playerId/friends/:friendId/collection', 'friendCollection'],
   ['GET', '/api/leaderboard', 'leaderboard'],
 ];
 

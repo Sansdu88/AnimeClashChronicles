@@ -96,3 +96,12 @@ export const SETS = [
     colors: ['#ff006e', '#8338ec'],
   },
 ];
+
+/**
+ * Collection score used by the rankings: every different card is worth the
+ * points of its rarity, and every extra copy adds `duplicateShare` of them.
+ */
+export const SCORE = {
+  points: { N: 10, R: 25, SR: 60, SSR: 150, UR: 400 },
+  duplicateShare: 0.1,
+};

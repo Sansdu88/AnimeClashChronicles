@@ -3,8 +3,8 @@
  * Player routes need a session (cookie set by /api/auth/login, or an
  * "Authorization: Bearer <token>" header) and only give access to your own player.
  */
-import { BOOSTER, ERAS, RARITIES, RARITY_IDS, TYPES } from './config.js';
-import { boosterOdds, openBooster } from './booster.js';
+import { BOOSTER, ERAS, RARITIES, RARITY_IDS, SCORE, TYPES } from './config.js';
+import { boosterOdds, collectionScore, openBooster } from './booster.js';
 import { compareByRarity } from './catalog.js';
 import { HttpError, createRouter, reply } from './http.js';
 import {
@@ -135,16 +135,75 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     };
   }
 
+  const rarityOfCard = (cardId) => catalog.getCard(cardId)?.rarity;
+
   function profile(player) {
     const stats = store.stats(player.id);
     const cardsPulled = Object.values(stats.pullsByRarity).reduce((sum, n) => sum + n, 0);
+    const { entries, summary } = collectionOf(player.id);
     return {
       id: player.id,
       name: player.name,
       email: player.email,
+      friendCode: player.friendCode,
       createdAt: player.createdAt,
-      stats: { ...stats, cardsPulled, ...collectionOf(player.id).summary },
+      stats: { ...stats, cardsPulled, ...summary, score: collectionScore(entries, rarityOfCard).score },
     };
+  }
+
+  /** What friends can see of a player (no e-mail). */
+  function publicProfile(player) {
+    const { email, ...rest } = profile(player);
+    return rest;
+  }
+
+  /** Ranking rows (score, cards…) for a list of players, best first. */
+  function rank(players, collections, youId) {
+    return players
+      .map((player) => {
+        const score = collectionScore(collections.get(player.id) ?? [], rarityOfCard);
+        return {
+          id: player.id,
+          name: player.name,
+          you: player.id === youId,
+          score: score.score,
+          uniqueCards: score.uniqueCards,
+          cardsPulled: score.cardsPulled,
+          completion: score.uniqueCards / totalCards,
+          byRarity: score.byRarity,
+          boostersOpened: player.boostersOpened ?? store.stats(player.id).boostersOpened,
+          createdAt: player.createdAt,
+        };
+      })
+      .sort((a, b) => b.score - a.score || b.uniqueCards - a.uniqueCards || (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
+      .map(({ createdAt, ...row }, index) => ({ rank: index + 1, ...row }));
+  }
+
+  function friendsOf(player) {
+    const collections = store.allCollections();
+    const friends = store.friends(player.id);
+    const { incoming, outgoing } = store.friendRequests(player.id);
+    const ranked = rank([player, ...friends], collections, player.id);
+    const byId = new Map(ranked.map((row) => [row.id, row]));
+    return {
+      friendCode: player.friendCode,
+      scoring: SCORE,
+      friends: friends.map((friend) => ({
+        ...friend,
+        score: byId.get(friend.id).score,
+        uniqueCards: byId.get(friend.id).uniqueCards,
+        completion: byId.get(friend.id).completion,
+      })),
+      incoming,
+      outgoing,
+      ranking: ranked,
+    };
+  }
+
+  function requireFriend(player, friendId) {
+    const link = store.friendship(player.id, friendId);
+    if (link?.status !== 'accepted') throw new HttpError(403, 'This player is not your friend', null, 'not_friends');
+    return store.getPlayer(friendId);
   }
 
   // ── Catalog ────────────────────────────────────────────────────────────────
@@ -325,20 +384,66 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return { deletedBoosters, player: profile(player) };
   });
 
+  /** Best collectors by score (points by rarity, see SCORE in config.js). */
   router.get('/api/leaderboard', ({ req, query }) => {
     const limit = intParam(query.get('limit'), { name: 'limit', min: 1, max: 100, fallback: 10 });
-    const you = currentPlayer(req)?.id;
-    return {
-      players: store.leaderboard(limit).map((row, index) => ({
-        rank: index + 1,
-        name: row.name,
-        you: row.id === you,
-        uniqueCards: Math.min(row.uniqueCards, totalCards),
-        completion: Math.min(row.uniqueCards, totalCards) / totalCards,
-        boostersOpened: row.boostersOpened,
-        cardsPulled: row.cardsPulled,
-      })),
-    };
+    const ranked = rank(store.collectors(), store.allCollections(), currentPlayer(req)?.id);
+    return { scoring: SCORE, players: ranked.slice(0, limit).map(({ id, ...row }) => row) };
+  });
+
+  // ── Friends (your own list only) ───────────────────────────────────────────
+
+  router.get('/api/players/:playerId/friends', ({ req, params }) => friendsOf(requireSelf(req, params.playerId)));
+
+  /** Body: { code } — a friend code ("#K7Q2XM") or an e-mail address. */
+  router.post('/api/players/:playerId/friends', ({ req, params, body }) => {
+    const player = requireSelf(req, params.playerId);
+    const code = typeof body.code === 'string' ? body.code.trim() : '';
+    const friendId = code.includes('@') ? store.findLogin(code.toLowerCase())?.id : store.findByFriendCode(code);
+    if (!friendId) throw new HttpError(404, 'No player with this friend code or e-mail', null, 'player_not_found');
+    if (friendId === player.id) throw new HttpError(400, 'You cannot add yourself', null, 'cannot_add_self');
+
+    const link = store.friendship(player.id, friendId);
+    if (link?.status === 'accepted') throw new HttpError(409, 'You are already friends', null, 'already_friends');
+    if (link?.requesterId === player.id) throw new HttpError(409, 'Request already sent', null, 'request_exists');
+    let status = 'pending';
+    if (link) {
+      // They had already asked you: adding them back accepts their request.
+      store.acceptFriend(friendId, player.id);
+      status = 'accepted';
+    } else {
+      store.requestFriend(player.id, friendId);
+    }
+    const friend = store.getPlayer(friendId);
+    return reply(201, { status, friend: { id: friend.id, name: friend.name, friendCode: friend.friendCode }, ...friendsOf(player) });
+  });
+
+  router.post('/api/players/:playerId/friends/:friendId/accept', ({ req, params }) => {
+    const player = requireSelf(req, params.playerId);
+    if (!store.acceptFriend(params.friendId, player.id)) throw new HttpError(404, 'No friend request from this player', null, 'request_not_found');
+    return friendsOf(player);
+  });
+
+  router.post('/api/players/:playerId/friends/:friendId/decline', ({ req, params }) => {
+    const player = requireSelf(req, params.playerId);
+    const link = store.friendship(player.id, params.friendId);
+    if (link?.status !== 'pending' || link.addresseeId !== player.id) {
+      throw new HttpError(404, 'No friend request from this player', null, 'request_not_found');
+    }
+    store.removeFriendship(player.id, params.friendId);
+    return friendsOf(player);
+  });
+
+  /** Removes a friend, or cancels a request you sent. */
+  router.delete('/api/players/:playerId/friends/:friendId', ({ req, params }) => {
+    const player = requireSelf(req, params.playerId);
+    if (!store.removeFriendship(player.id, params.friendId)) throw new HttpError(404, 'Not in your friend list', null, 'not_friends');
+    return friendsOf(player);
+  });
+
+  router.get('/api/players/:playerId/friends/:friendId/collection', ({ req, params }) => {
+    const friend = requireFriend(requireSelf(req, params.playerId), params.friendId);
+    return { player: publicProfile(friend), cards: collectionOf(friend.id).entries };
   });
 
   return router;

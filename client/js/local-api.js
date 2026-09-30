@@ -7,8 +7,8 @@
  * Built by `npm run build:pages`, which also copies server/config.js and
  * server/booster.js to js/shared/ and writes data/meta.json + data/cards.json.
  */
-import { BOOSTER, RARITY_IDS } from './shared/config.js';
-import { openBooster } from './shared/booster.js';
+import { BOOSTER, RARITY_IDS, SCORE } from './shared/config.js';
+import { collectionScore, openBooster } from './shared/booster.js';
 
 const STORE_KEY = 'animeClashChronicles.local';
 const HISTORY_LIMIT = 50;
@@ -66,6 +66,10 @@ function cleanName(value) {
   return name;
 }
 
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const newFriendCode = () =>
+  Array.from(crypto.getRandomValues(new Uint32Array(6)), (n) => CODE_ALPHABET[n % CODE_ALPHABET.length]).join('');
+
 function randomName() {
   const pick = (list) => list[Math.floor(Math.random() * list.length)];
   return `${pick(ADJECTIVES)} ${pick(NOUNS)} ${100 + Math.floor(Math.random() * 900)}`;
@@ -91,6 +95,8 @@ export async function createLocalApi() {
     db = null;
   }
   db ??= { players: {}, session: null };
+  db.friendships ??= [];
+  for (const player of Object.values(db.players)) player.friendCode ??= newFriendCode();
   const save = () => localStorage.setItem(STORE_KEY, JSON.stringify(db));
 
   function summary(player) {
@@ -105,12 +111,19 @@ export async function createLocalApi() {
     };
   }
 
+  const entriesOf = (player) =>
+    Object.entries(player.collection)
+      .filter(([id]) => cardsById.has(id))
+      .map(([cardId, entry]) => ({ cardId, ...entry }));
+  const rarityOfCard = (cardId) => cardsById.get(cardId)?.rarity;
+
   function profile(player) {
     const cardsPulled = Object.values(player.pullsByRarity).reduce((sum, n) => sum + n, 0);
     return {
       id: player.id,
       name: player.name,
       email: player.email,
+      friendCode: player.friendCode,
       createdAt: player.createdAt,
       stats: {
         boostersOpened: player.boostersOpened,
@@ -118,7 +131,62 @@ export async function createLocalApi() {
         pullsByRarity: { ...player.pullsByRarity },
         cardsPulled,
         ...summary(player),
+        score: collectionScore(entriesOf(player), rarityOfCard).score,
       },
+    };
+  }
+
+  function rank(players, youId) {
+    return players
+      .map((player) => {
+        const score = collectionScore(entriesOf(player), rarityOfCard);
+        return {
+          id: player.id,
+          name: player.name,
+          you: player.id === youId,
+          score: score.score,
+          uniqueCards: score.uniqueCards,
+          cardsPulled: score.cardsPulled,
+          completion: score.uniqueCards / cards.length,
+          byRarity: score.byRarity,
+          boostersOpened: player.boostersOpened,
+          createdAt: player.createdAt,
+        };
+      })
+      .sort((a, b) => b.score - a.score || b.uniqueCards - a.uniqueCards || a.createdAt.localeCompare(b.createdAt))
+      .map(({ createdAt, ...row }, index) => ({ rank: index + 1, ...row }));
+  }
+
+  const linkBetween = (a, b) =>
+    db.friendships.find((f) => (f.requesterId === a && f.addresseeId === b) || (f.requesterId === b && f.addresseeId === a));
+  const removeLink = (a, b) => {
+    const before = db.friendships.length;
+    db.friendships = db.friendships.filter((f) => f !== linkBetween(a, b));
+    return db.friendships.length < before;
+  };
+  const brief = (player, extra) => ({ id: player.id, name: player.name, friendCode: player.friendCode, ...extra });
+
+  function friendsOf(player) {
+    const links = db.friendships.filter((f) => f.requesterId === player.id || f.addresseeId === player.id);
+    const other = (f) => db.players[f.requesterId === player.id ? f.addresseeId : f.requesterId];
+    const friends = links.filter((f) => f.status === 'accepted').map((f) => ({ player: other(f), since: f.respondedAt }));
+    const ranked = rank([player, ...friends.map((f) => f.player)], player.id);
+    const byId = new Map(ranked.map((row) => [row.id, row]));
+    return {
+      friendCode: player.friendCode,
+      scoring: SCORE,
+      friends: friends
+        .map(({ player: friend, since }) =>
+          brief(friend, { since, score: byId.get(friend.id).score, uniqueCards: byId.get(friend.id).uniqueCards, completion: byId.get(friend.id).completion }),
+        )
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      incoming: links
+        .filter((f) => f.status === 'pending' && f.addresseeId === player.id)
+        .map((f) => brief(db.players[f.requesterId], { sentAt: f.createdAt })),
+      outgoing: links
+        .filter((f) => f.status === 'pending' && f.requesterId === player.id)
+        .map((f) => brief(db.players[f.addresseeId], { sentAt: f.createdAt })),
+      ranking: ranked,
     };
   }
 
@@ -165,6 +233,7 @@ export async function createLocalApi() {
           collection: {},
           history: [],
           nextBoosterId: 1,
+          friendCode: newFriendCode(),
         };
         db.players[player.id] = player;
         db.session = player.id;
@@ -314,22 +383,74 @@ export async function createLocalApi() {
       /^\/leaderboard$/,
       ({ query }) => {
         const limit = intParam(query.get('limit'), 1, 100, 10, 'limit');
-        return {
-          players: Object.values(db.players)
-            .map((player) => ({ player, profile: profile(player) }))
-            .filter(({ profile: p }) => p.stats.cardsPulled > 0)
-            .sort((a, b) => b.profile.stats.uniqueCards - a.profile.stats.uniqueCards || a.player.boostersOpened - b.player.boostersOpened)
-            .slice(0, limit)
-            .map(({ player, profile: p }, index) => ({
-              rank: index + 1,
-              name: player.name,
-              you: player.id === db.session,
-              uniqueCards: p.stats.uniqueCards,
-              completion: p.stats.completion,
-              boostersOpened: p.stats.boostersOpened,
-              cardsPulled: p.stats.cardsPulled,
-            })),
-        };
+        const collectors = Object.values(db.players).filter((player) => Object.keys(player.collection).length);
+        return { scoring: SCORE, players: rank(collectors, db.session).slice(0, limit).map(({ id, ...row }) => row) };
+      },
+    ],
+
+    ['GET', /^\/players\/([^/]+)\/friends$/, ({ params }) => friendsOf(requireSelf(params[0]))],
+
+    [
+      'POST',
+      /^\/players\/([^/]+)\/friends$/,
+      ({ params, body }) => {
+        const player = requireSelf(params[0]);
+        const code = typeof body.code === 'string' ? body.code.trim() : '';
+        const normalized = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const friend = code.includes('@')
+          ? findByEmail(code.toLowerCase())
+          : Object.values(db.players).find((p) => p.friendCode === normalized);
+        if (!friend) fail(404, 'No player with this friend code or e-mail', 'player_not_found');
+        if (friend.id === player.id) fail(400, 'You cannot add yourself', 'cannot_add_self');
+        const link = linkBetween(player.id, friend.id);
+        if (link?.status === 'accepted') fail(409, 'You are already friends', 'already_friends');
+        if (link?.requesterId === player.id) fail(409, 'Request already sent', 'request_exists');
+        let status = 'pending';
+        if (link) {
+          Object.assign(link, { status: 'accepted', respondedAt: new Date().toISOString() });
+          status = 'accepted';
+        } else {
+          db.friendships.push({ requesterId: player.id, addresseeId: friend.id, status, createdAt: new Date().toISOString() });
+        }
+        save();
+        return { status, friend: brief(friend), ...friendsOf(player) };
+      },
+    ],
+
+    [
+      'POST',
+      /^\/players\/([^/]+)\/friends\/([^/]+)\/(accept|decline)$/,
+      ({ params }) => {
+        const player = requireSelf(params[0]);
+        const link = linkBetween(player.id, params[1]);
+        if (link?.status !== 'pending' || link.addresseeId !== player.id) fail(404, 'No friend request from this player', 'request_not_found');
+        if (params[2] === 'accept') Object.assign(link, { status: 'accepted', respondedAt: new Date().toISOString() });
+        else removeLink(player.id, params[1]);
+        save();
+        return friendsOf(player);
+      },
+    ],
+
+    [
+      'DELETE',
+      /^\/players\/([^/]+)\/friends\/([^/]+)$/,
+      ({ params }) => {
+        const player = requireSelf(params[0]);
+        if (!removeLink(player.id, params[1])) fail(404, 'Not in your friend list', 'not_friends');
+        save();
+        return friendsOf(player);
+      },
+    ],
+
+    [
+      'GET',
+      /^\/players\/([^/]+)\/friends\/([^/]+)\/collection$/,
+      ({ params }) => {
+        const player = requireSelf(params[0]);
+        const friend = db.players[params[1]];
+        if (!friend || linkBetween(player.id, friend.id)?.status !== 'accepted') fail(403, 'This player is not your friend', 'not_friends');
+        const { email, ...visible } = profile(friend);
+        return { player: visible, cards: entriesOf(friend) };
       },
     ],
   ];

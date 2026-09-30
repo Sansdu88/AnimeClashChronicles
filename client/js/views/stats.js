@@ -68,14 +68,14 @@ function leaderboardHTML(players) {
   return html`<table class="leaderboard">
     <thead><tr>
       <th scope="col">${t('stats.rank')}</th><th scope="col">${t('stats.player')}</th>
-      <th scope="col">${t('stats.cards')}</th><th scope="col">${t('stats.boostersCol')}</th>
+      <th scope="col">${t('stats.score')}</th><th scope="col">${t('stats.cards')}</th>
     </tr></thead>
     <tbody>
       ${players.map((p) => html`<tr class="${p.you ? 'is-you' : ''}">
         <td>${p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : p.rank}</td>
         <td>${p.name}${p.you ? html` <span class="you-pill">${t('stats.you')}</span>` : ''}</td>
-        <td><b>${p.uniqueCards}</b> <span class="muted">(${fmt.percent(p.completion)})</span></td>
-        <td>${fmt.number(p.boostersOpened)}</td>
+        <td><b class="score">${fmt.number(p.score)}</b></td>
+        <td>${p.uniqueCards} <span class="muted">(${fmt.percent(p.completion)})</span></td>
       </tr>`)}
     </tbody>
   </table>`;
@@ -112,6 +112,7 @@ export async function renderStats(main) {
       </header>
 
       <div class="stat-tiles">
+        ${tile(t('stats.score'), fmt.number(stats.score))}
         ${tile(t('stats.boosters'), fmt.number(stats.boostersOpened))}
         ${tile(t('stats.pulled'), fmt.number(stats.cardsPulled))}
         ${tile(t('stats.unique'), `${stats.uniqueCards}/${stats.totalCards}`, fmt.percent(stats.completion, 1))}
