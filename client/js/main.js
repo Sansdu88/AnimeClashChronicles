@@ -13,7 +13,7 @@ import { renderStats } from './views/stats.js';
 import { renderRules } from './views/rules.js';
 import { renderFriendCollection, renderFriends } from './views/friends.js';
 import { renderTrades } from './views/trades.js';
-import { fetchFriends, fetchTrades, syncCollection } from './state.js';
+import { fetchNotifications, syncCollection } from './state.js';
 
 const ROUTES = {
   open: renderOpen,
@@ -36,14 +36,69 @@ function currentRoute() {
   return ROUTES[name] ? [name, param ? decodeURIComponent(param) : null] : ['open', null];
 }
 
-function paintBadge(selector, count) {
-  const badge = $(selector);
+// ── Notifications ────────────────────────────────────────────────────────────
+// The badges of the "Friends" and "Trades" links are checked every few seconds.
+
+const NOTIFY_EVERY_MS = 10_000;
+/** Last numbers shown on the badges (null = not known yet, e.g. just logged in). */
+const badges = { friends: null, trades: null };
+let badgesVersion = 0; // changes when a page shows fresher numbers than a check in progress
+let notifyTimer = 0;
+
+function paintBadge(name, count) {
+  const badge = $(`#${name}-badge`);
   badge.textContent = count;
   badge.hidden = !count;
+  badges[name] = count;
 }
 
-const paintFriendBadge = (count) => paintBadge('#friends-badge', count);
-const paintTradeBadge = (count) => paintBadge('#trades-badge', count);
+/** Numbers given by the Friends / Trades pages, which just read them. */
+function pageBadge(name, count) {
+  badgesVersion += 1;
+  paintBadge(name, count);
+}
+
+/** True while the player types or has a dialog open: the page is not redrawn under them. */
+const isBusy = () =>
+  document.body.classList.contains('has-modal') || Boolean(document.activeElement?.matches?.('input, select, textarea'));
+
+function showNotifications({ friendRequests, trades }) {
+  const before = { ...badges };
+  paintBadge('friends', friendRequests);
+  paintBadge('trades', trades);
+  if (before.friends !== null && friendRequests > before.friends) toast(t('notify.friendRequest'), 'info', 4500);
+  if (before.trades !== null && trades > before.trades) toast(t('notify.trade'), 'info', 4500);
+
+  // The Friends or Trades page on screen shows old data: redraw it.
+  const [name, param] = currentRoute();
+  const stale =
+    (name === 'friends' && !param && before.friends !== null && friendRequests !== before.friends) ||
+    (name === 'trades' && before.trades !== null && trades !== before.trades);
+  if (stale && !isBusy()) render({ scroll: false });
+}
+
+async function checkNotifications() {
+  if (screen !== 'app' || document.hidden) return;
+  const version = badgesVersion;
+  try {
+    const counts = await fetchNotifications();
+    if (screen === 'app' && version === badgesVersion) showNotifications(counts);
+  } catch {
+    /* offline or server restarting: next check */
+  }
+}
+
+function startNotifications() {
+  clearInterval(notifyTimer);
+  checkNotifications();
+  notifyTimer = setInterval(checkNotifications, NOTIFY_EVERY_MS);
+}
+
+function stopNotifications() {
+  clearInterval(notifyTimer);
+  badges.friends = null;
+  badges.trades = null;
+}
 
 // ── Header & static texts ────────────────────────────────────────────────────
 
@@ -147,6 +202,7 @@ function render({ scroll = true } = {}) {
 
 function showAuth() {
   screen = 'auth';
+  stopNotifications();
   closeAllLayers();
   document.body.classList.add('is-logged-out');
   document.title = `${t('titles.auth')} · Anime Clash Chronicles`;
@@ -164,12 +220,7 @@ function enterApp() {
   document.body.classList.remove('is-logged-out');
   updateHeader();
   render();
-  fetchFriends()
-    .then((data) => paintFriendBadge(data.incoming.length))
-    .catch(() => {});
-  fetchTrades()
-    .then((data) => paintTradeBadge(data.trades.filter((trade) => trade.yourTurn).length))
-    .catch(() => {});
+  startNotifications();
 }
 
 async function doLogout() {
@@ -222,8 +273,10 @@ async function start() {
     else if (screen === 'auth') showAuth();
   });
   window.addEventListener('mb:logout', doLogout);
-  window.addEventListener('mb:friend-requests', (event) => paintFriendBadge(event.detail));
-  window.addEventListener('mb:trades-waiting', (event) => paintTradeBadge(event.detail));
+  window.addEventListener('mb:friend-requests', (event) => pageBadge('friends', event.detail));
+  window.addEventListener('mb:trades-waiting', (event) => pageBadge('trades', event.detail));
+  // Back on the tab: check at once instead of waiting for the next check.
+  document.addEventListener('visibilitychange', checkNotifications);
   window.addEventListener('mb:unauthorized', () => {
     if (screen !== 'app') return;
     state.player = null;

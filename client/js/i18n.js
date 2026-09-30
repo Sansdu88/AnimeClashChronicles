@@ -47,6 +47,7 @@ const DICT = {
     footer:
       'Card texts from <a href="https://en.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA 4.0) · pictures © their respective owners · fan-made game · <a href="#/rules">rules</a>',
     common: { close: 'Close', cancel: 'Cancel', confirm: 'Confirm', save: 'Save', oops: 'Oops', loading: 'Loading…' },
+    notify: { friendRequest: '👋 New friend request!', trade: '🔄 A trade is waiting for your answer!' },
     rarities: { N: 'Normal', R: 'Rare', SR: 'Super Rare', SSR: 'Super Special Rare', UR: 'Ultra Rare', REV: 'Reversed' },
     types: {
       action: 'Action',
@@ -414,6 +415,7 @@ const DICT = {
     footer:
       'Textes des cartes issus de <a href="https://fr.wikipedia.org" target="_blank" rel="noopener">Wikipédia</a> (CC BY-SA 4.0) · images © leurs propriétaires respectifs · jeu de fan · <a href="#/rules">règles</a>',
     common: { close: 'Fermer', cancel: 'Annuler', confirm: 'Confirmer', save: 'Enregistrer', oops: 'Oups', loading: 'Chargement…' },
+    notify: { friendRequest: '👋 Nouvelle demande d’ami !', trade: '🔄 Un échange attend ta réponse !' },
     rarities: { N: 'Normale', R: 'Rare', SR: 'Super Rare', SSR: 'Super Rare Spéciale', UR: 'Ultra Rare', REV: 'Inversée' },
     types: {
       action: 'Action',

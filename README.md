@@ -177,6 +177,7 @@ with the token returned by register/login.
 | POST | `/api/players/:playerId/trades/:tradeId/accept` | The player who offered accepts: both cards change hands in one transaction |
 | POST | `/api/players/:playerId/trades/:tradeId/decline` | The friend declines the trade, or takes back the card they chose |
 | DELETE | `/api/players/:playerId/trades/:tradeId` | The player who offered cancels the trade |
+| GET | `/api/players/:playerId/notifications` | `{ friendRequests, trades }`: friend requests received and trades waiting for your answer (the web page checks every 10 seconds for its badges) |
 | GET | `/api/leaderboard?limit=10` | Best collectors by score |
 
 Routes under `/api/players/:playerId` require being logged in as that player.
