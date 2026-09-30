@@ -6,7 +6,7 @@ Pokémon-TCG style. There are **151 cards**, one per anime, each built from the 
 Play in **English or French** (the card texts come from the English or the French Wikipedia),
 with an **account** (e-mail + password) that keeps your collection.
 
-It is a small full-stack project: a **REST API** (Node.js + SQLite) and a **web UI**
+It is a small full-stack project: a **REST API** (Node.js + Supabase/PostgreSQL) and a **web UI**
 (vanilla JavaScript), with **zero dependencies**.
 
 ## Quick start: one command
@@ -81,8 +81,7 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 │   ├── http.js             tiny router, JSON helpers, static file server
 │   ├── booster.js          booster opening logic (pure functions)
 │   ├── catalog.js          loads the cards from data/cards.json
-│   ├── db.js               SQLite storage (node:sqlite): accounts, sessions, boosters, pulls, friends
-│   ├── supabase-store.js   the same storage in Supabase (used when .env has the keys)
+│   ├── supabase-store.js   database access (Supabase REST API): accounts, sessions, boosters, friends
 │   └── config.js           rarities, drop rates, types, eras, booster sets
 ├── client/                 web UI (HTML/CSS/JS modules, no build step)
 │   ├── index.html
@@ -96,13 +95,12 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 ├── scripts/
 │   ├── sync-wikipedia.js   rebuilds data/cards.json from Wikipedia
 │   └── text-utils.js       picks the summary sentence for each card
-└── storage/                created at runtime: SQLite database (not versioned)
 ```
 
-## Database: SQLite or Supabase
+## Database: Supabase
 
-By default, players, boosters and friends are saved in a local SQLite file
-(`storage/anime-clash-chronicles.db`). To use a **Supabase** (PostgreSQL) database instead:
+Players, sessions, boosters and friends are stored in a **Supabase** (PostgreSQL) database.
+To set it up (once):
 
 1. In the Supabase dashboard, open **SQL Editor → New query**, paste
    [supabase/schema.sql](supabase/schema.sql) and click **Run** (it creates the tables).
@@ -188,9 +186,9 @@ Optional environment variables for `npm start`:
 |---|---|---|
 | `PORT` | `3000` | First port to try |
 | `HOST` | `127.0.0.1` | Use `0.0.0.0` to let other devices on your network play |
-| `DB_FILE` | `storage/anime-clash-chronicles.db` | Where players and collections are saved |
 | `NO_OPEN` | *(unset)* | Set to `1` to not open the browser automatically |
-| `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | *(unset)* | Use Supabase instead of SQLite (usually set in `.env`) |
+| `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | *(required)* | Your Supabase database (usually set in `.env`) |
+| `SECURE_COOKIES` | *(unset)* | Set to `1` when the site is served over HTTPS |
 
 In PowerShell: `$env:PORT=4000; npm start`. In bash: `PORT=4000 npm start`.
 
