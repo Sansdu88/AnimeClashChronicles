@@ -1,35 +1,7 @@
-/** "Rules" page: how boosters and rarities work, types, API reference and credits. */
+/** "Rules" page: how boosters and rarities work, types and credits. */
 import { fmt, html, mount, raw } from '../dom.js';
 import { rarityName, setName, setTagline, t, tHtml, typeName } from '../i18n.js';
 import { state } from '../state.js';
-import { isLocalMode } from '../api.js';
-
-const API_ROUTES = [
-  ['GET', '/api/health', 'health'],
-  ['GET', '/api/meta', 'meta'],
-  ['GET', '/api/cards', 'cards'],
-  ['GET', '/api/cards/:cardId', 'card'],
-  ['GET', '/api/sets', 'sets'],
-  ['GET', '/api/sets/:setId', 'set'],
-  ['POST', '/api/auth/register', 'register'],
-  ['POST', '/api/auth/login', 'login'],
-  ['POST', '/api/auth/logout', 'logout'],
-  ['GET', '/api/auth/me', 'me'],
-  ['POST', '/api/auth/password', 'password'],
-  ['GET', '/api/players/:playerId', 'player'],
-  ['PATCH', '/api/players/:playerId', 'rename'],
-  ['POST', '/api/players/:playerId/boosters', 'open'],
-  ['GET', '/api/players/:playerId/boosters', 'history'],
-  ['GET', '/api/players/:playerId/collection', 'collection'],
-  ['DELETE', '/api/players/:playerId/collection', 'reset'],
-  ['GET', '/api/players/:playerId/friends', 'friends'],
-  ['POST', '/api/players/:playerId/friends', 'addFriend'],
-  ['POST', '/api/players/:playerId/friends/:friendId/accept', 'acceptFriend'],
-  ['POST', '/api/players/:playerId/friends/:friendId/decline', 'declineFriend'],
-  ['DELETE', '/api/players/:playerId/friends/:friendId', 'removeFriend'],
-  ['GET', '/api/players/:playerId/friends/:friendId/collection', 'friendCollection'],
-  ['GET', '/api/leaderboard', 'leaderboard'],
-];
 
 function atLeastOneLabel(rarityId, chance) {
   if (rarityId === 'N') return '—';
@@ -115,22 +87,6 @@ export function renderRules(main) {
           </ul>
         </section>
       </div>
-
-      <section class="panel">
-        <h2 class="panel__title">${t('rules.api')}</h2>
-        <p>${raw(tHtml(isLocalMode() ? 'rules.apiLocal' : 'rules.apiText'))}</p>
-        <div class="table-wrap">
-          <table class="api-table">
-            <tbody>
-              ${API_ROUTES.map(([method, path, key]) => html`<tr>
-                <td><span class="method method--${method.toLowerCase()}">${method}</span></td>
-                <td><code>${path}</code></td>
-                <td>${t(`rules.routes.${key}`)}</td>
-              </tr>`)}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
       <section class="panel">
         <h2 class="panel__title">${t('rules.credits')}</h2>
