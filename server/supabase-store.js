@@ -17,6 +17,21 @@ const isUuid = (value) => typeof value === 'string' && UUID.test(value);
 const PLAYER_COLUMNS = 'id,name,email,friend_code,created_at';
 const toPlayer = (row) =>
   row ? { id: row.id, name: row.name, email: row.email, friendCode: row.friend_code, createdAt: row.created_at } : null;
+const TRADE_COLUMNS =
+  'id,status,from_card_id,to_card_id,created_at,proposed_at,closed_at,' +
+  'from_player:players!trades_from_fk(id,name,friend_code),to_player:players!trades_to_fk(id,name,friend_code)';
+const tradePlayer = (row) => ({ id: row.id, name: row.name, friendCode: row.friend_code });
+const toTrade = (row) => ({
+  id: row.id,
+  status: row.status,
+  from: tradePlayer(row.from_player),
+  to: tradePlayer(row.to_player),
+  fromCardId: row.from_card_id,
+  toCardId: row.to_card_id,
+  createdAt: row.created_at,
+  proposedAt: row.proposed_at,
+  closedAt: row.closed_at,
+});
 const eq = (value) => `eq.${encodeURIComponent(value)}`;
 const between = (a, b) => `or=(and(requester_id.eq.${a},addressee_id.eq.${b}),and(requester_id.eq.${b},addressee_id.eq.${a}))`;
 
@@ -246,9 +261,15 @@ export function createSupabaseStore({ url, secretKey }) {
       return row?.opened_at ?? null;
     },
 
+    /** Deletes the player's boosters and traded cards, and cancels their open trades (function reset_collection). */
     async resetCollection(playerId) {
-      const rows = await request('DELETE', `boosters?player_id=${eq(playerId)}&select=id`, { prefer: 'return=representation' });
-      return rows.length;
+      return request('POST', 'rpc/reset_collection', { body: { p_player_id: playerId } });
+    },
+
+    /** Copies of one card the player owns (0 if none). */
+    async copies(playerId, cardId) {
+      const [row] = await get(`player_collection?select=count&player_id=${eq(playerId)}&card_id=${eq(cardId)}`);
+      return row?.count ?? 0;
     },
 
     /** Players who pulled at least one card: [{ id, name, createdAt, boostersOpened }] */
@@ -291,10 +312,15 @@ export function createSupabaseStore({ url, secretKey }) {
       return rows.length === 1;
     },
 
-    /** Removes a friend, or a request in either direction. False if there was nothing. */
+    /** Removes a friend, or a request in either direction, and cancels their open trades. False if there was nothing. */
     async removeFriendship(a, b) {
       if (!isUuid(a) || !isUuid(b)) return false;
       const rows = await request('DELETE', `friendships?${between(a, b)}&select=status`, { prefer: 'return=representation' });
+      await request(
+        'PATCH',
+        `trades?or=(and(from_id.eq.${a},to_id.eq.${b}),and(from_id.eq.${b},to_id.eq.${a}))&status=in.(pending,proposed)`,
+        { body: { status: 'canceled', closed_at: new Date().toISOString() } },
+      );
       return rows.length > 0;
     },
 
@@ -328,6 +354,61 @@ export function createSupabaseStore({ url, secretKey }) {
       ]);
       const toRequest = (row) => ({ id: row.player.id, name: row.player.name, friendCode: row.player.friend_code, sentAt: row.created_at });
       return { incoming: incoming.map(toRequest), outgoing: outgoing.map(toRequest) };
+    },
+
+    // ── Trades ───────────────────────────────────────────────────────────────
+
+    /** { open: trades waiting for an answer, closed: the `closedLimit` latest others }, newest first. */
+    async trades(playerId, closedLimit) {
+      const mine = `select=${TRADE_COLUMNS}&or=(from_id.eq.${playerId},to_id.eq.${playerId})`;
+      const [open, closed] = await Promise.all([
+        get(`trades?${mine}&status=in.(pending,proposed)&order=id.desc`),
+        closedLimit > 0
+          ? get(`trades?${mine}&status=in.(accepted,declined,canceled)&order=closed_at.desc&limit=${Number(closedLimit)}`)
+          : [],
+      ]);
+      return { open: open.map(toTrade), closed: closed.map(toTrade) };
+    },
+
+    async getTrade(id) {
+      const [row] = await get(`trades?select=${TRADE_COLUMNS}&id=eq.${Number(id)}`);
+      return row ? toTrade(row) : null;
+    },
+
+    /** Returns the new trade's id. */
+    async createTrade(fromId, toId, cardId) {
+      const [row] = await request('POST', 'trades?select=id', {
+        body: { from_id: fromId, to_id: toId, from_card_id: cardId },
+        prefer: 'return=representation',
+      });
+      return row.id;
+    },
+
+    /** The friend (`toId`) chooses the card they give back. False if the trade is no longer waiting for it. */
+    async proposeTrade(id, toId, cardId) {
+      const rows = await request('PATCH', `trades?id=eq.${Number(id)}&to_id=${eq(toId)}&status=eq.pending&select=id`, {
+        body: { to_card_id: cardId, status: 'proposed', proposed_at: new Date().toISOString() },
+        prefer: 'return=representation',
+      });
+      return rows.length === 1;
+    },
+
+    /**
+     * Swaps the two cards (function complete_trade). Returns 'accepted', 'not_found',
+     * 'from_card_missing' or 'to_card_missing'.
+     */
+    async completeTrade(id, fromId) {
+      return request('POST', 'rpc/complete_trade', { body: { p_trade_id: Number(id), p_player_id: fromId } });
+    },
+
+    /** Declines (`side` 'to') or cancels (`side` 'from') an open trade. False if it is not open anymore. */
+    async closeTrade(id, side, playerId, status) {
+      const rows = await request(
+        'PATCH',
+        `trades?id=eq.${Number(id)}&${side}_id=${eq(playerId)}&status=in.(pending,proposed)&select=id`,
+        { body: { status, closed_at: new Date().toISOString() }, prefer: 'return=representation' },
+      );
+      return rows.length === 1;
     },
 
     close() {

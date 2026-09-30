@@ -181,3 +181,35 @@ export const acceptFriend = (id) => api(friendPath(id, '/accept'), { method: 'PO
 export const declineFriend = (id) => api(friendPath(id, '/decline'), { method: 'POST' });
 export const removeFriend = (id) => api(friendPath(id), { method: 'DELETE' });
 export const fetchFriendCollection = (id) => api(friendPath(id, '/collection'));
+
+// ── Trades ───────────────────────────────────────────────────────────────────
+
+const tradePath = (id, suffix = '') => playerPath(`/trades/${encodeURIComponent(id)}${suffix}`);
+
+/** { trades (open, with yourTurn), history, promised: { cardId: copies }, friends } */
+export const fetchTrades = () => api(playerPath('/trades'));
+export const offerTrade = (friendId, cardId) => api(playerPath('/trades'), { method: 'POST', body: { friendId, cardId } });
+export const proposeTrade = (id, cardId) => api(tradePath(id, '/propose'), { method: 'POST', body: { cardId } });
+export const declineTrade = (id) => api(tradePath(id, '/decline'), { method: 'POST' });
+export const cancelTrade = (id) => api(tradePath(id), { method: 'DELETE' });
+
+/** Swaps the cards: your collection changes. */
+export async function acceptTrade(id) {
+  const result = await api(tradePath(id, '/accept'), { method: 'POST' });
+  setPlayer(result.player);
+  await refreshCollection();
+  return result;
+}
+
+/**
+ * Reloads your cards and profile (a friend who accepts a trade changes them).
+ * Returns true when your collection changed.
+ */
+export async function syncCollection() {
+  const signature = () => [...state.owned].map(([id, entry]) => `${id}:${entry.count}`).sort().join();
+  const before = signature();
+  const [player] = await Promise.all([api(playerPath()), refreshCollection()]);
+  setPlayer(player);
+  emit();
+  return signature() !== before;
+}
