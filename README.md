@@ -81,7 +81,8 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 │   ├── http.js             tiny router, JSON helpers, static file server
 │   ├── booster.js          booster opening logic (pure functions)
 │   ├── catalog.js          loads the cards from data/cards.json
-│   ├── db.js               SQLite storage (node:sqlite): accounts, sessions, boosters, pulls
+│   ├── db.js               SQLite storage (node:sqlite): accounts, sessions, boosters, pulls, friends
+│   ├── supabase-store.js   the same storage in Supabase (used when .env has the keys)
 │   └── config.js           rarities, drop rates, types, eras, booster sets
 ├── client/                 web UI (HTML/CSS/JS modules, no build step)
 │   ├── index.html
@@ -90,11 +91,28 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 ├── data/
 │   ├── anime-list.js       the 151 anime (input of npm run sync)
 │   └── cards.json          generated card catalog (texts, pictures, rarity)
+├── supabase/
+│   └── schema.sql          creates the Supabase tables (run it in the SQL Editor)
 ├── scripts/
 │   ├── sync-wikipedia.js   rebuilds data/cards.json from Wikipedia
 │   └── text-utils.js       picks the summary sentence for each card
 └── storage/                created at runtime: SQLite database (not versioned)
 ```
+
+## Database: SQLite or Supabase
+
+By default, players, boosters and friends are saved in a local SQLite file
+(`storage/anime-clash-chronicles.db`). To use a **Supabase** (PostgreSQL) database instead:
+
+1. In the Supabase dashboard, open **SQL Editor → New query**, paste
+   [supabase/schema.sql](supabase/schema.sql) and click **Run** (it creates the tables).
+2. Copy `.env.example` to `.env` and fill in your project URL and keys
+   (**Project Settings → API Keys**). `.env` is in `.gitignore`: it is never committed.
+3. `npm start` — the startup message shows `Database: Supabase (…)`.
+
+Only the server uses the database, with the **secret** key (it never reaches the browser).
+Row Level Security is enabled on every table with no public policy, so the publishable key
+cannot read anything.
 
 ## Score and rankings
 
@@ -172,6 +190,7 @@ Optional environment variables for `npm start`:
 | `HOST` | `127.0.0.1` | Use `0.0.0.0` to let other devices on your network play |
 | `DB_FILE` | `storage/anime-clash-chronicles.db` | Where players and collections are saved |
 | `NO_OPEN` | *(unset)* | Set to `1` to not open the browser automatically |
+| `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | *(unset)* | Use Supabase instead of SQLite (usually set in `.env`) |
 
 In PowerShell: `$env:PORT=4000; npm start`. In bash: `PORT=4000 npm start`.
 

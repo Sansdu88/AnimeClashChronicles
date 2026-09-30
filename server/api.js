@@ -88,37 +88,39 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   });
 
   // ── Sessions ───────────────────────────────────────────────────────────────
+  // Store methods are synchronous with SQLite and asynchronous with Supabase:
+  // they are always awaited.
 
   /** The logged-in player of this request, or null. */
-  function currentPlayer(req) {
+  async function currentPlayer(req) {
     const token = readSessionToken(req);
     return token ? store.sessionPlayer(hashToken(token)) : null;
   }
 
-  function requireLogin(req) {
-    const player = currentPlayer(req);
+  async function requireLogin(req) {
+    const player = await currentPlayer(req);
     if (!player) throw new HttpError(401, 'Log in first (POST /api/auth/login)', null, 'not_authenticated');
     return player;
   }
 
   /** Logged in AND the :playerId of the URL is you. */
-  function requireSelf(req, playerId) {
-    const player = requireLogin(req);
+  async function requireSelf(req, playerId) {
+    const player = await requireLogin(req);
     if (player.id !== playerId) throw new HttpError(403, 'This is not your player', null, 'forbidden');
     return player;
   }
 
-  function startSession(player, status, extra = {}) {
+  async function startSession(player, status, extra = {}) {
     const token = newSessionToken();
-    store.createSession(player.id, hashToken(token), SESSION_DAYS);
-    return reply(status, { player: profile(player), token, ...extra }, { 'Set-Cookie': sessionCookie(token, { secure: secureCookies }) });
+    await store.createSession(player.id, hashToken(token), SESSION_DAYS);
+    return reply(status, { player: await profile(player), token, ...extra }, { 'Set-Cookie': sessionCookie(token, { secure: secureCookies }) });
   }
 
   // ── Profiles ───────────────────────────────────────────────────────────────
 
   /** Collection rows (cards still in the catalog) + completion numbers. */
-  function collectionOf(playerId) {
-    const entries = store.collection(playerId).filter((row) => catalog.getCard(row.cardId));
+  async function collectionOf(playerId) {
+    const entries = (await store.collection(playerId)).filter((row) => catalog.getCard(row.cardId));
     const owned = new Set(entries.map((row) => row.cardId));
     const progress = (cards) => ({ owned: cards.filter((card) => owned.has(card.id)).length, total: cards.length });
     return {
@@ -137,10 +139,9 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
 
   const rarityOfCard = (cardId) => catalog.getCard(cardId)?.rarity;
 
-  function profile(player) {
-    const stats = store.stats(player.id);
+  async function profile(player) {
+    const [stats, { entries, summary }] = await Promise.all([store.stats(player.id), collectionOf(player.id)]);
     const cardsPulled = Object.values(stats.pullsByRarity).reduce((sum, n) => sum + n, 0);
-    const { entries, summary } = collectionOf(player.id);
     return {
       id: player.id,
       name: player.name,
@@ -152,15 +153,15 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   }
 
   /** What friends can see of a player (no e-mail). */
-  function publicProfile(player) {
-    const { email, ...rest } = profile(player);
+  async function publicProfile(player) {
+    const { email, ...rest } = await profile(player);
     return rest;
   }
 
   /** Ranking rows (score, cards…) for a list of players, best first. */
-  function rank(players, collections, youId) {
-    return players
-      .map((player) => {
+  async function rank(players, collections, youId) {
+    const rows = await Promise.all(
+      players.map(async (player) => {
         const score = collectionScore(collections.get(player.id) ?? [], rarityOfCard);
         return {
           id: player.id,
@@ -171,19 +172,23 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
           cardsPulled: score.cardsPulled,
           completion: score.uniqueCards / totalCards,
           byRarity: score.byRarity,
-          boostersOpened: player.boostersOpened ?? store.stats(player.id).boostersOpened,
+          boostersOpened: player.boostersOpened ?? (await store.stats(player.id)).boostersOpened,
           createdAt: player.createdAt,
         };
-      })
+      }),
+    );
+    return rows
       .sort((a, b) => b.score - a.score || b.uniqueCards - a.uniqueCards || (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
       .map(({ createdAt, ...row }, index) => ({ rank: index + 1, ...row }));
   }
 
-  function friendsOf(player) {
-    const collections = store.allCollections();
-    const friends = store.friends(player.id);
-    const { incoming, outgoing } = store.friendRequests(player.id);
-    const ranked = rank([player, ...friends], collections, player.id);
+  async function friendsOf(player) {
+    const [collections, friends, { incoming, outgoing }] = await Promise.all([
+      store.allCollections(),
+      store.friends(player.id),
+      store.friendRequests(player.id),
+    ]);
+    const ranked = await rank([player, ...friends], collections, player.id);
     const byId = new Map(ranked.map((row) => [row.id, row]));
     return {
       friendCode: player.friendCode,
@@ -200,8 +205,8 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     };
   }
 
-  function requireFriend(player, friendId) {
-    const link = store.friendship(player.id, friendId);
+  async function requireFriend(player, friendId) {
+    const link = await store.friendship(player.id, friendId);
     if (link?.status !== 'accepted') throw new HttpError(403, 'This player is not your friend', null, 'not_friends');
     return store.getPlayer(friendId);
   }
@@ -266,15 +271,15 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     const email = cleanEmail(body.email);
     const password = checkPassword(body.password);
     const name = body.name === undefined || body.name === '' ? randomPlayerName(rng) : cleanPlayerName(body.name);
-    if (store.findLogin(email)) throw new HttpError(409, 'An account already exists with this e-mail', null, 'email_taken');
+    if (await store.findLogin(email)) throw new HttpError(409, 'An account already exists with this e-mail', null, 'email_taken');
     const passwordHash = await hashPassword(password);
 
     let player = null;
-    if (typeof body.claimPlayerId === 'string' && store.claimPlayer(body.claimPlayerId, { name, email, passwordHash })) {
-      player = store.getPlayer(body.claimPlayerId);
+    if (typeof body.claimPlayerId === 'string' && (await store.claimPlayer(body.claimPlayerId, { name, email, passwordHash }))) {
+      player = await store.getPlayer(body.claimPlayerId);
     }
     try {
-      player ??= store.createPlayer(name, { email, passwordHash });
+      player ??= await store.createPlayer(name, { email, passwordHash });
     } catch (err) {
       // Two sign-ups with the same e-mail at the same time: the unique index decides.
       if (/UNIQUE/i.test(err.message)) throw new HttpError(409, 'An account already exists with this e-mail', null, 'email_taken');
@@ -290,55 +295,55 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     if (loginLimiter.blocked(limiterKey)) {
       throw new HttpError(429, 'Too many failed attempts, try again in a few minutes', null, 'too_many_attempts');
     }
-    const login = email ? store.findLogin(email) : null;
+    const login = email ? await store.findLogin(email) : null;
     const valid = login ? await verifyPassword(password, login.passwordHash) : (await burnPasswordCheck(password), false);
     if (!valid) {
       loginLimiter.fail(limiterKey);
       throw new HttpError(401, 'Wrong e-mail or password', null, 'invalid_credentials');
     }
     loginLimiter.reset(limiterKey);
-    return startSession(store.getPlayer(login.id), 200);
+    return startSession(await store.getPlayer(login.id), 200);
   });
 
-  router.post('/api/auth/logout', ({ req }) => {
+  router.post('/api/auth/logout', async ({ req }) => {
     const token = readSessionToken(req);
-    if (token) store.deleteSession(hashToken(token));
+    if (token) await store.deleteSession(hashToken(token));
     return reply(200, { ok: true }, { 'Set-Cookie': clearedSessionCookie() });
   });
 
   /** The logged-in player, or { player: null } (not an error: it is how a page checks if someone is logged in). */
-  router.get('/api/auth/me', ({ req }) => {
-    const player = currentPlayer(req);
-    return { player: player ? profile(player) : null };
+  router.get('/api/auth/me', async ({ req }) => {
+    const player = await currentPlayer(req);
+    return { player: player ? await profile(player) : null };
   });
 
   /** Body: { currentPassword, newPassword }. Logs out your other sessions. */
   router.post('/api/auth/password', async ({ req, body }) => {
-    const player = requireLogin(req);
-    const ok = await verifyPassword(String(body.currentPassword ?? ''), store.getPasswordHash(player.id));
+    const player = await requireLogin(req);
+    const ok = await verifyPassword(String(body.currentPassword ?? ''), await store.getPasswordHash(player.id));
     if (!ok) throw new HttpError(401, 'The current password is wrong', null, 'wrong_password');
-    store.setPasswordHash(player.id, await hashPassword(checkPassword(body.newPassword)));
-    store.deleteOtherSessions(player.id, hashToken(readSessionToken(req)));
+    await store.setPasswordHash(player.id, await hashPassword(checkPassword(body.newPassword)));
+    await store.deleteOtherSessions(player.id, hashToken(readSessionToken(req)));
     return { ok: true };
   });
 
   // ── Players (your own only) ────────────────────────────────────────────────
 
-  router.get('/api/players/:playerId', ({ req, params }) => profile(requireSelf(req, params.playerId)));
+  router.get('/api/players/:playerId', async ({ req, params }) => profile(await requireSelf(req, params.playerId)));
 
-  router.patch('/api/players/:playerId', ({ req, params, body }) => {
-    requireSelf(req, params.playerId);
-    return profile(store.renamePlayer(params.playerId, cleanPlayerName(body.name)));
+  router.patch('/api/players/:playerId', async ({ req, params, body }) => {
+    await requireSelf(req, params.playerId);
+    return profile(await store.renamePlayer(params.playerId, cleanPlayerName(body.name)));
   });
 
-  router.post('/api/players/:playerId/boosters', ({ req, params, body }) => {
-    const player = requireSelf(req, params.playerId);
+  router.post('/api/players/:playerId/boosters', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
     const setId = oneOf(body.setId, setIds, 'setId') ?? 'all-stars';
     const count = intParam(body.count, { name: 'count', min: 1, max: BOOSTER.maxPerRequest, fallback: 1 });
     const set = catalog.getSet(setId);
 
     const opened = Array.from({ length: count }, () => openBooster(set, { rng }));
-    const saved = store.recordBoosters(player.id, setId, opened);
+    const saved = await store.recordBoosters(player.id, setId, opened);
     return reply(201, {
       boosters: saved.map((booster) => ({
         id: booster.id,
@@ -346,15 +351,15 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
         openedAt: booster.openedAt,
         cards: booster.pulls.map(({ card, isNew }) => ({ ...card, isNew })),
       })),
-      player: profile(player),
+      player: await profile(player),
     });
   });
 
-  router.get('/api/players/:playerId/boosters', ({ req, params, query }) => {
-    requireSelf(req, params.playerId);
+  router.get('/api/players/:playerId/boosters', async ({ req, params, query }) => {
+    await requireSelf(req, params.playerId);
     const limit = intParam(query.get('limit'), { name: 'limit', min: 1, max: 100, fallback: 20 });
     return {
-      boosters: store.history(params.playerId, limit).map((booster) => ({
+      boosters: (await store.history(params.playerId, limit)).map((booster) => ({
         id: booster.id,
         setId: booster.setId,
         openedAt: booster.openedAt,
@@ -372,78 +377,88 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     };
   });
 
-  router.get('/api/players/:playerId/collection', ({ req, params }) => {
-    requireSelf(req, params.playerId);
-    const { entries, summary } = collectionOf(params.playerId);
+  router.get('/api/players/:playerId/collection', async ({ req, params }) => {
+    await requireSelf(req, params.playerId);
+    const { entries, summary } = await collectionOf(params.playerId);
     return { ...summary, cards: entries };
   });
 
-  router.delete('/api/players/:playerId/collection', ({ req, params }) => {
-    const player = requireSelf(req, params.playerId);
-    const deletedBoosters = store.resetCollection(player.id);
-    return { deletedBoosters, player: profile(player) };
+  router.delete('/api/players/:playerId/collection', async ({ req, params }) => {
+    const player = await requireSelf(req, params.playerId);
+    const deletedBoosters = await store.resetCollection(player.id);
+    return { deletedBoosters, player: await profile(player) };
   });
 
   /** Best collectors by score (points by rarity, see SCORE in config.js). */
-  router.get('/api/leaderboard', ({ req, query }) => {
+  router.get('/api/leaderboard', async ({ req, query }) => {
     const limit = intParam(query.get('limit'), { name: 'limit', min: 1, max: 100, fallback: 10 });
-    const ranked = rank(store.collectors(), store.allCollections(), currentPlayer(req)?.id);
+    const [collectors, collections, you] = await Promise.all([store.collectors(), store.allCollections(), currentPlayer(req)]);
+    const ranked = await rank(collectors, collections, you?.id);
     return { scoring: SCORE, players: ranked.slice(0, limit).map(({ id, ...row }) => row) };
   });
 
   // ── Friends (your own list only) ───────────────────────────────────────────
 
-  router.get('/api/players/:playerId/friends', ({ req, params }) => friendsOf(requireSelf(req, params.playerId)));
+  router.get('/api/players/:playerId/friends', async ({ req, params }) => friendsOf(await requireSelf(req, params.playerId)));
 
   /** Body: { code } — a friend code ("#K7Q2XM") or an e-mail address. */
-  router.post('/api/players/:playerId/friends', ({ req, params, body }) => {
-    const player = requireSelf(req, params.playerId);
+  router.post('/api/players/:playerId/friends', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
     const code = typeof body.code === 'string' ? body.code.trim() : '';
-    const friendId = code.includes('@') ? store.findLogin(code.toLowerCase())?.id : store.findByFriendCode(code);
+    const friendId = code.includes('@') ? (await store.findLogin(code.toLowerCase()))?.id : await store.findByFriendCode(code);
     if (!friendId) throw new HttpError(404, 'No player with this friend code or e-mail', null, 'player_not_found');
     if (friendId === player.id) throw new HttpError(400, 'You cannot add yourself', null, 'cannot_add_self');
 
-    const link = store.friendship(player.id, friendId);
+    const link = await store.friendship(player.id, friendId);
     if (link?.status === 'accepted') throw new HttpError(409, 'You are already friends', null, 'already_friends');
     if (link?.requesterId === player.id) throw new HttpError(409, 'Request already sent', null, 'request_exists');
     let status = 'pending';
     if (link) {
       // They had already asked you: adding them back accepts their request.
-      store.acceptFriend(friendId, player.id);
+      await store.acceptFriend(friendId, player.id);
       status = 'accepted';
     } else {
-      store.requestFriend(player.id, friendId);
+      await store.requestFriend(player.id, friendId);
     }
-    const friend = store.getPlayer(friendId);
-    return reply(201, { status, friend: { id: friend.id, name: friend.name, friendCode: friend.friendCode }, ...friendsOf(player) });
+    const friend = await store.getPlayer(friendId);
+    return reply(201, {
+      status,
+      friend: { id: friend.id, name: friend.name, friendCode: friend.friendCode },
+      ...(await friendsOf(player)),
+    });
   });
 
-  router.post('/api/players/:playerId/friends/:friendId/accept', ({ req, params }) => {
-    const player = requireSelf(req, params.playerId);
-    if (!store.acceptFriend(params.friendId, player.id)) throw new HttpError(404, 'No friend request from this player', null, 'request_not_found');
+  router.post('/api/players/:playerId/friends/:friendId/accept', async ({ req, params }) => {
+    const player = await requireSelf(req, params.playerId);
+    if (!(await store.acceptFriend(params.friendId, player.id))) {
+      throw new HttpError(404, 'No friend request from this player', null, 'request_not_found');
+    }
     return friendsOf(player);
   });
 
-  router.post('/api/players/:playerId/friends/:friendId/decline', ({ req, params }) => {
-    const player = requireSelf(req, params.playerId);
-    const link = store.friendship(player.id, params.friendId);
+  router.post('/api/players/:playerId/friends/:friendId/decline', async ({ req, params }) => {
+    const player = await requireSelf(req, params.playerId);
+    const link = await store.friendship(player.id, params.friendId);
     if (link?.status !== 'pending' || link.addresseeId !== player.id) {
       throw new HttpError(404, 'No friend request from this player', null, 'request_not_found');
     }
-    store.removeFriendship(player.id, params.friendId);
+    await store.removeFriendship(player.id, params.friendId);
     return friendsOf(player);
   });
 
   /** Removes a friend, or cancels a request you sent. */
-  router.delete('/api/players/:playerId/friends/:friendId', ({ req, params }) => {
-    const player = requireSelf(req, params.playerId);
-    if (!store.removeFriendship(player.id, params.friendId)) throw new HttpError(404, 'Not in your friend list', null, 'not_friends');
+  router.delete('/api/players/:playerId/friends/:friendId', async ({ req, params }) => {
+    const player = await requireSelf(req, params.playerId);
+    if (!(await store.removeFriendship(player.id, params.friendId))) {
+      throw new HttpError(404, 'Not in your friend list', null, 'not_friends');
+    }
     return friendsOf(player);
   });
 
-  router.get('/api/players/:playerId/friends/:friendId/collection', ({ req, params }) => {
-    const friend = requireFriend(requireSelf(req, params.playerId), params.friendId);
-    return { player: publicProfile(friend), cards: collectionOf(friend.id).entries };
+  router.get('/api/players/:playerId/friends/:friendId/collection', async ({ req, params }) => {
+    const friend = await requireFriend(await requireSelf(req, params.playerId), params.friendId);
+    const [player, { entries }] = await Promise.all([publicProfile(friend), collectionOf(friend.id)]);
+    return { player, cards: entries };
   });
 
   return router;
