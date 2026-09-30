@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * npm run sync — builds data/cards.json from Wikipedia, in English and French.
+ * npm run sync — builds the card catalog from Wikipedia, in English and French,
+ * and saves it in Supabase (table public.cards, needs SUPABASE_SECRET_KEY in .env).
  *
  * For every anime listed in data/anime-list.js it reads, in batches:
  *   ① the English page: intro, short description, picture, French link
@@ -16,9 +17,8 @@
  * themselves, so requests are batched and paced. Set WIKIMEDIA_CONTACT to your
  * e-mail or website to be allowed to go faster.
  *
- * If a page cannot be fetched, the card from the previous cards.json is kept.
+ * If a page cannot be fetched, the card already in the database is kept.
  */
-import { readFile, writeFile } from 'node:fs/promises';
 import { ANIME } from '../data/anime-list.js';
 import { ERAS, RARITIES, RARITY_IDS, TYPES, eraForYear } from '../server/config.js';
 import {
@@ -33,8 +33,8 @@ import {
   stripQualifier,
   truncate,
 } from './text-utils.js';
+import { openStore } from './supabase-env.js';
 
-const OUT_FILE = new URL('../data/cards.json', import.meta.url);
 const SITES = { en: 'https://en.wikipedia.org', fr: 'https://fr.wikipedia.org' };
 const CONTACT = process.env.WIKIMEDIA_CONTACT?.trim();
 const USER_AGENT = `AnimeClashChronicles/1.0 (hobby trading-card game${CONTACT ? `; ${CONTACT}` : ''}) Node.js`;
@@ -140,13 +140,9 @@ function validateList() {
   }
 }
 
-async function loadPrevious() {
-  try {
-    const { cards } = JSON.parse(await readFile(OUT_FILE, 'utf8'));
-    return new Map(cards.map((card) => [card.source, card]));
-  } catch {
-    return new Map();
-  }
+async function loadPrevious(store) {
+  const { cards } = await store.loadCatalog();
+  return new Map(cards.map((card) => [card.source, card]));
 }
 
 // ① ───────────────────────────────────────────────────────────────────────────
@@ -295,7 +291,8 @@ function assignPower(group) {
 // Main ────────────────────────────────────────────────────────────────────────
 async function main() {
   validateList();
-  const previous = await loadPrevious();
+  const store = openStore();
+  const previous = await loadPrevious(store);
   if (!CONTACT) console.log('(tip: set WIKIMEDIA_CONTACT=<your e-mail or website> to sync faster)\n');
 
   console.log(`① Reading ${ANIME.length} English Wikipedia pages…`);
@@ -433,17 +430,15 @@ async function main() {
     card.number = i + 1;
   });
 
-  const payload = {
+  await store.saveCatalog(cards, {
     generatedAt: new Date().toISOString(),
     popularity: { metric: 'English Wikipedia page views', days: 60, until: lastDay },
     license:
       'Card texts come from Wikipedia (CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/). ' +
       "Pictures belong to their respective owners, see each picture's file page on Wikipedia.",
-    cards,
-  };
-  await writeFile(OUT_FILE, `${JSON.stringify(payload, null, 2)}\n`);
+  });
 
-  console.log(`\n✔ Wrote ${cards.length} cards to data/cards.json (${cards.filter((c) => c.fr).length} in French)\n`);
+  console.log(`\n✔ Saved ${cards.length} cards in Supabase (${cards.filter((c) => c.fr).length} in French)\n`);
   const table = {};
   for (const era of ERAS) {
     table[era.name] = Object.fromEntries(

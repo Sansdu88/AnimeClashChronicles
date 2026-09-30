@@ -1,11 +1,12 @@
 /**
- * Player data storage in Supabase (PostgreSQL): accounts, sessions, boosters,
- * collections and friends. It talks to the Supabase REST API (PostgREST) with
+ * Data storage in Supabase (PostgreSQL): the card catalog, and the players'
+ * accounts, sessions, boosters, collections and friends. It talks to the Supabase REST API (PostgREST) with
  * fetch and the secret key from .env, so the project has no dependency.
  *
  * The tables are created by supabase/schema.sql.
  */
 import { randomInt, randomUUID } from 'node:crypto';
+import { cardToRow, rowToCard } from './catalog.js';
 
 // Friend codes avoid look-alike characters (no I, O, 0, 1).
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -65,6 +66,37 @@ export function createSupabaseStore({ url, secretKey }) {
     /** Fails with a clear message if the database is unreachable or the tables are missing. */
     async check() {
       await get('players?select=id&limit=1');
+    },
+
+    // ── Card catalog ─────────────────────────────────────────────────────────
+
+    /** { cards, sets, meta }: every card (in number order), the booster sets and the catalog info. */
+    async loadCatalog() {
+      const [rows, sets, [info]] = await Promise.all([
+        getAll('cards?select=*&order=number,id'),
+        get('booster_sets?select=id,position,name,jp,tagline,era,colors&order=position'),
+        get('catalog_info?select=generated_at,popularity,license'),
+      ]);
+      return {
+        cards: rows.map(rowToCard),
+        sets,
+        meta: { generatedAt: info?.generated_at ?? null, popularity: info?.popularity ?? null, license: info?.license ?? null },
+      };
+    },
+
+    /** Adds or updates cards (by id) and the catalog info. Cards that are not given are kept. */
+    async saveCatalog(cards, { generatedAt = null, popularity = null, license = null } = {}) {
+      const updatedAt = new Date().toISOString();
+      for (let i = 0; i < cards.length; i += 50) {
+        await request('POST', 'cards?on_conflict=id', {
+          body: cards.slice(i, i + 50).map((card) => ({ ...cardToRow(card), updated_at: updatedAt })),
+          prefer: 'resolution=merge-duplicates',
+        });
+      }
+      await request('POST', 'catalog_info?on_conflict=id', {
+        body: { id: true, generated_at: generatedAt, popularity, license },
+        prefer: 'resolution=merge-duplicates',
+      });
     },
 
     // ── Players & accounts ───────────────────────────────────────────────────

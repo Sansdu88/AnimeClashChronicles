@@ -2,8 +2,8 @@
  * Curated list of anime that become cards.
  *
  * This file is the INPUT of `npm run sync`, which reads each Wikipedia page and
- * writes the final catalog to `data/cards.json` (summary, picture, popularity,
- * rarity...). To add a card: add a line here, then run `npm run sync`.
+ * saves the final catalog in Supabase, table `cards` (summary, picture,
+ * popularity, rarity...). To add a card: add a line here, then run `npm run sync`.
  *
  * Fields:
  *   title      English Wikipedia page title (redirects are followed)

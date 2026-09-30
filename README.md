@@ -33,7 +33,8 @@ the game logic runs in the browser ([client/js/local-api.js](client/js/local-api
 account and cards are saved in your browser only (so friends can only be added between
 accounts created in the same browser). `npm run build:pages` builds this version in
 `dist/`, and [.github/workflows/pages.yml](.github/workflows/pages.yml) deploys it at every push
-on `main`.
+on `main`. The build reads the cards from Supabase: add `SUPABASE_URL` and
+`SUPABASE_PUBLISHABLE_KEY` as repository secrets (**Settings → Secrets and variables → Actions**).
 
 ## What's inside
 
@@ -73,7 +74,7 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 ## Project structure
 
 ```
-├── package.json            npm start / npm run sync
+├── package.json            npm start / npm run sync / npm run db:import
 ├── server/                 REST API (Node.js built-ins only)
 │   ├── index.js            entry point: starts the server, opens the browser
 │   ├── app.js              HTTP server: /api routes + web UI files
@@ -81,37 +82,44 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 │   ├── auth.js             passwords (scrypt), session tokens, cookies
 │   ├── http.js             tiny router, JSON helpers, static file server
 │   ├── booster.js          booster opening logic (pure functions)
-│   ├── catalog.js          loads the cards from data/cards.json
-│   ├── supabase-store.js   database access (Supabase REST API): accounts, sessions, boosters, friends
-│   └── config.js           rarities, drop rates, types, eras, booster sets
+│   ├── catalog.js          builds the card catalog and booster sets (read from Supabase)
+│   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, friends
+│   └── config.js           rarities, drop rates, types, eras
 ├── client/                 web UI (HTML/CSS/JS modules, no build step)
 │   ├── index.html
 │   ├── css/                base, card, booster, views
 │   └── js/                 main.js (router), i18n (EN/FR), state, api, components/, views/, ui/
 ├── data/
-│   ├── anime-list.js       the 151 anime (input of npm run sync)
-│   └── cards.json          generated card catalog (texts, pictures, rarity)
+│   └── anime-list.js       the 151 anime (input of npm run sync)
 ├── supabase/
 │   └── schema.sql          creates the Supabase tables (run it in the SQL Editor)
 ├── scripts/
-│   ├── sync-wikipedia.js   rebuilds data/cards.json from Wikipedia
+│   ├── sync-wikipedia.js   rebuilds the cards in Supabase from Wikipedia
+│   ├── import-cards.js     copies a cards JSON file into Supabase (npm run db:import)
+│   ├── supabase-env.js     opens the database for the scripts (.env)
 │   └── text-utils.js       picks the summary sentence for each card
 ```
 
 ## Database: Supabase
 
-Players, sessions, boosters and friends are stored in a **Supabase** (PostgreSQL) database.
+Everything is stored in a **Supabase** (PostgreSQL) database: the card catalog (`cards`,
+`booster_sets`, `catalog_info`) and the players, sessions, boosters and friends.
 To set it up (once):
 
 1. In the Supabase dashboard, open **SQL Editor → New query**, paste
-   [supabase/schema.sql](supabase/schema.sql) and click **Run** (it creates the tables).
+   [supabase/schema.sql](supabase/schema.sql) and click **Run** (it creates the tables and the
+   booster sets; it can be run again safely, for example after an update).
 2. Copy `.env.example` to `.env` and fill in your project URL and keys
    (**Project Settings → API Keys**). `.env` is in `.gitignore`: it is never committed.
-3. `npm start` — the startup message shows `Database: Supabase (…)`.
+3. Fill the cards: `npm run sync` (from Wikipedia), or `npm run db:import` to copy a
+   `data/cards.json` file made by an older version. `npm run db:import -- --sql` writes
+   `supabase/seed-cards.sql` instead, to paste in the SQL Editor.
+4. `npm start` — the startup message shows `Database: Supabase (…)`.
 
 Only the server uses the database, with the **secret** key (it never reaches the browser).
-Row Level Security is enabled on every table with no public policy, so the publishable key
-cannot read anything.
+Row Level Security is enabled on every table. The card catalog is public and read-only (the
+publishable key can read it, used by the GitHub Pages build); nothing else is readable with
+the publishable key.
 
 ## Score and rankings
 
@@ -195,9 +203,9 @@ In PowerShell: `$env:PORT=4000; npm start`. In bash: `PORT=4000 npm start`.
 
 ## Refreshing or adding cards
 
-The catalog in `data/cards.json` is already generated, so the game works right away. To rebuild
-it from the English and French Wikipedia (new summaries, pictures, and rarities from the latest
-page views):
+The card catalog lives in the Supabase table `cards`. To rebuild it from the English and French
+Wikipedia (new summaries, pictures, and rarities from the latest page views), then restart the
+server:
 
 ```bash
 npm run sync

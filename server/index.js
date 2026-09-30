@@ -12,7 +12,7 @@
 import { exec } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
-import { loadCatalog } from './catalog.js';
+import { createCatalog } from './catalog.js';
 import { createSupabaseStore } from './supabase-store.js';
 
 try {
@@ -73,8 +73,19 @@ async function openDatabase() {
   return { store, label: `Supabase (${new URL(SUPABASE_URL).host})` };
 }
 
-const catalog = loadCatalog();
+/** The cards and booster sets, read once at startup (restart the server after a sync). */
+async function loadCatalog(store) {
+  const { cards, sets, meta } = await store.loadCatalog();
+  if (cards.length === 0 || sets.length === 0) {
+    console.error('\n  ✗ The card catalog is empty in Supabase.');
+    console.error('    Run supabase/schema.sql, then "npm run db:import" (or "npm run sync").\n');
+    process.exit(1);
+  }
+  return createCatalog(cards, sets, meta);
+}
+
 const { store, label: databaseLabel } = await openDatabase();
+const catalog = await loadCatalog(store);
 const server = createApp({ catalog, store, clientDir: CLIENT_DIR, secureCookies: process.env.SECURE_COOKIES === '1' });
 
 const port = await listen(server, PORT);

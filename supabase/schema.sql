@@ -6,8 +6,62 @@
 --
 -- Only the Node.js server talks to these tables, with the SECRET key (which
 -- bypasses Row Level Security). RLS is enabled with no policy, so the public
--- (publishable) key cannot read or change anything.
+-- (publishable) key cannot read or change anything — except the card catalog
+-- (cards, booster_sets, catalog_info), which is public and read-only.
 -- ============================================================================
+
+-- ── Card catalog ─────────────────────────────────────────────────────────────
+-- Filled by `npm run sync` (from Wikipedia) or `npm run db:import` (from a JSON file).
+create table if not exists public.cards (
+  id          text primary key,           -- e.g. "naruto"
+  number      int not null,               -- collection number, 1 = oldest anime
+  name        text not null,
+  name_ja     text,
+  rarity      text not null check (rarity in ('N', 'R', 'SR', 'SSR', 'UR')),
+  type        text not null,              -- see TYPES in server/config.js
+  year        int not null,
+  era         text not null,              -- showa, heisei, reiwa
+  power       int not null,
+  views       int not null default 0,     -- Wikipedia page views (decides the rarity)
+  description text,
+  short       text,
+  summary     text,
+  image       jsonb,                      -- { src, width, height, file, credit }
+  wiki_title  text,
+  url         text,
+  fr          jsonb,                      -- French texts, null without a French page
+  source      text not null,              -- title in data/anime-list.js
+  revision    bigint,                     -- Wikipedia revision (lets the sync skip unchanged pages)
+  story_text  text,
+  updated_at  timestamptz not null default now()
+);
+create index if not exists cards_by_number on public.cards (number);
+
+-- The boosters players can open. era null = every card.
+create table if not exists public.booster_sets (
+  id       text primary key,
+  position smallint not null,              -- display order
+  name     text not null,
+  jp       text,
+  tagline  text,
+  era      text,
+  colors   text[] not null
+);
+
+insert into public.booster_sets (id, position, name, jp, tagline, era, colors) values
+  ('all-stars', 1, 'All-Stars',       'オールスター', 'Every era, every legend',     null,     array['#e63946', '#ffb703']),
+  ('showa',     2, 'Shōwa Classics',  '昭和',         'The pioneers · before 1989',  'showa',  array['#bc6c25', '#fefae0']),
+  ('heisei',    3, 'Heisei Legends',  '平成',         'The golden age · 1989–2018', 'heisei', array['#3a0ca3', '#4cc9f0']),
+  ('reiwa',     4, 'Reiwa New Wave',  '令和',         'Today''s hits · 2019+',      'reiwa',  array['#ff006e', '#8338ec'])
+on conflict (id) do nothing;
+
+-- One row: when and how the catalog was built.
+create table if not exists public.catalog_info (
+  id           boolean primary key default true check (id),
+  generated_at timestamptz,
+  popularity   jsonb,                     -- { metric, days, until }
+  license      text
+);
 
 -- ── Players & accounts ───────────────────────────────────────────────────────
 create table if not exists public.players (
@@ -42,12 +96,28 @@ create table if not exists public.pulls (
   booster_id bigint not null references public.boosters (id) on delete cascade,
   position   smallint not null,           -- 1 to 5, in reveal order
   player_id  uuid not null references public.players (id) on delete cascade,
-  card_id    text not null,               -- id of the card in data/cards.json
+  card_id    text not null,               -- id of the card in public.cards
   rarity     text not null check (rarity in ('N', 'R', 'SR', 'SSR', 'UR')),
   is_new     boolean not null,            -- first copy of this card for the player
   primary key (booster_id, position)
 );
 create index if not exists pulls_by_player on public.pulls (player_id, card_id);
+
+-- Pulled cards and opened boosters must exist in the catalog (a card that a
+-- player owns cannot be deleted). "not valid": rows saved before the catalog
+-- was in the database are not checked, only new ones.
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'pulls_card_fk') then
+    alter table public.pulls add constraint pulls_card_fk
+      foreign key (card_id) references public.cards (id) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'boosters_set_fk') then
+    alter table public.boosters add constraint boosters_set_fk
+      foreign key (set_id) references public.booster_sets (id) not valid;
+  end if;
+end;
+$$;
 
 -- ── Friends ──────────────────────────────────────────────────────────────────
 create table if not exists public.friendships (
@@ -147,6 +217,19 @@ alter table public.sessions    enable row level security;
 alter table public.boosters    enable row level security;
 alter table public.pulls       enable row level security;
 alter table public.friendships enable row level security;
+alter table public.cards        enable row level security;
+alter table public.booster_sets enable row level security;
+alter table public.catalog_info enable row level security;
+
+-- The card catalog is public (it is shown on the website): anyone can read it,
+-- only the server (secret key) can change it.
+drop policy if exists "catalog is public" on public.cards;
+create policy "catalog is public" on public.cards for select to anon, authenticated using (true);
+drop policy if exists "catalog is public" on public.booster_sets;
+create policy "catalog is public" on public.booster_sets for select to anon, authenticated using (true);
+drop policy if exists "catalog is public" on public.catalog_info;
+create policy "catalog is public" on public.catalog_info for select to anon, authenticated using (true);
+grant select on public.cards, public.booster_sets, public.catalog_info to anon, authenticated;
 
 -- Nothing is readable or callable with the public keys: only the server (secret key).
 revoke all on public.player_collection, public.player_rarity_counts, public.player_booster_counts, public.collectors
