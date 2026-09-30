@@ -213,3 +213,8 @@ export async function syncCollection() {
   emit();
   return signature() !== before;
 }
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+/** { friendRequests, trades }: friend requests received, trades waiting for your answer. */
+export const fetchNotifications = () => api(playerPath('/notifications'));

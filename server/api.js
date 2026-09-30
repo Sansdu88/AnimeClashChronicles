@@ -586,6 +586,11 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return tradesOf(player);
   });
 
+  /** Numbers for the header badges; the web page asks every few seconds, so it only makes two small queries. */
+  router.get('/api/players/:playerId/notifications', async ({ req, params }) =>
+    store.notifications((await requireSelf(req, params.playerId)).id),
+  );
+
   /** The player who offered the card cancels the trade. */
   router.delete('/api/players/:playerId/trades/:tradeId', async ({ req, params }) => {
     const player = await requireSelf(req, params.playerId);

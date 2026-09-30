@@ -401,6 +401,15 @@ export function createSupabaseStore({ url, secretKey }) {
       return request('POST', 'rpc/complete_trade', { body: { p_trade_id: Number(id), p_player_id: fromId } });
     },
 
+    /** Numbers for the header badges: friend requests received, trades waiting for the player's answer. */
+    async notifications(playerId) {
+      const [requests, trades] = await Promise.all([
+        get(`friendships?select=requester_id&addressee_id=${eq(playerId)}&status=eq.pending`),
+        get(`trades?select=id&or=(and(to_id.eq.${playerId},status.eq.pending),and(from_id.eq.${playerId},status.eq.proposed))`),
+      ]);
+      return { friendRequests: requests.length, trades: trades.length };
+    },
+
     /** Declines (`side` 'to') or cancels (`side` 'from') an open trade. False if it is not open anymore. */
     async closeTrade(id, side, playerId, status) {
       const rows = await request(
