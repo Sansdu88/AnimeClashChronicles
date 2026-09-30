@@ -6,6 +6,10 @@
  *   HOST     interface to listen on (default 127.0.0.1; use 0.0.0.0 to play on your LAN)
  *   DB_FILE  SQLite file for players and collections (default storage/anime-clash-chronicles.db)
  *   NO_OPEN  set to 1 to not open the browser automatically
+ *   SUPABASE_URL, SUPABASE_SECRET_KEY  store the data in Supabase instead of SQLite
+ *
+ * These can also be written in a .env file at the root of the project (never
+ * committed, see .gitignore and .env.example).
  */
 import { exec } from 'node:child_process';
 import { existsSync, renameSync } from 'node:fs';
@@ -13,6 +17,13 @@ import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
 import { loadCatalog } from './catalog.js';
 import { openStore } from './db.js';
+import { createSupabaseStore } from './supabase-store.js';
+
+try {
+  process.loadEnvFile(fileURLToPath(new URL('../.env', import.meta.url)));
+} catch {
+  /* no .env file: environment variables only */
+}
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -48,16 +59,32 @@ function listen(server, port, attempt = 1) {
   });
 }
 
-// Saves made when the project was called "Manga Booster" keep working.
-const OLD_DB_FILE = fileURLToPath(new URL('../storage/manga-booster.db', import.meta.url));
-if (!process.env.DB_FILE && existsSync(OLD_DB_FILE) && !existsSync(DB_FILE)) {
-  for (const suffix of ['', '-wal', '-shm']) {
-    if (existsSync(OLD_DB_FILE + suffix)) renameSync(OLD_DB_FILE + suffix, DB_FILE + suffix);
+async function openDatabase() {
+  const { SUPABASE_URL, SUPABASE_SECRET_KEY } = process.env;
+  if (SUPABASE_URL && SUPABASE_SECRET_KEY) {
+    const store = createSupabaseStore({ url: SUPABASE_URL, secretKey: SUPABASE_SECRET_KEY });
+    try {
+      await store.check();
+    } catch (err) {
+      console.error(`\n  ✗ Cannot use the Supabase database: ${err.message}`);
+      console.error('    Create the tables first: run supabase/schema.sql in the Supabase SQL Editor.\n');
+      process.exit(1);
+    }
+    return { store, label: `Supabase (${new URL(SUPABASE_URL).host})` };
   }
+
+  // Saves made when the project was called "Manga Booster" keep working.
+  const OLD_DB_FILE = fileURLToPath(new URL('../storage/manga-booster.db', import.meta.url));
+  if (!process.env.DB_FILE && existsSync(OLD_DB_FILE) && !existsSync(DB_FILE)) {
+    for (const suffix of ['', '-wal', '-shm']) {
+      if (existsSync(OLD_DB_FILE + suffix)) renameSync(OLD_DB_FILE + suffix, DB_FILE + suffix);
+    }
+  }
+  return { store: openStore(DB_FILE), label: 'SQLite (local file)' };
 }
 
 const catalog = loadCatalog();
-const store = openStore(DB_FILE);
+const { store, label: databaseLabel } = await openDatabase();
 const server = createApp({ catalog, store, clientDir: CLIENT_DIR });
 
 const port = await listen(server, PORT);
@@ -69,6 +96,7 @@ console.log(`
     ANIME CLASH CHRONICLES · アニメ・クラッシュ・クロニクル
   ═══════════════════════════════════════════
   ${catalog.cards.length} cards · ${catalog.sets.length} boosters · data from Wikipedia
+  Database: ${databaseLabel}
 
   ▶ Play:  ${url}
   ▶ API:   ${url}/api/meta
