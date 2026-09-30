@@ -1,11 +1,14 @@
 /**
- * "Open" page: the booster shelf and the opening stage
+ * "Open" page: the booster shelf, the booster stock and the opening stage
  * (shake → tear → 5 face-down cards → flip them one by one).
- * A player can open one booster every 2 minutes (BOOSTER.cooldownSeconds).
+ * A player gets one booster every 2 minutes (BOOSTER.cooldownSeconds) and can
+ * keep up to 10 (BOOSTER.stackMax): several boosters can be opened in a row,
+ * with their own show (the packs burst one after the other, then all the cards
+ * flip in a cascade).
  */
 import { $, $$, escapeHtml, fmt, html, mount, raw, wait } from '../dom.js';
 import { cardText, errorText, rarityName, setName, setTagline, t, tHtml } from '../i18n.js';
-import { boosterWait, byRarity, openBoosters, setOf, state } from '../state.js';
+import { boosterStock, byRarity, openBoosters, reloadPlayer, setOf, state } from '../state.js';
 import { cardBackHTML, cardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
 import { RARITY_COLORS, burst, flash, onomatopoeia, shakeScreen } from '../ui/effects.js';
@@ -15,6 +18,7 @@ import { toast } from '../ui/toast.js';
 
 const setCards = (set) => state.cards.filter((card) => !set.era || card.era === set.era);
 const packStyle = (set) => `--c1:${set.colors[0]};--c2:${set.colors[1]}`;
+const BIG = new Set(['SSR', 'UR', 'REV']);
 
 function packHTML(set) {
   const art = set.featured?.image;
@@ -32,44 +36,57 @@ function packHTML(set) {
   </span>`;
 }
 
+/** A pack in two halves, torn apart with the class "is-torn". */
+const tearablePackHTML = (set) => html`<span class="stage-pack__half stage-pack__half--top">${packHTML(set)}</span>
+  <span class="stage-pack__half stage-pack__half--bottom">${packHTML(set)}</span>`;
+
 function packTileHTML(set) {
   const cards = setCards(set);
   const have = cards.filter((card) => state.owned.has(card.id)).length;
   return html`<div class="pack-tile">
-    <button class="pack" type="button" data-open="${set.id}" aria-label="${t('open.openOne', { set: setName(set.id) })}">${packHTML(set)}</button>
+    <button class="pack" type="button" data-open="${set.id}" data-count="1" aria-label="${t('open.openOne', { set: setName(set.id) })}">${packHTML(set)}</button>
     <div class="pack-tile__progress" title="${t('open.progress', { have, total: cards.length })}">
       <span class="meter"><span class="meter__fill" style="width:${((have / cards.length) * 100).toFixed(1)}%"></span></span>
       <span class="pack-tile__count">${have}/${cards.length}</span>
     </div>
     <div class="pack-tile__actions">
-      <button class="btn btn--primary" type="button" data-open="${set.id}">${t('open.open')}</button>
+      <button class="btn btn--primary" type="button" data-open="${set.id}" data-count="1">${t('open.open')}</button>
+      <button class="btn btn--secondary" type="button" data-open="${set.id}" data-count="many" hidden></button>
     </div>
   </div>`;
 }
 
-/**
- * Calls `paint(seconds)` now and every second while the wait before the next
- * booster runs (the last call has 0). `paint` returns false to stop.
- */
-function countdown(paint) {
+/** Calls `paint()` now and every second, until it returns false. */
+function everySecond(paint) {
   const tick = () => {
-    const seconds = boosterWait();
-    if (paint(seconds) === false || seconds === 0) return;
-    setTimeout(tick, 1000);
+    if (paint() !== false) setTimeout(tick, 1000);
   };
   tick();
 }
 
+/** Opens `count` boosters of a set: the single-booster stage, or the show for several. */
+function startOpening(setId, count, stage) {
+  if (count > 1) openMany(setId, count, stage);
+  else openSingle(setId, stage);
+}
+
 export function renderOpen(main) {
   const { player, meta } = state;
+  const max = meta.booster.stackMax;
   mount(
     main,
     html`<section class="view view-open">
       <div class="hero">
         <h1 class="hero__title">${t('open.title')}</h1>
-        <p class="hero__sub">${raw(tHtml('open.sub', { minutes: meta.booster.cooldownSeconds / 60 }))}</p>
+        <p class="hero__sub">${raw(tHtml('open.sub', { minutes: meta.booster.cooldownSeconds / 60, max }))}</p>
       </div>
-      <p class="cooldown" role="status" hidden></p>
+      <div class="stock" role="status">
+        <div class="stock__slots" aria-hidden="true">
+          ${Array.from({ length: max }, (_, i) => html`<span class="stock__slot" style="--i:${i}"></span>`)}
+        </div>
+        <p class="stock__text"><b class="stock__count">0</b>/${max} <span>${t('open.stockLabel')}</span></p>
+        <p class="stock__next"></p>
+      </div>
       <div class="shelf">${meta.sets.map(packTileHTML)}</div>
       <p class="open-footer">
         <span>${t('open.collection')} <strong>${player.stats.uniqueCards}/${player.stats.totalCards}</strong>
@@ -84,23 +101,47 @@ export function renderOpen(main) {
     const button = event.target.closest('[data-open]');
     if (!button) return;
     sfx.play('click');
-    openSingle(button.dataset.open);
+    const { stock } = boosterStock();
+    startOpening(button.dataset.open, button.dataset.count === 'many' ? Math.min(stock, meta.booster.maxPerRequest) : 1);
   });
 
-  // While waiting: countdown banner and disabled buttons, then "ready!".
-  const banner = $('.cooldown', main);
-  const buttons = $$('[data-open]', main);
-  let waited = false;
-  countdown((seconds) => {
-    if (!banner.isConnected) return false; // the page was left or redrawn
-    banner.hidden = seconds === 0;
-    banner.textContent = `⏳ ${t('open.cooldown', { time: fmt.duration(seconds) })}`;
-    for (const button of buttons) button.disabled = seconds > 0;
-    if (seconds > 0) waited = true;
-    else if (waited && !document.querySelector('.stage')) {
-      sfx.play('R');
-      toast(t('open.ready'), 'success');
+  // The stock fills up while the page is open: slots, countdown, buttons.
+  const panel = $('.stock', main);
+  const slots = $$('.stock__slot', panel);
+  const openButtons = $$('[data-open]', main);
+  const manyButtons = $$('[data-count="many"]', main);
+  let previous = null;
+  everySecond(() => {
+    if (!panel.isConnected) return false; // the page was left or redrawn
+    const { stock, nextIn } = boosterStock();
+    const every = meta.booster.cooldownSeconds;
+    slots.forEach((slot, i) => {
+      slot.classList.toggle('is-full', i < stock);
+      slot.classList.toggle('is-charging', i === stock);
+      if (i === stock) slot.style.setProperty('--progress', ((every - nextIn) / every).toFixed(3));
+    });
+    panel.classList.toggle('is-full', stock >= max);
+    panel.classList.toggle('is-empty', stock === 0);
+    $('.stock__count', panel).textContent = stock;
+    $('.stock__next', panel).textContent =
+      stock >= max ? t('open.stockFull') : `⏳ ${t('open.nextIn', { time: fmt.duration(nextIn) })}`;
+    for (const button of openButtons) button.disabled = stock === 0;
+    const many = Math.min(stock, meta.booster.maxPerRequest);
+    for (const button of manyButtons) {
+      button.hidden = many < 2;
+      button.textContent = t('open.openMany', { count: many });
+      button.setAttribute('aria-label', t('open.openManyLabel', { count: many, set: setName(button.dataset.open) }));
     }
+    // A booster arrived while the player was waiting on this page.
+    if (previous !== null && stock > previous && !document.querySelector('.stage')) {
+      if (previous === 0) {
+        sfx.play('R');
+        toast(t('open.ready'), 'success');
+      } else if (stock >= max) {
+        toast(t('open.stockFullToast', { max }), 'info');
+      }
+    }
+    previous = stock;
     return true;
   });
 }
@@ -160,6 +201,56 @@ function preloadImages(cards, timeout = 3500) {
 
 const nextClick = (element) => new Promise((resolve) => element.addEventListener('click', resolve, { once: true }));
 
+/** Asks the server for boosters; a failed request closes the stage (the stock is reloaded if it was wrong). */
+async function requestBoosters(stage, setId, count, minWait) {
+  try {
+    const [boosters] = await Promise.all([openBoosters(setId, count), wait(minWait)]);
+    return boosters;
+  } catch (err) {
+    toast(errorText(err), 'error');
+    if (err.code === 'booster_cooldown') reloadPlayer().catch(() => {});
+    stage.close();
+    return null;
+  }
+}
+
+/**
+ * "Open another" / "Open ×N" buttons at the end of an opening, or a countdown
+ * when the stock is empty. Kept up to date every second while shown.
+ */
+function nextButtons(slot, set, stage) {
+  let shown = null;
+  let waited = false;
+  everySecond(() => {
+    if (!slot.isConnected || stage.closed) return false;
+    const { stock, nextIn } = boosterStock();
+    const many = Math.min(stock, state.meta.booster.maxPerRequest);
+    const key = stock > 0 ? `stock ${stock}` : `wait ${nextIn}`;
+    if (key === shown) return true;
+    // Focus the buttons when they first appear, then only if they had it.
+    const takeFocus = shown === null || slot.contains(document.activeElement);
+    shown = key;
+    mount(
+      slot,
+      stock > 0
+        ? html`<button class="btn btn--primary btn--big" type="button" data-again="1">${t('stage.again')}</button>
+            ${many >= 2 && html`<button class="btn btn--secondary btn--big" type="button" data-again="${many}">${t('open.openMany', { count: many })}</button>`}`
+        : html`<button class="btn btn--primary btn--big" type="button" disabled>⏳ ${t('open.nextIn', { time: fmt.duration(nextIn) })}</button>`,
+    );
+    if (stock === 0) waited = true;
+    else if (waited) {
+      waited = false;
+      sfx.play('R');
+    }
+    if (takeFocus) (slot.querySelector('button:not(:disabled)') ?? slot.parentElement.querySelector('a'))?.focus({ preventScroll: true });
+    return true;
+  });
+  slot.onclick = (event) => {
+    const count = Number(event.target.closest('[data-again]')?.dataset.again);
+    if (count) startOpening(set.id, count, stage);
+  };
+}
+
 // ── Single booster ──────────────────────────────────────────────────────────
 
 async function openSingle(setId, stage = createStage()) {
@@ -173,8 +264,7 @@ async function openSingle(setId, stage = createStage()) {
     stage.content,
     html`<div class="stage-pack-wrap">
       <button class="stage-pack" type="button" aria-label="${t('stage.tearLabel', { set: setName(set.id) })}">
-        <span class="stage-pack__half stage-pack__half--top">${packHTML(set)}</span>
-        <span class="stage-pack__half stage-pack__half--bottom">${packHTML(set)}</span>
+        ${tearablePackHTML(set)}
       </button>
       <p class="stage__hint bubble">${t('stage.tapPack')}</p>
     </div>`,
@@ -189,15 +279,10 @@ async function openSingle(setId, stage = createStage()) {
   $('.stage__hint', stage.content).textContent = t('stage.opening');
   sfx.play('shake');
 
-  let booster;
-  try {
-    [[booster]] = await Promise.all([openBoosters(setId, 1), wait(650)]);
-    await preloadImages(booster.cards);
-  } catch (err) {
-    toast(errorText(err), 'error');
-    stage.close();
-    return;
-  }
+  const boosters = await requestBoosters(stage, setId, 1, 650);
+  if (!boosters) return;
+  const [booster] = boosters;
+  await preloadImages(booster.cards);
   if (stale()) return;
 
   pack.classList.remove('is-shaking');
@@ -244,7 +329,7 @@ function showReveal(stage, set, booster, run) {
     if (flip.dataset.state) return;
     flip.dataset.state = 'busy';
     const card = cards[Number(flip.dataset.index)];
-    if (['SSR', 'UR', 'REV'].includes(card.rarity)) {
+    if (BIG.has(card.rarity)) {
       flip.classList.add('is-charging');
       if (card.rarity !== 'SSR') sfx.play('charge');
       await wait({ SSR: 500, UR: 950, REV: 1300 }[card.rarity]);
@@ -285,27 +370,15 @@ function showReveal(stage, set, booster, run) {
           ${t('stage.best')} <strong class="rarity-text r-${best.rarity}">${best.rarity}</strong> ${cardText(best).name}
         </p>
         <div class="btn-row">
-          <button class="btn btn--primary btn--big" type="button" data-action="again">${t('stage.again')}</button>
+          <span class="btn-row" data-slot="next"></span>
           <a class="btn btn--ghost-light" href="#/collection">${t('stage.myCollection')}</a>
         </div>`,
     );
-    const again = $('[data-action="again"]', stage.content);
-    let waited = false;
-    countdown((seconds) => {
-      if (!again.isConnected) return false;
-      again.disabled = seconds > 0;
-      again.textContent = seconds > 0 ? `⏳ ${t('open.cooldown', { time: fmt.duration(seconds) })}` : t('stage.again');
-      if (seconds > 0) waited = true;
-      else if (waited) sfx.play('R');
-      return true;
-    });
-    (again.disabled ? $('.btn-row a', stage.content) : again).focus({ preventScroll: true });
+    nextButtons($('[data-slot="next"]', stage.content), set, stage);
   }
 
   stage.content.onclick = (event) => {
-    const action = event.target.closest('[data-action]')?.dataset.action;
-    if (action === 'reveal-all') revealAll();
-    else if (action === 'again') openSingle(set.id, stage);
+    if (event.target.closest('[data-action="reveal-all"]')) revealAll();
     const flip = event.target.closest('.flip');
     if (!flip) return;
     if (flip.dataset.state === 'revealed') openCardModal(cards[Number(flip.dataset.index)], { list: cards });
@@ -319,6 +392,241 @@ function showReveal(stage, set, booster, run) {
     }
   };
   flips[0].focus({ preventScroll: true });
+}
+
+// ── Several boosters in a row ───────────────────────────────────────────────
+
+async function openMany(setId, count, stage = createStage()) {
+  const set = setOf(setId);
+  const run = ++stage.run;
+  const stale = () => stage.closed || stage.run !== run;
+  stage.element.dataset.phase = 'packs';
+  stage.element.style.cssText = packStyle(set);
+
+  // The packs arrive as a fanned-out hand.
+  mount(
+    stage.content,
+    html`<div class="mega">
+      <p class="mega__title">${t('mega.title', { count })}</p>
+      <button class="mega__packs" type="button" style="--n:${count}" aria-label="${t('mega.tearLabel', { count, set: setName(set.id) })}">
+        ${Array.from({ length: count }, (_, i) => html`<span class="mega-pack" style="--i:${i}">${tearablePackHTML(set)}</span>`)}
+      </button>
+      <p class="stage__hint bubble">${t('mega.tap')}</p>
+    </div>`,
+  );
+  const packs = $('.mega__packs', stage.content);
+  packs.focus({ preventScroll: true });
+  await nextClick(packs);
+  if (stale()) return;
+
+  packs.disabled = true;
+  packs.classList.add('is-shaking');
+  $('.stage__hint', stage.content).textContent = t('stage.opening');
+  sfx.play('shake');
+  setTimeout(() => !stale() && sfx.play('charge'), 350);
+
+  const boosters = await requestBoosters(stage, setId, count, 1100);
+  if (!boosters) return;
+  await preloadImages(boosters.flatMap((booster) => booster.cards), 5000);
+  if (stale()) return;
+
+  // Chain reaction: the packs burst one after the other, faster and faster.
+  packs.classList.remove('is-shaking');
+  const items = $$('.mega-pack', packs);
+  for (const [i, item] of items.entries()) {
+    if (stale()) return;
+    item.classList.add('is-torn');
+    sfx.play('tear');
+    const box = item.getBoundingClientRect();
+    burst(box.left + box.width / 2, box.top + box.height * 0.18, { colors: ['#fff', '#ffd23f', set.colors[0], set.colors[1]], count: 18, power: 0.9 });
+    await wait(Math.max(70, 190 - i * 14));
+  }
+  const box = packs.getBoundingClientRect();
+  flash('rgba(255,255,255,.9)', 420);
+  shakeScreen();
+  burst(box.left + box.width / 2, box.top + box.height / 2, { colors: ['#fff', '#ffd23f', '#ff2e88', '#3a86ff'], count: 110, power: 1.6 });
+  onomatopoeia(t('fx.tear'), { x: box.left + box.width / 2, y: box.top + box.height * 0.3, color: '#fff', size: 'xl' });
+  await wait(750);
+  if (stale()) return;
+  showManyReveal(stage, set, boosters, run);
+}
+
+function showManyReveal(stage, set, boosters, run) {
+  const cards = boosters.flatMap((booster) => booster.cards);
+  const stale = () => stage.closed || stage.run !== run;
+  const rarities = [...state.meta.rarities].reverse(); // rarest first
+  const tally = Object.fromEntries(rarities.map((rarity) => [rarity.id, 0]));
+  let newCount = 0;
+  let revealed = 0;
+  let mode = 'manual'; // then 'cascade' (Reveal all) or 'skip'
+  stage.element.dataset.phase = 'reveal';
+
+  mount(
+    stage.content,
+    html`<div class="mega-reveal">
+      <div class="mega-reveal__head">
+        <p class="mega__title mega__title--small">${t('mega.cards', { count: cards.length, boosters: boosters.length })}</p>
+        <div class="mega-tally" aria-hidden="true">
+          ${rarities.map((rarity) => html`<span class="tally-chip r-${rarity.id} is-zero" data-tally="${rarity.id}">${rarity.id} <b>0</b></span>`)}
+          <span class="tally-chip tally-chip--new is-zero" data-tally="new">${t('card.new')} <b>0</b></span>
+        </div>
+        <div class="mega-reveal__actions">
+          <p class="stage__hint bubble">${t('mega.clickCards')}</p>
+          <div class="btn-row">
+            <button class="btn btn--primary" type="button" data-action="reveal-all">${t('stage.revealAll')}</button>
+            <button class="btn btn--ghost-light" type="button" data-action="skip">${t('mega.skip')}</button>
+          </div>
+        </div>
+      </div>
+      <div class="mega-grid">
+        ${cards.map(
+          (card, i) => html`<div class="flip flip--mini" role="button" tabindex="0" data-index="${i}" data-rarity="${card.rarity}"
+              style="--i:${i}" aria-label="${t('stage.reveal', { n: i + 1, total: cards.length })}">
+            <div class="flip__inner">
+              <div class="flip__face flip__back">${cardBackHTML()}</div>
+              <div class="flip__face flip__front">${cardHTML(card, { isNew: card.isNew, interactive: false, lazy: false })}</div>
+            </div>
+          </div>`,
+        )}
+      </div>
+    </div>`,
+  );
+
+  const flips = $$('.flip', stage.content);
+
+  function bump(key, value) {
+    const chip = $(`[data-tally="${key}"]`, stage.content);
+    chip.querySelector('b').textContent = value;
+    chip.classList.remove('is-zero', 'is-bumped');
+    void chip.offsetWidth; // restart the animation
+    chip.classList.add('is-bumped');
+  }
+
+  /** Keeps the card being revealed on screen during the cascade. */
+  function follow(flip) {
+    const box = flip.getBoundingClientRect();
+    if (box.top < 70 || box.bottom > window.innerHeight - 20) flip.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  async function reveal(flip, { quick = false } = {}) {
+    if (flip.dataset.state) return;
+    flip.dataset.state = 'busy';
+    const card = cards[Number(flip.dataset.index)];
+    const big = BIG.has(card.rarity);
+    if (big && !quick) {
+      flip.classList.add('is-charging');
+      if (card.rarity !== 'SSR') sfx.play('charge');
+      await wait({ SSR: 450, UR: 900, REV: 1250 }[card.rarity]);
+      if (stale()) return;
+      flip.classList.remove('is-charging');
+    }
+    flip.classList.add('is-flipped');
+    if (!quick || big) sfx.play('flip');
+    await wait(quick ? 140 : 240);
+    if (stale()) return;
+    // Skipping: only the rarest cards still get their effects.
+    if (!quick || big) celebrate(flip.getBoundingClientRect(), card.rarity);
+    if (card.isNew) flip.classList.add('show-new');
+    flip.dataset.state = 'revealed';
+    flip.setAttribute('aria-label', t('stage.revealed', {
+      name: cardText(card).name,
+      rarity: rarityName(card.rarity),
+      isNew: card.isNew ? t('stage.revealedNew') : '',
+    }));
+    tally[card.rarity] += 1;
+    bump(card.rarity, tally[card.rarity]);
+    if (card.isNew) bump('new', ++newCount);
+    revealed += 1;
+    if (revealed === cards.length) finish();
+  }
+
+  /** "Reveal all": a wave through the cards; it pauses on the rare ones for their effects. */
+  async function cascade() {
+    mode = 'cascade';
+    $('[data-action="reveal-all"]', stage.content).hidden = true;
+    for (const flip of flips) {
+      if (stale() || mode !== 'cascade') return;
+      if (flip.dataset.state) continue;
+      const card = cards[Number(flip.dataset.index)];
+      follow(flip);
+      if (BIG.has(card.rarity)) {
+        await reveal(flip);
+        await wait(300);
+      } else {
+        reveal(flip);
+        await wait(card.rarity === 'SR' ? 230 : 110);
+      }
+    }
+  }
+
+  /** "Skip": everything flips at once (the rarest cards still celebrate). */
+  async function skip() {
+    mode = 'skip';
+    for (const button of $$('.mega-reveal__actions .btn', stage.content)) button.hidden = true;
+    for (const flip of flips) {
+      if (stale()) return;
+      if (flip.dataset.state) continue;
+      reveal(flip, { quick: true });
+      await wait(22);
+    }
+  }
+
+  function finish() {
+    const best = [...cards].sort(byRarity).slice(0, 3);
+    for (const card of best) flips[cards.indexOf(card)].classList.add('is-best');
+    finale(best[0].rarity, boosters.length);
+    stage.announce(t('mega.announce', { count: boosters.length, newCount }));
+    mount(
+      $('.mega-reveal__actions', stage.content),
+      html`<p class="mega__done">${t('mega.done', { count: boosters.length })}</p>
+        <p class="reveal__summary">
+          ${newCount ? html`<strong class="new-pill">${t('stage.newCards', { count: newCount })}</strong>` : t('stage.noNew')}
+          ${t('stage.best')}
+          ${best.map((card, i) => html`${i ? ' · ' : ''}<strong class="rarity-text r-${card.rarity}">${card.rarity}</strong> ${cardText(card).name}`)}
+        </p>
+        <p class="stage__hint">${t('stage.clickDetail')}</p>
+        <div class="btn-row">
+          <span class="btn-row" data-slot="next"></span>
+          <a class="btn btn--ghost-light" href="#/collection">${t('stage.myCollection')}</a>
+        </div>`,
+    );
+    nextButtons($('[data-slot="next"]', stage.content), set, stage);
+    stage.element.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  stage.content.onclick = (event) => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'reveal-all') cascade();
+    else if (action === 'skip') skip();
+    const flip = event.target.closest('.flip');
+    if (!flip) return;
+    if (flip.dataset.state === 'revealed') openCardModal(cards[Number(flip.dataset.index)], { list: cards });
+    else reveal(flip);
+  };
+  stage.content.onkeydown = (event) => {
+    const flip = event.target.closest?.('.flip');
+    if (flip && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      flip.click();
+    }
+  };
+  $('[data-action="reveal-all"]', stage.content).focus({ preventScroll: true });
+}
+
+/** Fireworks at the end of a multi-opening, bigger when the best card is rarer. */
+function finale(rarity, count) {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const colors = [...RARITY_COLORS[rarity], '#fff', '#ffd23f'];
+  const rounds = { N: 3, R: 3, SR: 4, SSR: 5, UR: 7, REV: 9 }[rarity] ?? 4;
+  for (let k = 0; k < rounds; k++) {
+    setTimeout(() => {
+      burst(width * (0.12 + Math.random() * 0.76), height * (0.18 + Math.random() * 0.35), { colors, count: 55, power: 1.3 });
+      sfx.play(k % 2 ? 'R' : 'SR');
+    }, k * 190);
+  }
+  flash('rgba(255, 255, 255, .55)', 420);
+  onomatopoeia(t('mega.boom', { count }), { x: width / 2, y: height * 0.32, color: '#ffd23f', size: 'xl', tilt: -6 });
 }
 
 /** Sound + particles + lettering for a revealed card, centered on `box`. */

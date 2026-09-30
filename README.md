@@ -1,6 +1,6 @@
 # Anime Clash Chronicles
 
-A manga-style trading card game in the browser: open **a booster of 5 anime cards every 2 minutes**,
+A manga-style trading card game in the browser: open **a booster of 5 anime cards every 2 minutes** (up to 10 kept in stock),
 Pokémon-TCG style. There are **about 2,000 cards**, one per anime or manga, each built from its
 **Wikipedia page**: a picture, a short summary, and a **rarity based on how popular it is**.
 Play in **English or French** (the card texts come from the English or the French Wikipedia),
@@ -38,7 +38,7 @@ can take a minute.
 
 | | |
 |---|---|
-| **Boosters** | 4 boosters: *All-Stars* (every card) and one per Japanese era: *Shōwa* (before 1989), *Heisei* (1989–2018), *Reiwa* (2019+). One booster every 2 minutes: the server enforces the wait and the page shows a countdown. |
+| **Boosters** | 4 boosters: *All-Stars* (every card) and one per Japanese era: *Shōwa* (before 1989), *Heisei* (1989–2018), *Reiwa* (2019+). One more booster every 2 minutes, up to 10 kept in stock: open them one by one, or several in a row with their own show (the packs burst one after the other, then all the cards flip in a cascade). The server keeps the stock; the page shows it with a countdown. |
 | **Opening** | Shake and tear the pack, then flip 5 face-down cards. Rare cards glow before you flip them, and SSR/UR/REV reveals trigger manga effects (RUMBLE, BOOM!!, REVERSE!!), confetti and sounds (synthesized, can be muted). |
 | **Cards** | Picture, type (Action, Mecha, Romance…), year, power level, and a one-sentence summary from Wikipedia. SSR, UR and REV are full-art cards with a holographic effect that follows your mouse; REV (Reversed) cards have inverted colors. |
 | **Collection** | A pokédex-style grid: missing cards show up as `???`. Filters, sorting, and completion per rarity. Click a card for its full Wikipedia summary. |
@@ -161,7 +161,7 @@ with the token returned by register/login.
 | POST | `/api/auth/password` | Change password. Body: `{ "currentPassword", "newPassword" }` |
 | GET | `/api/players/:playerId` | Profile and stats |
 | PATCH | `/api/players/:playerId` | Rename. Body: `{ "name": "…" }` (1–24 characters) |
-| POST | `/api/players/:playerId/boosters` | Open a booster. Body: `{ "setId": "all-stars" }`. One every 2 minutes: too early → 429 `booster_cooldown` with `details.retryIn` (seconds). Profiles include `nextBoosterIn` |
+| POST | `/api/players/:playerId/boosters` | Open boosters from your stock. Body: `{ "setId": "all-stars", "count": 1 }` (`count` 1–10). One booster is added every 2 minutes, 10 at most: not enough → 429 `booster_cooldown` with `details.retryIn` (seconds) and `details.stock`. Profiles include `boosterStock` and `nextBoosterIn` (seconds before the next one, 0 when the stock is full) |
 | GET | `/api/players/:playerId/boosters?limit=20` | Booster history, newest first |
 | GET | `/api/players/:playerId/collection` | Owned cards (with copies) and completion |
 | DELETE | `/api/players/:playerId/collection` | Reset the collection |

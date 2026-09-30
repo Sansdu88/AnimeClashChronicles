@@ -909,6 +909,12 @@
   text-align: center;
 }
 
+/* Boosters in stock, on the "Open" link. */
+.nav__badge--stock {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
 .friend-code {
   display: grid;
   justify-items: start;

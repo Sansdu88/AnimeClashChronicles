@@ -47,6 +47,21 @@ export function openBooster(set, { rng = Math.random, rules = BOOSTER } = {}) {
   return pulls.sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity]);
 }
 
+/**
+ * Boosters in stock. The stock counts from `since` (players.boosters_from, null =
+ * never counted: full): one booster every `cooldownSeconds`, at most `stackMax`.
+ * Returns { stock, nextIn }: `nextIn` = seconds before the next one (0 when full).
+ * Same formula as the SQL function open_boosters (see supabase/migrations/).
+ */
+export function boosterStock(since, now = Date.now(), rules = BOOSTER) {
+  const every = rules.cooldownSeconds * 1000;
+  // A full stock does not grow: count from at most `stackMax` boosters ago.
+  const start = Math.max(since ? new Date(since).getTime() : -Infinity, now - rules.stackMax * every);
+  const stock = Math.min(rules.stackMax, Math.floor((now - start) / every));
+  const nextIn = stock >= rules.stackMax ? 0 : Math.ceil((every - ((now - start) % every)) / 1000);
+  return { stock, nextIn };
+}
+
 /** Probability that one slot gives each rarity. */
 function slotOdds(weights) {
   const total = Object.values(weights).reduce((sum, w) => sum + w, 0);

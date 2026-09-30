@@ -4,7 +4,7 @@
  * "Authorization: Bearer <token>" header) and only give access to your own player.
  */
 import { BOOSTER, ERAS, RARITIES, RARITY_IDS, SCORE, TYPES } from './config.js';
-import { boosterOdds, collectionScore, openBooster } from './booster.js';
+import { boosterOdds, boosterStock, collectionScore, openBooster } from './booster.js';
 import { compareByRarity } from './catalog.js';
 import { HttpError, createRouter, reply } from './http.js';
 import {
@@ -137,19 +137,18 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
 
   const rarityOfCard = (cardId) => catalog.getCard(cardId)?.rarity;
 
-  /** Seconds before the player can open their next booster (0 = now). */
-  async function boosterWait(playerId) {
-    const last = await store.lastBoosterAt(playerId);
-    if (!last) return 0;
-    const remaining = BOOSTER.cooldownSeconds * 1000 - (Date.now() - new Date(last).getTime());
-    return Math.max(0, Math.ceil(remaining / 1000));
-  }
+  /** { stock, nextIn }: boosters the player can open now, seconds before the next one (0 when full). */
+  const stockOf = async (playerId) => boosterStock(await store.boostersFrom(playerId));
+
+  /** Seconds before the stock holds `count` boosters. */
+  const secondsUntil = ({ stock, nextIn }, count) =>
+    stock >= count ? 0 : nextIn + (count - stock - 1) * BOOSTER.cooldownSeconds;
 
   async function profile(player) {
-    const [stats, { entries, summary }, nextBoosterIn] = await Promise.all([
+    const [stats, { entries, summary }, { stock, nextIn }] = await Promise.all([
       store.stats(player.id),
       collectionOf(player.id),
-      boosterWait(player.id),
+      stockOf(player.id),
     ]);
     const cardsPulled = Object.values(stats.pullsByRarity).reduce((sum, n) => sum + n, 0);
     return {
@@ -159,7 +158,9 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       friendCode: player.friendCode,
       createdAt: player.createdAt,
       stats: { ...stats, cardsPulled, ...summary, score: collectionScore(entries, rarityOfCard).score },
-      nextBoosterIn,
+      // Boosters in stock (at most BOOSTER.stackMax), seconds before the next one (0 when full).
+      boosterStock: stock,
+      nextBoosterIn: nextIn,
     };
   }
 
@@ -403,18 +404,28 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     const count = intParam(body.count, { name: 'count', min: 1, max: BOOSTER.maxPerRequest, fallback: 1 });
     const set = catalog.getSet(setId);
 
-    const wait = opening.has(player.id) ? BOOSTER.cooldownSeconds : await boosterWait(player.id);
-    if (wait > 0) {
-      throw new HttpError(429, `You can open one booster every ${BOOSTER.cooldownSeconds / 60} minutes`, { retryIn: wait }, 'booster_cooldown');
-    }
+    const notEnough = (stock) =>
+      new HttpError(
+        429,
+        `Not enough boosters: you have ${stock.stock}, you get one every ${BOOSTER.cooldownSeconds / 60} minutes (${BOOSTER.stackMax} at most)`,
+        { retryIn: secondsUntil(stock, count), stock: stock.stock },
+        'booster_cooldown',
+      );
+    if (opening.has(player.id)) throw new HttpError(429, 'A booster is already being opened', { retryIn: 1 }, 'booster_cooldown');
+    const stock = await stockOf(player.id);
+    if (stock.stock < count) throw notEnough(stock);
+
     opening.add(player.id);
     let saved;
     try {
       const opened = Array.from({ length: count }, () => openBooster(set, { rng }));
-      saved = await store.recordBoosters(player.id, setId, opened);
+      // The database checks the stock again, in the same transaction as the save.
+      saved = await store.openBoosters(player.id, setId, opened, { every: BOOSTER.cooldownSeconds, max: BOOSTER.stackMax });
     } finally {
       opening.delete(player.id);
     }
+    if (saved.error === 'no_booster') throw notEnough(saved);
+    if (saved.error) throw new HttpError(404, 'Player not found');
     return reply(201, {
       boosters: saved.map((booster) => ({
         id: booster.id,

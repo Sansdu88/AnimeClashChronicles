@@ -201,16 +201,23 @@ export function createSupabaseStore({ url, secretKey }) {
 
     // ── Boosters & collection ────────────────────────────────────────────────
 
-    /** Saves opened boosters in one transaction (function record_boosters, see supabase/migrations/). */
-    async recordBoosters(playerId, setId, boosters) {
-      const saved = await request('POST', 'rpc/record_boosters', {
+    /**
+     * Takes the boosters from the player's stock and saves them, in one transaction
+     * (function open_boosters, see supabase/migrations/). Returns the saved boosters,
+     * or { error: 'no_booster', stock, nextIn } when the stock is too small.
+     */
+    async openBoosters(playerId, setId, boosters, { every, max }) {
+      const result = await request('POST', 'rpc/open_boosters', {
         body: {
           p_player_id: playerId,
           p_set_id: setId,
           p_boosters: boosters.map((cards) => cards.map((card) => ({ id: card.id, rarity: card.rarity }))),
+          p_every: every,
+          p_max: max,
         },
       });
-      return saved.map((booster, i) => ({
+      if (result.error) return result;
+      return result.boosters.map((booster, i) => ({
         id: booster.id,
         setId,
         openedAt: booster.openedAt,
@@ -255,10 +262,10 @@ export function createSupabaseStore({ url, secretKey }) {
       }));
     },
 
-    /** Date (ISO) of the player's last booster, or null. */
-    async lastBoosterAt(playerId) {
-      const [row] = await get(`boosters?select=opened_at&player_id=${eq(playerId)}&order=id.desc&limit=1`);
-      return row?.opened_at ?? null;
+    /** Date (ISO) the player's booster stock counts from (null = full), see boosterStock() in booster.js. */
+    async boostersFrom(playerId) {
+      const [row] = await get(`players?select=boosters_from&id=${eq(playerId)}`);
+      return row?.boosters_from ?? null;
     },
 
     /** Deletes the player's boosters and traded cards, and cancels their open trades (function reset_collection). */
