@@ -1,7 +1,37 @@
-import { readFileSync } from 'node:fs';
-import { RARITY_IDS, RARITY_RANK, SETS } from './config.js';
+import { RARITY_IDS, RARITY_RANK } from './config.js';
 
-export const DEFAULT_CATALOG_FILE = new URL('../data/cards.json', import.meta.url);
+/**
+ * Card fields ↔ columns of the Supabase table public.cards (supabase/schema.sql).
+ * The same card object is used by the sync script, the import script and the server.
+ */
+const CARD_COLUMNS = {
+  id: 'id',
+  number: 'number',
+  name: 'name',
+  nameJa: 'name_ja',
+  rarity: 'rarity',
+  type: 'type',
+  year: 'year',
+  era: 'era',
+  power: 'power',
+  views: 'views',
+  description: 'description',
+  short: 'short',
+  summary: 'summary',
+  image: 'image',
+  wikiTitle: 'wiki_title',
+  url: 'url',
+  fr: 'fr',
+  source: 'source',
+  revision: 'revision',
+  storyText: 'story_text',
+};
+
+export const cardToRow = (card) =>
+  Object.fromEntries(Object.entries(CARD_COLUMNS).map(([field, column]) => [column, card[field] ?? null]));
+
+export const rowToCard = (row) =>
+  Object.fromEntries(Object.entries(CARD_COLUMNS).map(([field, column]) => [field, row[column]]));
 
 /** Card as returned by the API. */
 function toPublicCard(card) {
@@ -41,21 +71,25 @@ export function compareByRarity(a, b) {
   return RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity] || b.power - a.power || b.views - a.views || a.number - b.number;
 }
 
-export function createCatalog(rawCards, meta = {}) {
+/**
+ * rawCards: cards as stored (see CARD_COLUMNS); sets: rows of public.booster_sets;
+ * meta: { generatedAt, popularity, license }.
+ */
+export function createCatalog(rawCards, sets, meta = {}) {
   const cards = rawCards.map(toPublicCard).sort((a, b) => a.number - b.number);
   const byId = new Map(cards.map((card) => [card.id, card]));
 
-  const sets = SETS.map((set) => {
+  const catalogSets = [...sets].sort((a, b) => a.position - b.position).map(({ position, ...set }) => {
     const setCards = cards.filter((card) => !set.era || card.era === set.era);
     const byRarity = Object.fromEntries(RARITY_IDS.map((id) => [id, setCards.filter((c) => c.rarity === id)]));
     const featured = [...setCards].sort(compareByRarity)[0] ?? null;
     return { ...set, cards: setCards, byRarity, featured };
   });
-  const setsById = new Map(sets.map((set) => [set.id, set]));
+  const setsById = new Map(catalogSets.map((set) => [set.id, set]));
 
   return {
     cards,
-    sets,
+    sets: catalogSets,
     meta: {
       generatedAt: meta.generatedAt ?? null,
       popularity: meta.popularity ?? null,
@@ -64,12 +98,4 @@ export function createCatalog(rawCards, meta = {}) {
     getCard: (id) => byId.get(id) ?? null,
     getSet: (id) => setsById.get(id) ?? null,
   };
-}
-
-export function loadCatalog(file = DEFAULT_CATALOG_FILE) {
-  const data = JSON.parse(readFileSync(file, 'utf8'));
-  if (!Array.isArray(data.cards) || data.cards.length === 0) {
-    throw new Error(`No cards in ${file}. Run "npm run sync" to build the catalog.`);
-  }
-  return createCatalog(data.cards, data);
 }

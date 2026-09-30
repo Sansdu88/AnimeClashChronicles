@@ -63,41 +63,7 @@ export function eraForYear(year) {
   return era.id;
 }
 
-/** Booster sets the player can open. `era: null` means every card. */
-export const SETS = [
-  {
-    id: 'all-stars',
-    name: 'All-Stars',
-    jp: 'オールスター',
-    tagline: 'Every era, every legend',
-    era: null,
-    colors: ['#e63946', '#ffb703'],
-  },
-  {
-    id: 'showa',
-    name: 'Shōwa Classics',
-    jp: '昭和',
-    tagline: 'The pioneers · before 1989',
-    era: 'showa',
-    colors: ['#bc6c25', '#fefae0'],
-  },
-  {
-    id: 'heisei',
-    name: 'Heisei Legends',
-    jp: '平成',
-    tagline: 'The golden age · 1989–2018',
-    era: 'heisei',
-    colors: ['#3a0ca3', '#4cc9f0'],
-  },
-  {
-    id: 'reiwa',
-    name: 'Reiwa New Wave',
-    jp: '令和',
-    tagline: "Today's hits · 2019+",
-    era: 'reiwa',
-    colors: ['#ff006e', '#8338ec'],
-  },
-];
+// The booster sets the player can open are in the database (public.booster_sets, see supabase/schema.sql).
 
 /**
  * Collection score used by the rankings: every different card is worth the
