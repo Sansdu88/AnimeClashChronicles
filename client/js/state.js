@@ -27,16 +27,27 @@ function emit() {
   for (const listener of listeners) listener(state);
 }
 
-// The server tells how many seconds are left before the next booster.
-let nextBoosterAt = 0;
+// Booster stock: the server tells how many boosters the player has and when the
+// next one comes; from that, the page counts on its own (one every cooldownSeconds).
+let stockFrom = 0; // local time (ms) the stock counts from
 
 function setPlayer(player) {
   state.player = player;
-  nextBoosterAt = Date.now() + (player?.nextBoosterIn ?? 0) * 1000;
+  const every = state.meta.booster.cooldownSeconds * 1000;
+  const { boosterStock: stock = 0, nextBoosterIn: nextIn = 0 } = player ?? {};
+  // nextIn = 0 means a full stock: counted as one more period (the count stops at the maximum).
+  stockFrom = Date.now() - stock * every - (nextIn ? every - nextIn * 1000 : every);
 }
 
-/** Seconds before the next booster can be opened (0 = now). */
-export const boosterWait = () => Math.max(0, Math.ceil((nextBoosterAt - Date.now()) / 1000));
+/** { stock, max, nextIn }: boosters you can open now, and seconds before the next one (0 when full). */
+export function boosterStock() {
+  const { cooldownSeconds, stackMax: max } = state.meta.booster;
+  const every = cooldownSeconds * 1000;
+  const elapsed = Date.now() - stockFrom;
+  const stock = Math.max(0, Math.min(max, Math.floor(elapsed / every)));
+  const nextIn = stock >= max ? 0 : Math.ceil((every - (elapsed % every)) / 1000);
+  return { stock, max, nextIn };
+}
 
 export const rarityOf = (id) => state.meta.rarities.find((r) => r.id === id);
 export const typeOf = (id) => state.meta.types.find((t) => t.id === id);

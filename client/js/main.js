@@ -13,7 +13,7 @@ import { renderStats } from './views/stats.js';
 import { renderRules } from './views/rules.js';
 import { renderFriendCollection, renderFriends } from './views/friends.js';
 import { renderTrades } from './views/trades.js';
-import { fetchNotifications, syncCollection } from './state.js';
+import { boosterStock, fetchNotifications, syncCollection } from './state.js';
 
 const ROUTES = {
   open: renderOpen,
@@ -98,6 +98,14 @@ function stopNotifications() {
   clearInterval(notifyTimer);
   badges.friends = null;
   badges.trades = null;
+}
+
+function paintStockBadge() {
+  if (screen !== 'app' || !state.player) return;
+  const badge = $('#open-badge');
+  const { stock } = boosterStock();
+  if (badge.textContent !== String(stock)) badge.textContent = stock;
+  badge.hidden = !stock;
 }
 
 // ── Header & static texts ────────────────────────────────────────────────────
@@ -221,6 +229,7 @@ function enterApp() {
   updateHeader();
   render();
   startNotifications();
+  paintStockBadge();
 }
 
 async function doLogout() {
@@ -275,6 +284,8 @@ async function start() {
   window.addEventListener('mb:logout', doLogout);
   window.addEventListener('mb:friend-requests', (event) => pageBadge('friends', event.detail));
   window.addEventListener('mb:trades-waiting', (event) => pageBadge('trades', event.detail));
+  // Boosters in stock, on the "Open" link (the stock grows every 2 minutes).
+  setInterval(paintStockBadge, 1000);
   // Back on the tab: check at once instead of waiting for the next check.
   document.addEventListener('visibilitychange', checkNotifications);
   window.addEventListener('mb:unauthorized', () => {
