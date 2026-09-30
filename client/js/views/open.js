@@ -2,15 +2,17 @@
  * "Open" page: the booster shelf, the booster stock and the opening stage
  * (shake → tear → 5 face-down cards → flip them one by one).
  * A player gets one booster every 2 minutes (BOOSTER.cooldownSeconds) and can
- * keep up to 10 (BOOSTER.stackMax): several boosters can be opened in a row,
- * with their own show (the packs burst one after the other, then all the cards
- * flip in a cascade).
+ * keep up to 10 (BOOSTER.stackMax): several boosters can be opened in a row
+ * (the packs burst one after the other, then all the cards flip in a cascade),
+ * and a full stock of 10 gets the ×10 show: a giant booster whose seal breaks
+ * in 3 taps, with anime cut-ins themed after the set (components/booster-show.js).
  */
 import { $, $$, escapeHtml, fmt, html, mount, raw, wait } from '../dom.js';
 import { cardText, errorText, rarityName, setName, setTagline, t, tHtml } from '../i18n.js';
 import { boosterStock, byRarity, openBoosters, reloadPlayer, setOf, state } from '../state.js';
 import { cardBackHTML, cardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
+import { confettiStorm, cutIn, scatterPacks, showFor } from '../components/booster-show.js';
 import { RARITY_COLORS, burst, flash, onomatopoeia, shakeScreen } from '../ui/effects.js';
 import { pushLayer } from '../ui/layers.js';
 import { sfx } from '../ui/sfx.js';
@@ -64,10 +66,19 @@ function everySecond(paint) {
   tick();
 }
 
-/** Opens `count` boosters of a set: the single-booster stage, or the show for several. */
+/** Opens `count` boosters of a set: one, several in a row, or the ×10 show for a full stock. */
 function startOpening(setId, count, stage) {
-  if (count > 1) openMany(setId, count, stage);
+  if (count >= state.meta.booster.stackMax) openTen(setId, stage);
+  else if (count > 1) openMany(setId, count, stage);
   else openSingle(setId, stage);
+}
+
+/** Text and look of an "Open ×N" button (the full stock gets the ×10 show). */
+function paintManyButton(button, count, setId) {
+  const special = count >= state.meta.booster.stackMax;
+  button.textContent = special ? t('open.openTen', { count }) : t('open.openMany', { count });
+  button.classList.toggle('btn--special', special);
+  button.setAttribute('aria-label', t(special ? 'open.openTenLabel' : 'open.openManyLabel', { count, set: setName(setId) }));
 }
 
 export function renderOpen(main) {
@@ -129,8 +140,7 @@ export function renderOpen(main) {
     const many = Math.min(stock, meta.booster.maxPerRequest);
     for (const button of manyButtons) {
       button.hidden = many < 2;
-      button.textContent = t('open.openMany', { count: many });
-      button.setAttribute('aria-label', t('open.openManyLabel', { count: many, set: setName(button.dataset.open) }));
+      paintManyButton(button, many, button.dataset.open);
     }
     // A booster arrived while the player was waiting on this page.
     if (previous !== null && stock > previous && !document.querySelector('.stage')) {
@@ -234,9 +244,11 @@ function nextButtons(slot, set, stage) {
       slot,
       stock > 0
         ? html`<button class="btn btn--primary btn--big" type="button" data-again="1">${t('stage.again')}</button>
-            ${many >= 2 && html`<button class="btn btn--secondary btn--big" type="button" data-again="${many}">${t('open.openMany', { count: many })}</button>`}`
+            ${many >= 2 && html`<button class="btn btn--secondary btn--big" type="button" data-again="${many}"></button>`}`
         : html`<button class="btn btn--primary btn--big" type="button" disabled>⏳ ${t('open.nextIn', { time: fmt.duration(nextIn) })}</button>`,
     );
+    const manyButton = $('[data-again]:not([data-again="1"])', slot);
+    if (manyButton) paintManyButton(manyButton, many, set.id);
     if (stock === 0) waited = true;
     else if (waited) {
       waited = false;
@@ -258,6 +270,7 @@ async function openSingle(setId, stage = createStage()) {
   const run = ++stage.run;
   const stale = () => stage.closed || stage.run !== run;
   stage.element.dataset.phase = 'pack';
+  delete stage.element.dataset.show;
   stage.element.style.cssText = packStyle(set);
 
   mount(
@@ -401,6 +414,7 @@ async function openMany(setId, count, stage = createStage()) {
   const run = ++stage.run;
   const stale = () => stage.closed || stage.run !== run;
   stage.element.dataset.phase = 'packs';
+  delete stage.element.dataset.show;
   stage.element.style.cssText = packStyle(set);
 
   // The packs arrive as a fanned-out hand.
@@ -451,7 +465,103 @@ async function openMany(setId, count, stage = createStage()) {
   showManyReveal(stage, set, boosters, run);
 }
 
-function showManyReveal(stage, set, boosters, run) {
+// ── ×10 show ────────────────────────────────────────────────────────────────
+
+const SEALS = 3; // taps to break the giant booster's seal (2 anime cut-ins per tap)
+
+async function openTen(setId, stage = createStage()) {
+  const set = setOf(setId);
+  const count = state.meta.booster.stackMax;
+  const show = showFor(set);
+  const run = ++stage.run;
+  const stale = () => stage.closed || stage.run !== run;
+  stage.element.dataset.phase = 'giant';
+  stage.element.dataset.show = show.theme;
+  stage.element.style.cssText = packStyle(set);
+
+  mount(
+    stage.content,
+    html`<div class="giant" data-hit="0">
+      <p class="mega__title giant__title">${t('show.title', { count })}</p>
+      <p class="giant__sub">${t(`show.sub.${show.theme}`)}</p>
+      <div class="giant__scene">
+        <div class="giant__rays" aria-hidden="true"></div>
+        <button class="giant-pack" type="button" aria-label="${t('show.tearLabel', { set: setName(set.id) })}">
+          ${tearablePackHTML(set)}
+          <svg class="giant-pack__cracks" viewBox="0 0 100 160" preserveAspectRatio="none" aria-hidden="true">
+            <g class="crack crack--1"><polyline points="50,0 45,20 55,33 47,52" /></g>
+            <g class="crack crack--2"><polyline points="47,52 59,70 48,90" /><polyline points="55,33 73,43 84,38" /></g>
+            <g class="crack crack--3"><polyline points="48,90 39,112 53,130 47,160" /><polyline points="45,20 25,29 14,24" /><polyline points="59,70 78,86 88,84" /></g>
+          </svg>
+          <span class="giant-pack__badge">×${count}</span>
+        </button>
+      </div>
+      <div class="giant__seals" aria-hidden="true">${Array.from({ length: SEALS }, () => html`<span></span>`)}</div>
+      <p class="stage__hint bubble">${t('show.tap', { left: SEALS })}</p>
+    </div>`,
+  );
+  const scene = $('.giant', stage.content);
+  const pack = $('.giant-pack', stage.content);
+  const hint = $('.stage__hint', stage.content);
+  sfx.play('fanfare');
+  setTimeout(() => {
+    if (stale()) return;
+    burst(window.innerWidth * 0.1, window.innerHeight * 0.9, { colors: show.colors, count: 50, power: 1.8 });
+    burst(window.innerWidth * 0.9, window.innerHeight * 0.9, { colors: show.colors, count: 50, power: 1.8 });
+  }, 450);
+  pack.focus({ preventScroll: true });
+
+  // Each tap cracks the booster a bit more and calls two anime on stage.
+  let request = null;
+  for (let hit = 1; hit <= SEALS; hit++) {
+    await nextClick(pack);
+    if (stale()) return;
+    request ??= requestBoosters(stage, setId, count, 0); // asked at the first tap, ready at the last
+    pack.disabled = true;
+    scene.dataset.hit = hit;
+    pack.classList.remove('is-hit');
+    void pack.offsetWidth; // restart the animation
+    pack.classList.add('is-hit');
+    sfx.play('crack');
+    shakeScreen();
+    const box = pack.getBoundingClientRect();
+    burst(box.left + box.width / 2, box.top + box.height * 0.4, { colors: show.colors, count: 40 + hit * 20, power: 1 + hit * 0.25 });
+    for (const [i, side] of ['left', 'right'].entries()) {
+      const anime = show.anime[(hit - 1) * 2 + i];
+      if (!anime) continue;
+      stage.announce(`${cardText(anime.card).name}: ${anime.shout}`);
+      await cutIn(anime, { side, theme: show.theme });
+      if (stale()) return;
+    }
+    hint.textContent = hit < SEALS ? t('show.tap', { left: SEALS - hit }) : t('stage.opening');
+    pack.disabled = hit === SEALS;
+    if (hit < SEALS) pack.focus({ preventScroll: true });
+  }
+
+  pack.classList.add('is-charging');
+  sfx.play('charge');
+  const boosters = await request;
+  if (!boosters) return;
+  await Promise.all([preloadImages(boosters.flatMap((booster) => booster.cards), 5000), wait(900)]);
+  if (stale()) return;
+
+  // The seal breaks: explosion, confetti storm, and the 10 boosters fly out.
+  const box = pack.getBoundingClientRect();
+  pack.classList.remove('is-charging');
+  pack.classList.add('is-torn');
+  sfx.play('boom');
+  flash('#fff', 750);
+  shakeScreen();
+  confettiStorm(show.colors, { rounds: 8 });
+  scatterPacks(packHTML(set), count, box.left + box.width / 2, box.top + box.height / 2);
+  onomatopoeia(t('show.boom'), { x: box.left + box.width / 2, y: box.top + box.height * 0.35, color: '#ffd23f', size: 'xl', tilt: -10 });
+  await wait(1500);
+  if (stale()) return;
+  showManyReveal(stage, set, boosters, run, show);
+}
+
+/** `show` (×10 only): the finale gets a confetti storm and a cut-in of the best card. */
+function showManyReveal(stage, set, boosters, run, show = null) {
   const cards = boosters.flatMap((booster) => booster.cards);
   const stale = () => stage.closed || stage.run !== run;
   const rarities = [...state.meta.rarities].reverse(); // rarest first
@@ -575,6 +685,12 @@ function showManyReveal(stage, set, boosters, run) {
     const best = [...cards].sort(byRarity).slice(0, 3);
     for (const card of best) flips[cards.indexOf(card)].classList.add('is-best');
     finale(best[0].rarity, boosters.length);
+    if (show) {
+      // ×10: one more confetti storm, and the best card gets its own cut-in.
+      confettiStorm(show.colors, { rounds: 5 });
+      const title = BIG.has(best[0].rarity) ? t('show.legendary') : t('show.bestPull');
+      setTimeout(() => !stale() && cutIn({ card: best[0], shout: title }, { side: 'left', theme: show.theme, duration: 1700 }), 900);
+    }
     stage.announce(t('mega.announce', { count: boosters.length, newCount }));
     mount(
       $('.mega-reveal__actions', stage.content),
