@@ -24,6 +24,16 @@ project has no dependencies).
 - Stop with `Ctrl+C`. Your progress is saved in `storage/anime-clash-chronicles.db`.
 - Card pictures load from Wikimedia, so you need an internet connection to see them.
 
+## Play online
+
+The game is also published on **GitHub Pages**: https://sansdu88.github.io/AnimeClashChronicles/
+
+GitHub Pages only hosts static files, so the online version runs without the Node.js server:
+the game logic runs in the browser ([client/js/local-api.js](client/js/local-api.js)) and your
+account and cards are saved in your browser only. `npm run build:pages` builds this version in
+`dist/`, and [.github/workflows/pages.yml](.github/workflows/pages.yml) deploys it at every push
+on `main`.
+
 ## What's inside
 
 | | |

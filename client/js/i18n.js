@@ -212,7 +212,8 @@ const DICT = {
       setCards: '{count} cards',
       types: 'Card types',
       api: 'REST API',
-      apiText: 'Everything the page does goes through a JSON API you can use too (try <a class="link" href="/api/meta" target="_blank">/api/meta</a>). Player routes need to be logged in (session cookie or <code>Authorization: Bearer &lt;token&gt;</code>).',
+      apiText: 'Everything the page does goes through a JSON API you can use too (try <a class="link" href="api/meta" target="_blank">/api/meta</a>). Player routes need to be logged in (session cookie or <code>Authorization: Bearer &lt;token&gt;</code>).',
+      apiLocal: 'This online version runs entirely in your browser, without the server. Run the project on your computer (<code>npm start</code>) to use the REST API below.',
       credits: 'Credits',
       creditsText:
         'Card texts come from <a class="link" href="https://en.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a> (English and French) and are available under the <a class="link" href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a> license. Pictures (manga covers, posters…) belong to their respective owners and are displayed from Wikimedia servers; each card links to its picture\'s source page. This is a fan-made, non-commercial game.',
@@ -261,6 +262,7 @@ const DICT = {
       created: 'Account created! Welcome, {name}!',
       loggedOut: 'See you soon!',
       required: 'Fill in your e-mail and password.',
+      localNote: 'Online version: your account and your cards are saved in this browser only.',
     },
     errors: {
       invalid_credentials: 'Wrong e-mail or password.',
@@ -482,7 +484,8 @@ const DICT = {
       setCards: '{count} cartes',
       types: 'Types de cartes',
       api: 'API REST',
-      apiText: "Tout ce que fait la page passe par une API JSON que tu peux utiliser toi aussi (essaie <a class=\"link\" href=\"/api/meta\" target=\"_blank\">/api/meta</a>). Les routes du joueur demandent d'être connecté (cookie de session ou <code>Authorization: Bearer &lt;token&gt;</code>).",
+      apiText: "Tout ce que fait la page passe par une API JSON que tu peux utiliser toi aussi (essaie <a class=\"link\" href=\"api/meta\" target=\"_blank\">/api/meta</a>). Les routes du joueur demandent d'être connecté (cookie de session ou <code>Authorization: Bearer &lt;token&gt;</code>).",
+      apiLocal: "Cette version en ligne fonctionne entièrement dans ton navigateur, sans le serveur. Lance le projet sur ton ordinateur (<code>npm start</code>) pour utiliser l'API REST ci-dessous.",
       credits: 'Crédits',
       creditsText:
         'Les textes des cartes viennent de <a class="link" href="https://fr.wikipedia.org" target="_blank" rel="noopener">Wikipédia</a> (en français et en anglais) et sont sous licence <a class="link" href="https://creativecommons.org/licenses/by-sa/4.0/deed.fr" target="_blank" rel="noopener">CC BY-SA 4.0</a>. Les images (couvertures de mangas, affiches…) appartiennent à leurs propriétaires respectifs et sont affichées depuis les serveurs de Wikimedia ; chaque carte renvoie vers la page source de son image. Ce jeu est un projet de fan, non commercial.',
@@ -531,6 +534,7 @@ const DICT = {
       created: 'Compte créé ! Bienvenue, {name} !',
       loggedOut: 'À bientôt !',
       required: 'Remplis ton e-mail et ton mot de passe.',
+      localNote: 'Version en ligne : ton compte et tes cartes sont enregistrés uniquement dans ce navigateur.',
     },
     errors: {
       invalid_credentials: 'E-mail ou mot de passe incorrect.',

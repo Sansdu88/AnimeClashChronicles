@@ -2,6 +2,7 @@
 import { fmt, html, mount, raw } from '../dom.js';
 import { rarityName, setName, setTagline, t, tHtml, typeName } from '../i18n.js';
 import { state } from '../state.js';
+import { isLocalMode } from '../api.js';
 
 const API_ROUTES = [
   ['GET', '/api/health', 'health'],
@@ -111,7 +112,7 @@ export function renderRules(main) {
 
       <section class="panel">
         <h2 class="panel__title">${t('rules.api')}</h2>
-        <p>${raw(tHtml('rules.apiText'))}</p>
+        <p>${raw(tHtml(isLocalMode() ? 'rules.apiLocal' : 'rules.apiText'))}</p>
         <div class="table-wrap">
           <table class="api-table">
             <tbody>
