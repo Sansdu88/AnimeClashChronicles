@@ -24,12 +24,14 @@ export const RARITY_RANK = Object.fromEntries(RARITY_IDS.map((id, i) => [id, i])
  * Booster rules. Each card slot rolls its rarity with the weights below
  * (weights are relative, they do not need to add up to 100).
  * The last slot is the "rare slot": it can never be a Normal card.
+ * A player can open one booster every `cooldownSeconds`.
  */
 export const BOOSTER = {
   size: 5,
   slotWeights: { N: 58, R: 27, SR: 10, SSR: 4, UR: 1 },
   rareSlotWeights: { R: 62, SR: 25, SSR: 10, UR: 3 },
-  maxPerRequest: 10,
+  maxPerRequest: 1,
+  cooldownSeconds: 120,
 };
 
 /** Card types, like Pokémon energy types. */

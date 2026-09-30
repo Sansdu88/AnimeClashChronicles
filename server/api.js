@@ -69,6 +69,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   const totalCards = catalog.cards.length;
   const setIds = catalog.sets.map((set) => set.id);
   const loginLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
+  const opening = new Set(); // players whose booster is being saved (blocks double clicks)
 
   const publicSet = (set) => ({
     id: set.id,
@@ -137,8 +138,20 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
 
   const rarityOfCard = (cardId) => catalog.getCard(cardId)?.rarity;
 
+  /** Seconds before the player can open their next booster (0 = now). */
+  async function boosterWait(playerId) {
+    const last = await store.lastBoosterAt(playerId);
+    if (!last) return 0;
+    const remaining = BOOSTER.cooldownSeconds * 1000 - (Date.now() - new Date(last).getTime());
+    return Math.max(0, Math.ceil(remaining / 1000));
+  }
+
   async function profile(player) {
-    const [stats, { entries, summary }] = await Promise.all([store.stats(player.id), collectionOf(player.id)]);
+    const [stats, { entries, summary }, nextBoosterIn] = await Promise.all([
+      store.stats(player.id),
+      collectionOf(player.id),
+      boosterWait(player.id),
+    ]);
     const cardsPulled = Object.values(stats.pullsByRarity).reduce((sum, n) => sum + n, 0);
     return {
       id: player.id,
@@ -147,6 +160,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       friendCode: player.friendCode,
       createdAt: player.createdAt,
       stats: { ...stats, cardsPulled, ...summary, score: collectionScore(entries, rarityOfCard).score },
+      nextBoosterIn,
     };
   }
 
@@ -340,8 +354,18 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     const count = intParam(body.count, { name: 'count', min: 1, max: BOOSTER.maxPerRequest, fallback: 1 });
     const set = catalog.getSet(setId);
 
-    const opened = Array.from({ length: count }, () => openBooster(set, { rng }));
-    const saved = await store.recordBoosters(player.id, setId, opened);
+    const wait = opening.has(player.id) ? BOOSTER.cooldownSeconds : await boosterWait(player.id);
+    if (wait > 0) {
+      throw new HttpError(429, `You can open one booster every ${BOOSTER.cooldownSeconds / 60} minutes`, { retryIn: wait }, 'booster_cooldown');
+    }
+    opening.add(player.id);
+    let saved;
+    try {
+      const opened = Array.from({ length: count }, () => openBooster(set, { rng }));
+      saved = await store.recordBoosters(player.id, setId, opened);
+    } finally {
+      opening.delete(player.id);
+    }
     return reply(201, {
       boosters: saved.map((booster) => ({
         id: booster.id,

@@ -208,6 +208,12 @@ export function createSupabaseStore({ url, secretKey }) {
       }));
     },
 
+    /** Date (ISO) of the player's last booster, or null. */
+    async lastBoosterAt(playerId) {
+      const [row] = await get(`boosters?select=opened_at&player_id=${eq(playerId)}&order=id.desc&limit=1`);
+      return row?.opened_at ?? null;
+    },
+
     async resetCollection(playerId) {
       const rows = await request('DELETE', `boosters?player_id=${eq(playerId)}&select=id`, { prefer: 'return=representation' });
       return rows.length;
