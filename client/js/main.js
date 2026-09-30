@@ -41,6 +41,23 @@ function paintFriendBadge(count) {
 
 // ── Header & static texts ────────────────────────────────────────────────────
 
+// Colorblind mode: off by default, remembered in this browser.
+const COLORBLIND_KEY = 'animeClashChronicles.colorblind';
+let colorblind = (() => {
+  try {
+    return localStorage.getItem(COLORBLIND_KEY) === 'on';
+  } catch {
+    return false;
+  }
+})();
+
+function paintColorblind() {
+  document.documentElement.classList.toggle('cb-mode', colorblind);
+  const button = $('#colorblind-toggle');
+  button.setAttribute('aria-pressed', String(colorblind));
+  button.title = colorblind ? t('header.colorblindOn') : t('header.colorblindOff');
+}
+
 function paintSound() {
   const button = $('#sound-toggle');
   button.textContent = sfx.enabled ? '🔊' : '🔇';
@@ -56,6 +73,7 @@ function applyStaticTexts() {
   $('#footer').innerHTML = tHtml('footer');
   for (const button of $$('[data-lang]')) button.setAttribute('aria-pressed', String(button.dataset.lang === getLang()));
   paintSound();
+  paintColorblind();
 }
 
 function updateHeader() {
@@ -73,6 +91,17 @@ function setupHeader() {
       onSubmit: ({ name }) => renamePlayer(name),
     });
     if (saved) toast(t('header.welcome', { name: state.player.name }), 'success');
+  });
+
+  $('#colorblind-toggle').addEventListener('click', () => {
+    colorblind = !colorblind;
+    try {
+      localStorage.setItem(COLORBLIND_KEY, colorblind ? 'on' : 'off');
+    } catch {
+      /* not remembered in private mode */
+    }
+    paintColorblind();
+    toast(t(colorblind ? 'header.colorblindEnabled' : 'header.colorblindDisabled'), colorblind ? 'success' : 'info');
   });
 
   $('#sound-toggle').addEventListener('click', () => {
@@ -97,7 +126,7 @@ function render({ scroll = true } = {}) {
   }
   document.title = `${t(`titles.${name}`)} · Anime Clash Chronicles`;
   main.dataset.view = name;
-  ROUTES[name](main, param);
+  ROUTES[name](main, param ?? undefined);
   if (scroll) {
     window.scrollTo(0, 0);
     main.focus({ preventScroll: true });

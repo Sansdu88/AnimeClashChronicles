@@ -67,7 +67,8 @@ function visibleCards() {
 }
 
 /** `player` / `owned` show a friend's collection instead of yours. */
-export function renderCollection(main, { player = state.player, owned: shown = state.owned } = {}) {
+export function renderCollection(main, options) {
+  const { player = state.player, owned: shown = state.owned } = options ?? {};
   const { meta } = state;
   const friend = player.id !== state.player.id;
   owned = shown;
