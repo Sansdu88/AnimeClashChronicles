@@ -88,8 +88,6 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   });
 
   // ── Sessions ───────────────────────────────────────────────────────────────
-  // Store methods are synchronous with SQLite and asynchronous with Supabase:
-  // they are always awaited.
 
   /** The logged-in player of this request, or null. */
   async function currentPlayer(req) {

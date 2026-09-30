@@ -1,0 +1,22 @@
+# Deploys the full game (API + website + Supabase) on Render.com:
+# Render dashboard → New → Blueprint → pick this repository, then enter the two
+# secret values when asked (they are never stored in the repository).
+services:
+  - type: web
+    name: anime-clash-chronicles
+    runtime: node
+    plan: free
+    buildCommand: echo "No build step"
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: NO_OPEN
+        value: "1"
+      - key: SECURE_COOKIES
+        value: "1"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false

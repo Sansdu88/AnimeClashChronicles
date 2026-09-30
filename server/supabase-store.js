@@ -1,8 +1,7 @@
 /**
- * Player data storage in Supabase (PostgreSQL), used when SUPABASE_URL and
- * SUPABASE_SECRET_KEY are set (see .env). It has the same methods as db.js
- * (SQLite), but they are asynchronous. It talks to the Supabase REST API
- * (PostgREST) with fetch, so the project still has no dependency.
+ * Player data storage in Supabase (PostgreSQL): accounts, sessions, boosters,
+ * collections and friends. It talks to the Supabase REST API (PostgREST) with
+ * fetch and the secret key from .env, so the project has no dependency.
  *
  * The tables are created by supabase/schema.sql.
  */

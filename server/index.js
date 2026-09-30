@@ -1,22 +1,18 @@
 /**
  * Entry point: `npm start`
  *
- * Environment variables (all optional):
- *   PORT     first port to try (default 3000, the next free one is used if taken)
- *   HOST     interface to listen on (default 127.0.0.1; use 0.0.0.0 to play on your LAN)
- *   DB_FILE  SQLite file for players and collections (default storage/anime-clash-chronicles.db)
- *   NO_OPEN  set to 1 to not open the browser automatically
- *   SUPABASE_URL, SUPABASE_SECRET_KEY  store the data in Supabase instead of SQLite
- *
- * These can also be written in a .env file at the root of the project (never
- * committed, see .gitignore and .env.example).
+ * Environment variables (usually written in the .env file, never committed —
+ * see .gitignore and .env.example):
+ *   SUPABASE_URL, SUPABASE_SECRET_KEY  the Supabase database (required)
+ *   PORT            first port to try (default 3000, the next free one is used if taken)
+ *   HOST            interface to listen on (default 127.0.0.1; 0.0.0.0 on a server)
+ *   NO_OPEN         set to 1 to not open the browser automatically
+ *   SECURE_COOKIES  set to 1 when the site is served over HTTPS
  */
 import { exec } from 'node:child_process';
-import { existsSync, renameSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
 import { loadCatalog } from './catalog.js';
-import { openStore } from './db.js';
 import { createSupabaseStore } from './supabase-store.js';
 
 try {
@@ -27,7 +23,6 @@ try {
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
-const DB_FILE = process.env.DB_FILE || fileURLToPath(new URL('../storage/anime-clash-chronicles.db', import.meta.url));
 const CLIENT_DIR = fileURLToPath(new URL('../client', import.meta.url));
 const MAX_PORT_ATTEMPTS = 10;
 
@@ -59,33 +54,28 @@ function listen(server, port, attempt = 1) {
   });
 }
 
+/** Connects to Supabase, or explains what is missing. */
 async function openDatabase() {
   const { SUPABASE_URL, SUPABASE_SECRET_KEY } = process.env;
-  if (SUPABASE_URL && SUPABASE_SECRET_KEY) {
-    const store = createSupabaseStore({ url: SUPABASE_URL, secretKey: SUPABASE_SECRET_KEY });
-    try {
-      await store.check();
-    } catch (err) {
-      console.error(`\n  ✗ Cannot use the Supabase database: ${err.message}`);
-      console.error('    Create the tables first: run supabase/schema.sql in the Supabase SQL Editor.\n');
-      process.exit(1);
-    }
-    return { store, label: `Supabase (${new URL(SUPABASE_URL).host})` };
+  if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
+    console.error('\n  ✗ No database configured.');
+    console.error('    Copy .env.example to .env and fill in SUPABASE_URL and SUPABASE_SECRET_KEY.\n');
+    process.exit(1);
   }
-
-  // Saves made when the project was called "Manga Booster" keep working.
-  const OLD_DB_FILE = fileURLToPath(new URL('../storage/manga-booster.db', import.meta.url));
-  if (!process.env.DB_FILE && existsSync(OLD_DB_FILE) && !existsSync(DB_FILE)) {
-    for (const suffix of ['', '-wal', '-shm']) {
-      if (existsSync(OLD_DB_FILE + suffix)) renameSync(OLD_DB_FILE + suffix, DB_FILE + suffix);
-    }
+  const store = createSupabaseStore({ url: SUPABASE_URL, secretKey: SUPABASE_SECRET_KEY });
+  try {
+    await store.check();
+  } catch (err) {
+    console.error(`\n  ✗ Cannot use the Supabase database: ${err.message}`);
+    console.error('    Create the tables first: run supabase/schema.sql in the Supabase SQL Editor.\n');
+    process.exit(1);
   }
-  return { store: openStore(DB_FILE), label: 'SQLite (local file)' };
+  return { store, label: `Supabase (${new URL(SUPABASE_URL).host})` };
 }
 
 const catalog = loadCatalog();
 const { store, label: databaseLabel } = await openDatabase();
-const server = createApp({ catalog, store, clientDir: CLIENT_DIR });
+const server = createApp({ catalog, store, clientDir: CLIENT_DIR, secureCookies: process.env.SECURE_COOKIES === '1' });
 
 const port = await listen(server, PORT);
 const shownHost = HOST === '0.0.0.0' || HOST === '127.0.0.1' ? 'localhost' : HOST;
