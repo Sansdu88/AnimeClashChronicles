@@ -1,6 +1,6 @@
 import { fmt, html, raw } from '../dom.js';
 import { cardText, rarityName, setName, t, typeName } from '../i18n.js';
-import { eraOf, state, typeOf } from '../state.js';
+import { state, typeOf } from '../state.js';
 import { cardHTML } from './card.js';
 import { openModal } from './modal.js';
 
@@ -8,7 +8,6 @@ function detailHTML(card, position) {
   const owned = state.owned.get(card.id);
   const text = cardText(card);
   const type = typeOf(card.type);
-  const era = eraOf(card.era);
   const eraSet = state.meta.sets.find((set) => set.era === card.era) ?? { id: 'all-stars' };
   const english = raw(text.translated ? '' : 'lang="en"');
 
@@ -19,11 +18,10 @@ function detailHTML(card, position) {
     </div>
     <div class="detail__info">
       <p class="detail__kicker">
-        #${fmt.pad(card.number)} · <span lang="ja">${era.kanji}</span> ${setName(eraSet.id)}
+        #${fmt.pad(card.number)} · ${setName(eraSet.id)}
         ${position && html`<span class="detail__position">${position}</span>`}
       </p>
       <h2 class="detail__title">${text.name}</h2>
-      ${card.nameJa && html`<p class="detail__ja" lang="ja">${card.nameJa}</p>`}
       <div class="detail__tags">
         <span class="tag tag--rarity r-${card.rarity}">${card.rarity} · ${rarityName(card.rarity)}</span>
         <span class="tag tag--type" style="--type:${type.color}">${type.icon} ${typeName(card.type)}</span>

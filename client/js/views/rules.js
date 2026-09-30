@@ -22,7 +22,6 @@ export function renderRules(main) {
     html`<section class="view view-rules">
       <header class="view-head">
         <div>
-          <p class="view-kicker" lang="ja">ルール</p>
           <h1 class="view-title">${t('rules.title')}</h1>
           <p class="view-sub">${t('rules.sub', { count: meta.totalCards })}</p>
         </div>
@@ -51,7 +50,7 @@ export function renderRules(main) {
             </thead>
             <tbody>
               ${rarities.map((r) => html`<tr class="r-${r.id}">
-                <td><span class="rarity-badge">${r.id}</span> ${rarityName(r.id)} <span class="muted" lang="ja">${r.jp}</span></td>
+                <td><span class="rarity-badge">${r.id}</span> ${rarityName(r.id)}</td>
                 <td>${r.cardCount}</td>
                 <td>${fmt.percent(booster.odds.normalSlot[r.id], 1)}</td>
                 <td>${fmt.percent(booster.odds.rareSlot[r.id], 1)}</td>
@@ -76,7 +75,7 @@ export function renderRules(main) {
           <h2 class="panel__title">${t('rules.sets')}</h2>
           <ul class="set-list">
             ${meta.sets.map((set) => html`<li style="--c1:${set.colors[0]};--c2:${set.colors[1]}">
-              <span class="set-list__kanji" lang="ja">${set.jp}</span>
+              <span class="set-list__swatch" aria-hidden="true"></span>
               <span><b>${setName(set.id)}</b><br><span class="muted">${setTagline(set.id)} · ${t('rules.setCards', { count: set.cardCount })}</span></span>
             </li>`)}
           </ul>
@@ -84,7 +83,7 @@ export function renderRules(main) {
         <section class="panel">
           <h2 class="panel__title">${t('rules.types')}</h2>
           <ul class="type-list">
-            ${meta.types.map((type) => html`<li><span class="tag tag--type" style="--type:${type.color}">${type.icon} ${typeName(type.id)}</span> <span class="muted" lang="ja">${type.jp}</span></li>`)}
+            ${meta.types.map((type) => html`<li><span class="tag tag--type" style="--type:${type.color}">${type.icon} ${typeName(type.id)}</span></li>`)}
           </ul>
         </section>
       </div>

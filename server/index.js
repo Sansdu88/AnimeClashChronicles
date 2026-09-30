@@ -94,7 +94,7 @@ const url = `http://${shownHost}:${port}`;
 
 console.log(`
   ═══════════════════════════════════════════
-    ANIME CLASH CHRONICLES · アニメ・クラッシュ・クロニクル
+    ANIME CLASH CHRONICLES
   ═══════════════════════════════════════════
   ${catalog.cards.length} cards · ${catalog.sets.length} boosters · data from Wikipedia
   Database: ${databaseLabel}
@@ -110,7 +110,7 @@ let stopping = false;
 function shutdown() {
   if (stopping) return;
   stopping = true;
-  console.log('\n  Bye! さようなら 👋');
+  console.log('\n  Bye! 👋');
   server.close();
   server.closeAllConnections?.();
   store.close();

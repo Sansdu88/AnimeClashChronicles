@@ -52,7 +52,7 @@ export function pickCard({ title, sub, entries, highlightLabel }) {
         if (filters.rarity && card.rarity !== filters.rarity) return false;
         if (filters.missing && !highlight) return false;
         if (!query) return true;
-        return `${card.name} ${card.fr?.name ?? ''} ${card.nameJa ?? ''} ${cardText(card).description}`.toLowerCase().includes(query);
+        return `${card.name} ${card.fr?.name ?? ''} ${cardText(card).description}`.toLowerCase().includes(query);
       });
       count.textContent = t('trades.pickCount', { count: shown.length });
       mount(

@@ -23,7 +23,6 @@ function packHTML(set) {
     <span class="pack__body">
       <span class="pack__brand">ANIME CLASH</span>
       <span class="pack__art">${art && html`<img src="${art.src}" alt="" loading="lazy" draggable="false">`}</span>
-      <span class="pack__kanji" lang="ja" style="--chars:${[...set.jp].length}">${set.jp}</span>
       <span class="pack__name">${setName(set.id)}</span>
       <span class="pack__tagline">${setTagline(set.id)}</span>
       <span class="pack__count">${t('open.cards')}</span>
@@ -67,7 +66,6 @@ export function renderOpen(main) {
     main,
     html`<section class="view view-open">
       <div class="hero">
-        <p class="hero__kicker" lang="ja">ブースターを開けよう！</p>
         <h1 class="hero__title">${t('open.title')}</h1>
         <p class="hero__sub">${raw(tHtml('open.sub', { minutes: meta.booster.cooldownSeconds / 60 }))}</p>
       </div>
@@ -207,7 +205,7 @@ async function openSingle(setId, stage = createStage()) {
   sfx.play('tear');
   const box = pack.getBoundingClientRect();
   flash('rgba(255,255,255,.8)', 280);
-  onomatopoeia('ビリッ!!', { x: box.left + box.width / 2, y: box.top + box.height * 0.12, color: '#fff', size: 'l' });
+  onomatopoeia(t('fx.tear'), { x: box.left + box.width / 2, y: box.top + box.height * 0.12, color: '#fff', size: 'l' });
   await wait(600);
   if (stale()) return;
   showReveal(stage, set, booster, run);
@@ -335,19 +333,19 @@ function celebrate(box, rarity) {
       break;
     case 'SR':
       burst(x, y, { colors, count: 32 });
-      onomatopoeia('キラッ', { x, y: box.top, color: '#e0aaff', size: 'm', tilt: 6 });
+      onomatopoeia(t('fx.sparkle'), { x, y: box.top, color: '#e0aaff', size: 'm', tilt: 6 });
       break;
     case 'SSR':
       flash('rgba(255, 210, 63, .55)', 420);
       burst(x, y, { colors, count: 70, power: 1.3 });
-      onomatopoeia('ゴゴゴ', { x, y: box.top - 10, color: '#ffd23f', size: 'l' });
+      onomatopoeia(t('fx.rumble'), { x, y: box.top - 10, color: '#ffd23f', size: 'l' });
       break;
     case 'UR':
       flash('#fff', 650);
       shakeScreen();
       burst(x, y, { colors, count: 120, power: 1.7 });
       setTimeout(() => burst(x, y, { colors, count: 60, power: 1.2 }), 280);
-      onomatopoeia('ドーン!!', { x, y: box.top - 20, color: '#ff2e88', size: 'xl' });
+      onomatopoeia(t('fx.boom'), { x, y: box.top - 20, color: '#ff2e88', size: 'xl' });
       break;
     case 'REV':
       flash('#000', 700);
@@ -355,7 +353,7 @@ function celebrate(box, rarity) {
       shakeScreen();
       burst(x, y, { colors, count: 150, power: 1.9 });
       setTimeout(() => burst(x, y, { colors, count: 80, power: 1.3 }), 300);
-      onomatopoeia('反転!!', { x, y: box.top - 20, color: '#00d177', size: 'xl' });
+      onomatopoeia(t('fx.reverse'), { x, y: box.top - 20, color: '#00d177', size: 'xl' });
       break;
     default:
       break;

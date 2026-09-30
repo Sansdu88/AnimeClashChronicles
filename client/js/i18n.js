@@ -48,6 +48,8 @@ const DICT = {
       'Card texts from <a href="https://en.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA 4.0) · pictures © their respective owners · fan-made game · <a href="#/rules">rules</a>',
     common: { close: 'Close', cancel: 'Cancel', confirm: 'Confirm', save: 'Save', oops: 'Oops', loading: 'Loading…' },
     notify: { friendRequest: '👋 New friend request!', trade: '🔄 A trade is waiting for your answer!' },
+    // Manga sound effects of the booster opening and of rare cards.
+    fx: { tear: 'RIIIP!!', sparkle: 'SHINE!', rumble: 'RUMBLE…', boom: 'BOOM!!', reverse: 'REVERSE!!' },
     rarities: { N: 'Normal', R: 'Rare', SR: 'Super Rare', SSR: 'Super Special Rare', UR: 'Ultra Rare', REV: 'Reversed' },
     types: {
       action: 'Action',
@@ -326,7 +328,6 @@ const DICT = {
       got: 'got',
     },
     auth: {
-      kicker: 'ようこそ！',
       title: 'Welcome to Anime Clash Chronicles',
       pitch: 'Open a booster of anime cards every 2 minutes, collect them all and climb the leaderboard. Create an account to save your collection.',
       login: 'Log in',
@@ -416,6 +417,7 @@ const DICT = {
       'Textes des cartes issus de <a href="https://fr.wikipedia.org" target="_blank" rel="noopener">Wikipédia</a> (CC BY-SA 4.0) · images © leurs propriétaires respectifs · jeu de fan · <a href="#/rules">règles</a>',
     common: { close: 'Fermer', cancel: 'Annuler', confirm: 'Confirmer', save: 'Enregistrer', oops: 'Oups', loading: 'Chargement…' },
     notify: { friendRequest: '👋 Nouvelle demande d’ami !', trade: '🔄 Un échange attend ta réponse !' },
+    fx: { tear: 'CRAAAC!!', sparkle: 'BLING!', rumble: 'GRRRR…', boom: 'BOUM!!', reverse: 'INVERSÉ!!' },
     rarities: { N: 'Normale', R: 'Rare', SR: 'Super Rare', SSR: 'Super Rare Spéciale', UR: 'Ultra Rare', REV: 'Inversée' },
     types: {
       action: 'Action',
@@ -697,7 +699,6 @@ const DICT = {
       got: 'reçu',
     },
     auth: {
-      kicker: 'ようこそ！',
       title: 'Bienvenue dans Anime Clash Chronicles',
       pitch: 'Ouvre un booster de cartes d’anime toutes les 2 minutes, collectionne-les toutes et grimpe au classement. Crée un compte pour sauvegarder ta collection.',
       login: 'Connexion',
