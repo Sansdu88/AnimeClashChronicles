@@ -443,6 +443,181 @@ body.is-logged-out .icon-btn--logout {
   filter: drop-shadow(0 0 6px rgba(255, 210, 63, 0.9));
 }
 
+/* ── Latest drops (the banner under the menu) ──────────────────────────────── */
+/* An endless carousel: the track holds the drops twice and slides by one half. */
+
+.drops {
+  display: flex;
+  align-items: stretch;
+  height: 48px;
+  overflow: hidden;
+  color: #fff;
+  background: var(--ink);
+  border-bottom: 3px solid var(--ink);
+}
+
+.drops__label {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 2px 28px 0 max(16px, calc((100vw - var(--header-width)) / 2));
+  background: var(--red);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  text-shadow: 1px 1px 0 var(--ink);
+}
+
+.drops__dot {
+  width: 10px;
+  height: 10px;
+  background: var(--yellow);
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  animation: live-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes live-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.drops__viewport {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+}
+
+.drops__track {
+  display: flex;
+  width: max-content;
+  height: 100%;
+  animation: drops-slide var(--duration, 40s) linear infinite;
+}
+
+/* Hovering or focusing a drop stops the carousel. */
+.drops:hover .drops__track,
+.drops:focus-within .drops__track {
+  animation-play-state: paused;
+}
+
+@keyframes drops-slide {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.drops__run {
+  display: flex;
+  align-items: center;
+  padding-left: 14px;
+}
+
+.drop {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  margin-right: 14px;
+  padding: 3px 14px 3px 4px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.drop:hover,
+.drop:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+.drop.is-friend {
+  border-color: var(--yellow);
+}
+
+.drop.r-UR,
+.drop.r-REV {
+  border-color: var(--rc);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--rc) 70%, transparent);
+}
+
+.drop__art {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #2a2520;
+  border: 2px solid var(--rc, #fff);
+  border-radius: 50%;
+}
+
+.drop__art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+
+.drop .rarity-badge {
+  min-width: 0;
+  padding: 1px 6px 0;
+  font-size: 14px;
+}
+
+.drop__card {
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 900;
+}
+
+.drop__who {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.drop__friend {
+  margin-right: 4px;
+  font-weight: 900;
+  color: var(--yellow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drops__track {
+    animation: none;
+  }
+
+  .drops__viewport {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .drops__label {
+    padding-right: 22px;
+    font-size: 15px;
+  }
+
+  .drop__card {
+    max-width: 150px;
+  }
+}
+
 /* ── Page ───────────────────────────────────────────────────────────────── */
 
 .page {

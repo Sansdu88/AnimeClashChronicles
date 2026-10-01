@@ -4,7 +4,7 @@
  * "Authorization: Bearer <token>" header) and only give access to your own player.
  * Admin routes (/api/admin/…) need a player whose is_admin is set in the database.
  */
-import { BOOSTER, DAILY, ERAS, RARITIES, RARITY_IDS, SCORE, STOCKS, SUPER_BOOSTER, TYPES, stockOf } from './config.js';
+import { BOOSTER, DAILY, ERAS, RARITIES, RARITY_IDS, RARITY_RANK, SCORE, STOCKS, SUPER_BOOSTER, TYPES, stockOf } from './config.js';
 import { boosterOdds, boosterStock, collectionScore, dailyStatus, openBooster, rewardDay } from './booster.js';
 import { ODDS_TOTAL, defaultSettings, loadSettings, mergeSettings } from './settings.js';
 import { compareByRarity } from './catalog.js';
@@ -724,6 +724,48 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     const player = await requireSelf(req, params.playerId);
     const deletedBoosters = await store.resetCollection(player.id);
     return { deletedBoosters, player: await profile(player) };
+  });
+
+  // ── Latest drops (the banner under the menu) ────────────────────────────────
+  // The best card of each of the latest boosters opened by anyone: your friends'
+  // first, then the rarest, then the newest. Yours and the admins' are left out.
+
+  const DROPS = { boosters: 100, shown: 12, perPlayer: 2, cacheMs: 15_000 };
+  let recent = { at: 0, boosters: [] };
+
+  /** The latest boosters, read at most every DROPS.cacheMs (every page asks for them). */
+  async function recentBoosters() {
+    if (Date.now() - recent.at > DROPS.cacheMs) recent = { at: Date.now(), boosters: await store.recentBoosters(DROPS.boosters) };
+    return recent.boosters;
+  }
+
+  /** { drops: [{ playerName, friend, cardId, rarity, setId, openedAt }] }, at most DROPS.perPlayer per player. */
+  router.get('/api/drops', async ({ req }) => {
+    const you = await currentPlayer(req);
+    const [boosters, friends] = await Promise.all([recentBoosters(), you ? store.friends(you.id) : []]);
+    const friendIds = new Set(friends.map((friend) => friend.id));
+    const drops = boosters
+      .filter((booster) => !booster.isAdmin && booster.playerId !== you?.id)
+      .map((booster) => {
+        const best = booster.pulls
+          .filter((pull) => catalog.getCard(pull.cardId))
+          .sort((a, b) => RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity])[0];
+        if (!best) return null;
+        const { playerId, playerName, setId, openedAt } = booster;
+        return { playerId, playerName, friend: friendIds.has(playerId), cardId: best.cardId, rarity: best.rarity, setId, openedAt };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.friend - a.friend || RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity] || b.openedAt.localeCompare(a.openedAt));
+    const perPlayer = new Map();
+    const shown = [];
+    for (const { playerId, ...drop } of drops) {
+      const count = perPlayer.get(playerId) ?? 0;
+      if (count >= DROPS.perPlayer) continue;
+      perPlayer.set(playerId, count + 1);
+      shown.push(drop);
+      if (shown.length === DROPS.shown) break;
+    }
+    return { drops: shown };
   });
 
   /** Best collectors by score (points by rarity, see SCORE in config.js); the admins are left out. */

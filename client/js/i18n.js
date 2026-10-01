@@ -61,6 +61,7 @@ const DICT = {
       'Card texts from <a href="https://en.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA 4.0) · pictures © their respective owners · fan-made game · <a href="#/rules">rules</a>',
     common: { close: 'Close', cancel: 'Cancel', confirm: 'Confirm', save: 'Save', oops: 'Oops', loading: 'Loading…' },
     notify: { friendRequest: '👋 New friend request!', trade: '🔄 A trade is waiting for your answer!' },
+    drops: { label: 'Live drops', friend: 'Friend', item: '{player} pulled {card} ({rarity})' },
     // Manga sound effects of the booster opening and of rare cards.
     fx: { tear: 'RIIIP!!', sparkle: 'SHINE!', rumble: 'RUMBLE…', boom: 'BOOM!!', heartbeat: 'BA-DUMP!' },
     // A Reversed card is revealed: the whole screen turns negative.
@@ -682,6 +683,7 @@ const DICT = {
       'Textes des cartes issus de <a href="https://fr.wikipedia.org" target="_blank" rel="noopener">Wikipédia</a> (CC BY-SA 4.0) · images © leurs propriétaires respectifs · jeu de fan · <a href="#/rules">règles</a>',
     common: { close: 'Fermer', cancel: 'Annuler', confirm: 'Confirmer', save: 'Enregistrer', oops: 'Oups', loading: 'Chargement…' },
     notify: { friendRequest: '👋 Nouvelle demande d’ami !', trade: '🔄 Un échange attend ta réponse !' },
+    drops: { label: 'Derniers tirages', friend: 'Ami', item: '{player} a tiré {card} ({rarity})' },
     fx: { tear: 'CRAAAC!!', sparkle: 'BLING!', rumble: 'GRRRR…', boom: 'BOUM!!', heartbeat: 'BA-BOUM !' },
     reverse: { title: 'REVERSE', sub: 'Ultra rare ! Seulement {count} cartes Inversées sur {total}.' },
     rarities: { N: 'Normale', R: 'Rare', SR: 'Super Rare', SSR: 'Super Rare Spéciale', UR: 'Ultra Rare', REV: 'Inversée' },
