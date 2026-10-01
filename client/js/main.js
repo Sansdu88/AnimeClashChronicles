@@ -2,6 +2,7 @@ import { $, $$, html, mount, storage } from './dom.js';
 import { errorText, getLang, setLang, t, tHtml } from './i18n.js';
 import { loadCatalog, logout, renamePlayer, restoreSession, state, subscribe } from './state.js';
 import { enableCardEffects } from './components/card.js';
+import { repaintDrops, startDrops, stopDrops } from './components/drops.js';
 import { formDialog } from './components/modal.js';
 import { closeAllLayers } from './ui/layers.js';
 import { sfx } from './ui/sfx.js';
@@ -255,6 +256,7 @@ function render({ scroll = true } = {}) {
 function showAuth() {
   screen = 'auth';
   stopNotifications();
+  stopDrops();
   closeAllLayers();
   document.body.classList.add('is-logged-out');
   document.title = `${t('titles.auth')} · Anime Clash Chronicles`;
@@ -273,6 +275,7 @@ function enterApp() {
   updateHeader();
   render();
   startNotifications();
+  startDrops();
   paintStockBadge();
   paintDaily();
   maybeDailyPopup();
@@ -324,8 +327,12 @@ async function start() {
   window.addEventListener('mb:refresh', () => render({ scroll: false }));
   window.addEventListener('mb:lang', () => {
     applyStaticTexts();
-    if (screen === 'app') render({ scroll: false });
-    else if (screen === 'auth') showAuth();
+    if (screen === 'app') {
+      render({ scroll: false });
+      repaintDrops();
+    } else if (screen === 'auth') {
+      showAuth();
+    }
   });
   window.addEventListener('mb:logout', doLogout);
   window.addEventListener('mb:friend-requests', (event) => pageBadge('friends', event.detail));

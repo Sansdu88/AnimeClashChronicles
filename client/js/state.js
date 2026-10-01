@@ -340,6 +340,11 @@ export const adminDailyGift = (id, gift) => api(adminPlayerPath(id, '/daily/gift
 export const adminClearPlayer = (id) => api(adminPlayerPath(id, '/clear'), { method: 'POST' });
 export const adminDeletePlayer = (id) => api(adminPlayerPath(id), { method: 'DELETE' });
 
+// ── Latest drops ─────────────────────────────────────────────────────────────
+
+/** { drops: [{ playerName, friend, cardId, rarity, setId, openedAt }] }: the banner under the menu. */
+export const fetchDrops = () => api('/drops');
+
 // ── Notifications ────────────────────────────────────────────────────────────
 
 /** { friendRequests, trades }: friend requests received, trades waiting for your answer. */

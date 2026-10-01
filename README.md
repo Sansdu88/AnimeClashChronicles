@@ -50,6 +50,7 @@ can take a minute.
 | **Stats** | Luck meter (your pulls compared with the official odds), booster history, global leaderboard. |
 | **Accounts** | Sign up with an e-mail and a password, log in from any browser, rename yourself, change your password, log out. Several people on the same network can play on one server (see `HOST` below). |
 | **Colorblind mode** | The 👁 button (off by default) switches rarities to colors that stay distinct with every kind of color blindness and adds card-game symbols: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR · ☆☆☆ REV. |
+| **Live drops** | A banner under the menu shows the latest drops of the players of the whole world in an endless carousel: the best card of each of the latest boosters, your friends' first, then the rarest, then the newest (at most 2 per player; yours and the admins' are left out). It stops when hovered, and a click shows the card. |
 | **Admin panel** | For the admins only (set from the database console, see [Admins](#admins)): the Kira price of each booster and the Kira of a recycled duplicate, the daily reward (a Super Booster every N daily rewards, the boosters the players can choose, Super Booster event days for everyone), the rarity odds of the boosters and of the Super Booster. Every change applies at once. A list of all the players with a search bar, to give a player their daily reward back, give them a Super Booster for their next one, clear their data (cards, boosters, Kira, friends, trades, daily rewards; the account stays) or delete them. |
 | **Languages** | An **EN / FR** switch in the header translates the whole interface, and French cards use their French Wikipedia title and text (*Goldorak*, *Ken le Survivant*, *Capitaine Albator*…). The first visit follows the browser's language. |
 
@@ -225,7 +226,8 @@ with the token returned by register/login.
 | POST | `/api/players/:playerId/trades/:tradeId/decline` | The friend declines the trade, or takes back the card they chose |
 | DELETE | `/api/players/:playerId/trades/:tradeId` | The player who offered cancels the trade |
 | GET | `/api/players/:playerId/notifications` | `{ friendRequests, trades }`: friend requests received and trades waiting for your answer (the web page checks every 10 seconds for its badges) |
-| GET | `/api/leaderboard?limit=10` | Best collectors by score |
+| GET | `/api/leaderboard?limit=10` | Best collectors by score (admins left out) |
+| GET | `/api/drops` | The latest drops for the banner: `{ drops: [{ playerName, friend, cardId, rarity, setId, openedAt }] }`, the best card of each of the latest 100 boosters, the logged-in player's friends first, then the rarest, then the newest (12 at most, 2 per player, without the admins nor yourself) |
 
 Routes under `/api/players/:playerId` require being logged in as that player.
 

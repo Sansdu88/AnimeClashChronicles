@@ -533,6 +533,24 @@ export function createSupabaseStore({ url, secretKey }) {
       });
     },
 
+    /**
+     * The latest `limit` boosters opened by anyone, newest first:
+     * [{ playerId, playerName, isAdmin, setId, openedAt, pulls: [{ cardId, rarity }] }]
+     */
+    async recentBoosters(limit) {
+      const rows = await get(
+        `boosters?select=set_id,opened_at,player:players(id,name,is_admin),pulls(card_id,rarity)&order=id.desc&limit=${Number(limit)}`,
+      );
+      return rows.map((row) => ({
+        playerId: row.player.id,
+        playerName: row.player.name,
+        isAdmin: row.player.is_admin === true,
+        setId: row.set_id,
+        openedAt: row.opened_at,
+        pulls: row.pulls.map((pull) => ({ cardId: pull.card_id, rarity: pull.rarity })),
+      }));
+    },
+
     /** Set of the ids of the admins (left out of the rankings). */
     async adminIds() {
       const rows = await get('players?select=id&is_admin=eq.true');
