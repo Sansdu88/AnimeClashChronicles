@@ -155,7 +155,8 @@ stocks are in `STOCKS`.
 Rankings (between friends, and the global leaderboard) use a **collection score** that grows
 with both the number and the rarity of your cards: each different card is worth
 **N 10 · R 25 · SR 60 · SSR 150 · UR 400 · REV 1000** points, and each extra copy adds 10% of that.
-The values are in `SCORE` in [server/config.js](server/config.js).
+The values are in `SCORE` in [server/config.js](server/config.js). Admins are left out of the rankings (both
+the global one and the friends one), since they can change the game.
 
 ## Admins
 

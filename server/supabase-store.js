@@ -533,6 +533,12 @@ export function createSupabaseStore({ url, secretKey }) {
       });
     },
 
+    /** Set of the ids of the admins (left out of the rankings). */
+    async adminIds() {
+      const rows = await get('players?select=id&is_admin=eq.true');
+      return new Set(rows.map((row) => row.id));
+    },
+
     /** Every player, for the admin panel: [{ id, name, email, friendCode, createdAt, isAdmin, kira, dailyGift }] */
     async allPlayers() {
       const rows = await getAll('players?select=id,name,email,friend_code,created_at,is_admin,kira,daily_super&order=created_at');

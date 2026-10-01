@@ -233,6 +233,12 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       .map(({ createdAt, ...row }, index) => ({ rank: index + 1, ...row }));
   }
 
+  /** A ranking without the admins (they could give themselves cards), ranked again from 1. */
+  async function withoutAdmins(rows) {
+    const admins = await store.adminIds();
+    return rows.filter((row) => !admins.has(row.id)).map((row, index) => ({ ...row, rank: index + 1 }));
+  }
+
   async function friendsOf(player) {
     const [collections, friends, { incoming, outgoing }] = await Promise.all([
       store.allCollections(),
@@ -252,7 +258,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       })),
       incoming,
       outgoing,
-      ranking: ranked,
+      ranking: await withoutAdmins(ranked),
     };
   }
 
@@ -720,11 +726,11 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return { deletedBoosters, player: await profile(player) };
   });
 
-  /** Best collectors by score (points by rarity, see SCORE in config.js). */
+  /** Best collectors by score (points by rarity, see SCORE in config.js); the admins are left out. */
   router.get('/api/leaderboard', async ({ req, query }) => {
     const limit = intParam(query.get('limit'), { name: 'limit', min: 1, max: 100, fallback: 10 });
     const [collectors, collections, you] = await Promise.all([store.collectors(), store.allCollections(), currentPlayer(req)]);
-    const ranked = await rank(collectors, collections, you?.id);
+    const ranked = await withoutAdmins(await rank(collectors, collections, you?.id));
     return { scoring: SCORE, players: ranked.slice(0, limit).map(({ id, ...row }) => row) };
   });
 
