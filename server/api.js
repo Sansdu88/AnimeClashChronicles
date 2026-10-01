@@ -164,6 +164,10 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return { kira, stocks: Object.fromEntries(Object.entries(STOCKS).map(([id, rules]) => [id, boosterStock(since[id], now, rules)])) };
   }
 
+  /** The stocks of an admin: always full, they never wait for a booster. */
+  const unlimitedStocks = () =>
+    Object.fromEntries(Object.entries(STOCKS).map(([id, rules]) => [id, { stock: rules.stackMax, nextIn: 0, unlimited: true }]));
+
   /** Daily reward status (see dailyStatus in booster.js). */
   const dailyOf = async (playerId) => dailyStatus(await store.dailyClaims(playerId), Date.now(), dailyRules());
 
@@ -195,9 +199,10 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       createdAt: player.createdAt,
       isAdmin: player.isAdmin === true,
       stats: { ...stats, cardsPulled, ...summary, score: collectionScore(entries, rarityOfCard).score },
-      // Kira (the game's money, see settings.market) and the booster stocks: { era: { stock, nextIn }, 'all-stars': … }.
+      // Kira (the game's money, see settings.market) and the booster stocks: { era: { stock, nextIn }, 'all-stars': … }
+      // (an admin's are unlimited: { stock: max, nextIn: 0, unlimited: true }).
       kira,
-      stocks,
+      stocks: player.isAdmin ? unlimitedStocks() : stocks,
       // Today's daily reward: claimed or not, day of the cycle, Super Booster or not.
       daily,
     };
@@ -468,15 +473,21 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
         'booster_cooldown',
       );
     if (opening.has(player.id)) throw new HttpError(429, 'A booster is already being opened', { retryIn: 1 }, 'booster_cooldown');
-    const stock = (await walletOf(player.id)).stocks[stockId];
-    if (stock.stock < count) throw notEnough(stock);
+    // Admins have unlimited boosters: no stock to check nor to spend.
+    const unlimited = player.isAdmin;
+    if (!unlimited) {
+      const stock = (await walletOf(player.id)).stocks[stockId];
+      if (stock.stock < count) throw notEnough(stock);
+    }
 
     opening.add(player.id);
     let saved;
     try {
       const opened = Array.from({ length: count }, () => openBooster(set, { rng, rules: boosterRules() }));
-      // The database checks the stock again, in the same transaction as the save.
-      saved = await store.openBoosters(player.id, setId, opened, { every: rules.cooldownSeconds, max: rules.stackMax });
+      // The database checks the stock again (not an admin's), in the same transaction as the save.
+      saved = unlimited
+        ? await store.recordBoosters(player.id, setId, opened)
+        : await store.openBoosters(player.id, setId, opened, { every: rules.cooldownSeconds, max: rules.stackMax });
     } finally {
       opening.delete(player.id);
     }

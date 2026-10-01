@@ -51,12 +51,13 @@ function setPlayer(player) {
 }
 
 /**
- * A booster stock ('era' or 'all-stars', see setOf(id).stock): { stock, max, every, nextIn }:
+ * A booster stock ('era' or 'all-stars', see setOf(id).stock): { stock, max, every, nextIn, unlimited }:
  * boosters you can open now, the most you can keep, seconds between two of them, and
- * seconds before the next one (0 when full).
+ * seconds before the next one (0 when full). An admin's stocks are `unlimited` (always full).
  */
 export function boosterStock(id) {
   const { cooldownSeconds: every, stackMax: max } = state.meta.stocks[id];
+  if (state.player?.stocks?.[id]?.unlimited) return { stock: max, max, every, nextIn: 0, unlimited: true };
   const elapsed = Date.now() - stockFrom[id];
   const stock = Math.max(0, Math.min(max, Math.floor(elapsed / (every * 1000))));
   const nextIn = stock >= max ? 0 : Math.ceil((every * 1000 - (elapsed % (every * 1000))) / 1000);
