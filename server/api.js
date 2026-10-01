@@ -3,7 +3,7 @@
  * Player routes need a session (cookie set by /api/auth/login, or an
  * "Authorization: Bearer <token>" header) and only give access to your own player.
  */
-import { BOOSTER, DAILY, ERAS, RARITIES, RARITY_IDS, SCORE, SUPER_BOOSTER, TYPES } from './config.js';
+import { BOOSTER, DAILY, ERAS, MARKET, RARITIES, RARITY_IDS, SCORE, STOCKS, SUPER_BOOSTER, TYPES, stockOf } from './config.js';
 import { boosterOdds, boosterStock, collectionScore, dailyStatus, openBooster } from './booster.js';
 import { compareByRarity } from './catalog.js';
 import { HttpError, createRouter, reply } from './http.js';
@@ -81,6 +81,8 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     tagline: set.tagline,
     era: set.era,
     colors: set.colors,
+    // The stock it is opened from (see STOCKS); the Super Booster only comes from the daily reward.
+    stock: set === superSet ? null : stockOf(set),
     cardCount: set.cards.length,
     rarityCounts: Object.fromEntries(RARITY_IDS.map((id) => [id, set.byRarity[id].length])),
     featured: set.featured && {
@@ -141,8 +143,16 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
 
   const rarityOfCard = (cardId) => catalog.getCard(cardId)?.rarity;
 
-  /** { stock, nextIn }: boosters the player can open now, seconds before the next one (0 when full). */
-  const stockOf = async (playerId) => boosterStock(await store.boostersFrom(playerId));
+  /**
+   * { kira, stocks: { era: { stock, nextIn }, 'all-stars': { … } } }: the player's Kira, and for
+   * each booster stock the boosters they can open now and the seconds before the next one (0 when full).
+   */
+  async function walletOf(playerId) {
+    const { boostersFrom, starsFrom, kira } = await store.wallet(playerId);
+    const since = { era: boostersFrom, 'all-stars': starsFrom };
+    const now = Date.now();
+    return { kira, stocks: Object.fromEntries(Object.entries(STOCKS).map(([id, rules]) => [id, boosterStock(since[id], now, rules)])) };
+  }
 
   /** Daily reward status (see dailyStatus in booster.js). */
   const dailyOf = async (playerId) => dailyStatus(await store.dailyClaims(playerId));
@@ -155,15 +165,15 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     cards: booster.pulls.map(({ card, isNew }) => ({ ...card, isNew })),
   });
 
-  /** Seconds before the stock holds `count` boosters. */
-  const secondsUntil = ({ stock, nextIn }, count) =>
-    stock >= count ? 0 : nextIn + (count - stock - 1) * BOOSTER.cooldownSeconds;
+  /** Seconds before a stock (`rules`: one of STOCKS) holds `count` boosters. */
+  const secondsUntil = ({ stock, nextIn }, count, rules) =>
+    stock >= count ? 0 : nextIn + (count - stock - 1) * rules.cooldownSeconds;
 
   async function profile(player) {
-    const [stats, { entries, summary }, { stock, nextIn }, daily] = await Promise.all([
+    const [stats, { entries, summary }, { kira, stocks }, daily] = await Promise.all([
       store.stats(player.id),
       collectionOf(player.id),
-      stockOf(player.id),
+      walletOf(player.id),
       dailyOf(player.id),
     ]);
     const cardsPulled = Object.values(stats.pullsByRarity).reduce((sum, n) => sum + n, 0);
@@ -174,17 +184,17 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       friendCode: player.friendCode,
       createdAt: player.createdAt,
       stats: { ...stats, cardsPulled, ...summary, score: collectionScore(entries, rarityOfCard).score },
-      // Boosters in stock (at most BOOSTER.stackMax), seconds before the next one (0 when full).
-      boosterStock: stock,
-      nextBoosterIn: nextIn,
+      // Kira (the game's money, see MARKET) and the booster stocks: { era: { stock, nextIn }, 'all-stars': … }.
+      kira,
+      stocks,
       // Today's daily reward: claimed or not, day of the cycle, Super Booster or not.
       daily,
     };
   }
 
-  /** What friends can see of a player (no e-mail, no daily reward). */
+  /** What friends can see of a player (no e-mail, daily reward nor Kira). */
   async function publicProfile(player) {
-    const { email, daily, ...rest } = await profile(player);
+    const { email, daily, kira, ...rest } = await profile(player);
     return rest;
   }
 
@@ -268,7 +278,8 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     };
   }
 
-  function tradeCard(cardId) {
+  /** `cardId` when it is a card of the catalog, else a 404. */
+  function knownCard(cardId) {
     if (typeof cardId !== 'string' || !catalog.getCard(cardId)) throw new HttpError(404, 'Card not found', null, 'card_not_found');
     return cardId;
   }
@@ -304,6 +315,8 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     eras: ERAS,
     sets: shopSets.map(publicSet),
     booster: { ...BOOSTER, odds },
+    stocks: STOCKS,
+    market: MARKET,
     daily: {
       superEvery: DAILY.superEvery,
       superSet: superSet ? publicSet(superSet) : null,
@@ -426,16 +439,18 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     const setId = oneOf(body.setId, setIds, 'setId') ?? 'all-stars';
     const count = intParam(body.count, { name: 'count', min: 1, max: BOOSTER.maxPerRequest, fallback: 1 });
     const set = catalog.getSet(setId);
+    const stockId = stockOf(set);
+    const rules = STOCKS[stockId];
 
     const notEnough = (stock) =>
       new HttpError(
         429,
-        `Not enough boosters: you have ${stock.stock}, you get one every ${BOOSTER.cooldownSeconds / 60} minutes (${BOOSTER.stackMax} at most)`,
-        { retryIn: secondsUntil(stock, count), stock: stock.stock },
+        `Not enough boosters: you have ${stock.stock}, you get one every ${rules.cooldownSeconds / 60} minutes (${rules.stackMax} at most)`,
+        { retryIn: secondsUntil(stock, count, rules), stock: stock.stock },
         'booster_cooldown',
       );
     if (opening.has(player.id)) throw new HttpError(429, 'A booster is already being opened', { retryIn: 1 }, 'booster_cooldown');
-    const stock = await stockOf(player.id);
+    const stock = (await walletOf(player.id)).stocks[stockId];
     if (stock.stock < count) throw notEnough(stock);
 
     opening.add(player.id);
@@ -443,7 +458,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     try {
       const opened = Array.from({ length: count }, () => openBooster(set, { rng }));
       // The database checks the stock again, in the same transaction as the save.
-      saved = await store.openBoosters(player.id, setId, opened, { every: BOOSTER.cooldownSeconds, max: BOOSTER.stackMax });
+      saved = await store.openBoosters(player.id, setId, opened, { every: rules.cooldownSeconds, max: rules.stackMax });
     } finally {
       opening.delete(player.id);
     }
@@ -485,6 +500,70 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return reply(201, { booster: openedBooster(saved), player: await profile(player) });
   });
 
+  // ── Kira market ────────────────────────────────────────────────────────────
+  // Duplicates are recycled into Kira by rarity (a player keeps one copy of each
+  // card, and the copies promised in open trades); Kira buys boosters, opened at once.
+
+  /** cardId → duplicates the player can recycle. */
+  async function spareCopies(playerId) {
+    const [entries, { open }] = await Promise.all([store.collection(playerId), store.trades(playerId, 0)]);
+    const promised = promisedCards(open, playerId);
+    return Object.fromEntries(
+      entries
+        .filter((row) => catalog.getCard(row.cardId))
+        .map((row) => [row.cardId, row.count - 1 - (promised.get(row.cardId) ?? 0)])
+        .filter(([, spare]) => spare > 0),
+    );
+  }
+
+  /** { kira, spare: { cardId: duplicates you can recycle } } */
+  router.get('/api/players/:playerId/market', async ({ req, params }) => {
+    const player = await requireSelf(req, params.playerId);
+    const [{ kira }, spare] = await Promise.all([store.wallet(player.id), spareCopies(player.id)]);
+    return { kira, spare };
+  });
+
+  /** Body: { cards: [{ cardId, count }] } — the duplicates to recycle (all of them or none). */
+  router.post('/api/players/:playerId/market/recycle', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
+    if (!Array.isArray(body.cards) || body.cards.length === 0 || body.cards.length > totalCards) {
+      throw new HttpError(400, '"cards" must be a list of { cardId, count }');
+    }
+    const counts = new Map();
+    for (const item of body.cards) {
+      const cardId = knownCard(item?.cardId);
+      counts.set(cardId, (counts.get(cardId) ?? 0) + intParam(item.count, { name: 'count', min: 1, max: 9999, fallback: 1 }));
+    }
+    const notEnough = (cardId, spare) =>
+      new HttpError(409, `Not enough duplicates of "${cardId}" to recycle`, { cardId, spare }, 'not_enough_copies');
+    const spare = await spareCopies(player.id);
+    for (const [cardId, count] of counts) if ((spare[cardId] ?? 0) < count) throw notEnough(cardId, spare[cardId] ?? 0);
+
+    // The database checks the duplicates again, in the same transaction as the recycling.
+    const cards = [...counts].map(([cardId, count]) => ({ cardId, count, kira: MARKET.recycle[catalog.getCard(cardId).rarity] }));
+    const result = await store.recycleCards(player.id, cards);
+    if (result.error === 'not_enough') throw notEnough(result.id, (await spareCopies(player.id))[result.id] ?? 0);
+    if (result.error) throw new HttpError(404, 'Player not found');
+    const [after, me] = await Promise.all([spareCopies(player.id), profile(player)]);
+    return { recycled: result.recycled, earned: result.earned, kira: result.kira, spare: after, player: me };
+  });
+
+  /** Body: { setId } — buys a booster with Kira (MARKET.prices: an era booster costs less than All-Stars), opened at once. */
+  router.post('/api/players/:playerId/market/buy', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
+    const set = catalog.getSet(oneOf(body.setId, setIds, 'setId') ?? 'all-stars');
+    const price = MARKET.prices[stockOf(set)];
+    const noKira = (kira) =>
+      new HttpError(409, `Not enough Kira: this booster costs ${price}, you have ${kira}`, { price, kira }, 'not_enough_kira');
+    const { kira } = await store.wallet(player.id);
+    if (kira < price) throw noKira(kira);
+    // The database checks the Kira again, in the same transaction as the purchase.
+    const saved = await store.buyBooster(player.id, set.id, openBooster(set, { rng }), price);
+    if (saved.error === 'no_kira') throw noKira(saved.kira);
+    if (saved.error) throw new HttpError(404, 'Player not found');
+    return reply(201, { booster: openedBooster(saved), player: await profile(player) });
+  });
+
   router.get('/api/players/:playerId/boosters', async ({ req, params, query }) => {
     await requireSelf(req, params.playerId);
     const limit = intParam(query.get('limit'), { name: 'limit', min: 1, max: 100, fallback: 20 });
@@ -493,6 +572,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
         id: booster.id,
         setId: booster.setId,
         openedAt: booster.openedAt,
+        kira: booster.kira ?? null,
         cards: booster.pulls.map((pull) => {
           const card = catalog.getCard(pull.cardId);
           return {
@@ -602,7 +682,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   router.post('/api/players/:playerId/trades', async ({ req, params, body }) => {
     const player = await requireSelf(req, params.playerId);
     await requireFriend(player, typeof body.friendId === 'string' ? body.friendId : '');
-    const cardId = tradeCard(body.cardId);
+    const cardId = knownCard(body.cardId);
     await requireSpareCopy(player.id, cardId);
     const id = await store.createTrade(player.id, body.friendId, cardId);
     return reply(201, { id, ...(await tradesOf(player)) });
@@ -613,7 +693,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     const player = await requireSelf(req, params.playerId);
     const trade = await openTrade(player, params.tradeId, 'to', ['pending']);
     await requireFriend(player, trade.from.id);
-    const cardId = tradeCard(body.cardId);
+    const cardId = knownCard(body.cardId);
     if (cardId === trade.fromCardId) throw new HttpError(400, 'Choose another card than the one you are offered', null, 'same_card');
     await requireSpareCopy(player.id, cardId);
     if (!(await store.proposeTrade(trade.id, player.id, cardId))) {

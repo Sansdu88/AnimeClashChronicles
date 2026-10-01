@@ -1,7 +1,8 @@
 # Anime Clash Chronicles
 
-A manga-style trading card game in the browser: open **a booster of 5 anime cards every 2 minutes** (up to 10 kept in stock),
-Pokémon-TCG style. There are **about 2,000 cards**, one per anime or manga, each built from its
+A manga-style trading card game in the browser: open **a booster of 5 anime cards every 2 minutes**
+(an All-Stars one every 10 minutes), Pokémon-TCG style, and recycle your duplicates into **Kira ✦**, the
+game's money, to buy more. There are **about 2,000 cards**, one per anime or manga, each built from its
 **Wikipedia page**: a picture, a short summary, and a **rarity based on how popular it is**.
 Play in **English or French** (the card texts come from the English or the French Wikipedia),
 with an **account** (e-mail + password) that keeps your collection.
@@ -38,11 +39,12 @@ can take a minute.
 
 | | |
 |---|---|
-| **Boosters** | 4 boosters: *All-Stars* (every card) and one per Japanese era: *Shōwa* (before 1989), *Heisei* (1989–2018), *Reiwa* (2019+). One more booster every 2 minutes, up to 10 kept in stock: open them one by one, or several in a row with their own show (the packs burst one after the other, then all the cards flip in a cascade). A full stock of 10 gets the **×10 show**: a booster display (like the display boxes of the Pokémon card game) whose seal breaks in 3 taps or with the Skip button, with manga cut-ins of the favorite anime of that booster (Dragon Ball and Akira for Shōwa, One Piece and Naruto for Heisei, Demon Slayer and Jujutsu Kaisen for Reiwa, Pokémon and Sailor Moon for All-Stars…), a different theme per booster and a confetti storm. The server keeps the stock; the page shows it with a countdown. |
+| **Boosters** | 4 boosters: *All-Stars* (every card) and one per Japanese era: *Shōwa* (before 1989), *Heisei* (1989–2018), *Reiwa* (2019+). Two stocks fill up on their own: the era boosters share one (+1 every 2 minutes) and All-Stars has its own, slower one (+1 every 10 minutes), up to 10 boosters each. Open them one by one, or several in a row with their own show (the packs burst one after the other, then all the cards flip in a cascade). A full stock of 10 gets the **×10 show**: a booster display (like the display boxes of the Pokémon card game) whose seal breaks in 3 taps or with the Skip button, with manga cut-ins of the favorite anime of that booster (Dragon Ball and Akira for Shōwa, One Piece and Naruto for Heisei, Demon Slayer and Jujutsu Kaisen for Reiwa, Pokémon and Sailor Moon for All-Stars…), a different theme per booster and a confetti storm. The server keeps the stocks; the page shows them with a countdown. An empty stock offers to buy a booster with Kira. |
+| **Kira market** | Kira (✦) is the money of the game (in Japan, *kira* cards are the shiny ones). Recycle your duplicates for Kira by rarity: you always keep one copy of each card, and the copies promised in open trades. One card at a time or all the duplicates of the rarities you tick; each recycled copy bursts into sparkles that fly to your wallet. Kira buys boosters, opened at once: an era booster costs less than All-Stars. Your Kira is in the header. |
 | **Daily reward** | Once a day, a **free booster of your choice** (one of the 4), opened at once: it does not use the stock. Every 5th daily reward is a **Super Booster**, a booster of every card with much better odds (see below), with its own entrance: it drops in a rainbow halo, charges up and blows. The first visit of the day opens a popup to claim it, then the **Daily** page (a 5-day stamp card with a countdown to the next day) and a badge on its link remind you. Missing a day loses nothing: it is your 5th reward that is the Super Booster, not your 5th day in a row. The day changes at midnight, Paris time (`DAILY.timeZone`). |
 | **Opening** | Shake and tear the pack, then flip 5 face-down cards. Rare cards glow before you flip them, and SSR/UR reveals trigger manga effects (RUMBLE, BOOM!!), confetti and sounds (synthesized, can be muted). A REV card gets its own moment: two heartbeats, then the whole screen turns negative for a few seconds under a giant **REVERSE**. |
 | **Cards** | Picture, type (Action, Mecha, Romance…), year, power level, and a one-sentence summary from Wikipedia. SSR, UR and REV are full-art cards with a holographic effect that follows your mouse; REV (Reversed) cards have inverted colors. |
-| **Collection** | A pokédex-style grid: missing cards show up as `???`. Filters, sorting, and completion per rarity. Click a card for its full Wikipedia summary. |
+| **Collection** | A pokédex-style grid: missing cards show up as `???`. Filters, sorting, and completion per rarity, 50 or 100 cards per page with page numbers. Click a card for its full Wikipedia summary. |
 | **Friends** | Every player has a friend code (e.g. `#K7Q2XM`). Send friend requests by code or e-mail, accept or decline them, look at your friends' collections, and compete in the friends ranking. |
 | **Trades** | Offer one copy of a card to a friend: they choose one of their cards to give back (or decline), then you accept the swap (or cancel it). Each player gives one copy: with ×5 you keep ×4, and trading your only copy removes the card from your collection. The picker shows which cards your friend is missing. |
 | **Stats** | Luck meter (your pulls compared with the official odds), booster history, global leaderboard. |
@@ -99,8 +101,8 @@ The rules live in [server/config.js](server/config.js) (`BOOSTER`, `DAILY`, `SUP
 │   ├── http.js             tiny router, JSON helpers, static file server
 │   ├── booster.js          booster opening logic, booster stock, daily reward day (pure functions)
 │   ├── catalog.js          builds the card catalog and booster sets (read from Supabase)
-│   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, daily rewards, friends, trades
-│   └── config.js           rarities, drop rates, daily reward, types, eras
+│   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, daily rewards, Kira, friends, trades
+│   └── config.js           rarities, drop rates, booster stocks, Kira market, daily reward, types, eras
 ├── client/                 web UI (HTML/CSS/JS modules, no build step)
 │   ├── index.html
 │   ├── css/                base, card, booster, views
@@ -120,7 +122,7 @@ The rules live in [server/config.js](server/config.js) (`BOOSTER`, `DAILY`, `SUP
 ## Database: Supabase
 
 Everything is stored in a **Supabase** (PostgreSQL) database: the card catalog (`cards`,
-`booster_sets`, `catalog_info`) and the players, sessions, boosters, daily rewards, friends and trades.
+`booster_sets`, `catalog_info`) and the players (with their Kira), sessions, boosters, daily rewards, friends and trades.
 The database is described by the SQL files of [supabase/migrations/](supabase/migrations/): the
 tables first, then the card catalog. The project is linked to Supabase with the **GitHub
 integration**, which applies new migrations when they are pushed on `main`. Without it, paste the
@@ -133,6 +135,15 @@ key (**Project Settings → API Keys**), then `npm start`: the startup message s
 Only the server uses the database, with the **secret** key (it never reaches the browser).
 Row Level Security is enabled on every table: the public (publishable) key can only read the
 card catalog, nothing else.
+
+## Kira market
+
+| Rarity of a duplicate | N | R | SR | SSR | UR | REV |
+|---|---|---|---|---|---|---|
+| Kira when recycled | 2 | 5 | 12 | 30 | 100 | 400 |
+
+A booster costs **50 Kira** (Shōwa, Heisei, Reiwa) or **120 Kira** (All-Stars). The values are in
+`MARKET` in [server/config.js](server/config.js), the booster stocks in `STOCKS`.
 
 ## Score and rankings
 
@@ -173,12 +184,15 @@ with the token returned by register/login.
 | POST | `/api/auth/password` | Change password. Body: `{ "currentPassword", "newPassword" }` |
 | GET | `/api/players/:playerId` | Profile and stats |
 | PATCH | `/api/players/:playerId` | Rename. Body: `{ "name": "…" }` (1–24 characters) |
-| POST | `/api/players/:playerId/boosters` | Open boosters from your stock. Body: `{ "setId": "all-stars", "count": 1 }` (`count` 1–10). One booster is added every 2 minutes, 10 at most: not enough → 429 `booster_cooldown` with `details.retryIn` (seconds) and `details.stock`. Profiles include `boosterStock` and `nextBoosterIn` (seconds before the next one, 0 when the stock is full) |
-| GET | `/api/players/:playerId/boosters?limit=20` | Booster history, newest first |
+| POST | `/api/players/:playerId/boosters` | Open boosters from their stock. Body: `{ "setId": "all-stars", "count": 1 }` (`count` 1–10). The era boosters share a stock (+1 every 2 minutes), All-Stars has its own (+1 every 10 minutes), 10 at most each: not enough → 429 `booster_cooldown` with `details.retryIn` (seconds) and `details.stock`. Profiles include `stocks` (`{ "era": { "stock", "nextIn" }, "all-stars": { … } }`, `nextIn` = seconds before the next one, 0 when full) and `kira` |
+| GET | `/api/players/:playerId/boosters?limit=20` | Booster history, newest first (`kira`: the price of a booster bought at the market) |
+| GET | `/api/players/:playerId/market` | `{ kira, spare }`: your Kira, and for each card the duplicates you can recycle |
+| POST | `/api/players/:playerId/market/recycle` | Recycle duplicates into Kira. Body: `{ "cards": [{ "cardId": "naruto", "count": 2 }] }` (all of them or none). Returns `{ recycled, earned, kira, spare, player }`. Too many → 409 `not_enough_copies` |
+| POST | `/api/players/:playerId/market/buy` | Buy a booster with Kira, opened at once. Body: `{ "setId": "showa" }`. Returns `{ booster, player }`. Not enough Kira → 409 `not_enough_kira` with `details.price` and `details.kira` |
 | GET | `/api/players/:playerId/daily` | Today's daily reward: `{ today, available, claims, day, cycle, super, nextIn }` (`day` 1–5 of the cycle, `super` on Super Booster days, `nextIn` = seconds before the next day). Profiles include it as `daily` |
 | POST | `/api/players/:playerId/daily` | Claim today's daily reward, opened at once. Body: `{ "setId": "heisei" }` (ignored on Super Booster days, when `"super"` is accepted). Returns `{ booster, player }`. Already claimed → 409 `daily_claimed` with `details.nextIn` |
 | GET | `/api/players/:playerId/collection` | Owned cards (with copies) and completion |
-| DELETE | `/api/players/:playerId/collection` | Reset the collection |
+| DELETE | `/api/players/:playerId/collection` | Reset the collection (and the Kira) |
 | GET | `/api/players/:playerId/friends` | Your friend code, friends, requests received/sent and the friends ranking |
 | POST | `/api/players/:playerId/friends` | Send a friend request. Body: `{ "code": "#K7Q2XM" }` (a friend code or an e-mail) |
 | POST | `/api/players/:playerId/friends/:friendId/accept` | Accept a friend request |

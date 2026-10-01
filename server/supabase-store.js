@@ -1,6 +1,6 @@
 /**
  * Data storage in Supabase (PostgreSQL): the card catalog, and the players'
- * accounts, sessions, boosters, daily rewards, collections and friends. It talks to the Supabase REST API (PostgREST) with
+ * accounts, sessions, boosters, daily rewards, Kira, collections and friends. It talks to the Supabase REST API (PostgREST) with
  * fetch and the secret key from .env, so the project has no dependency.
  *
  * The tables are created by the SQL files of supabase/migrations/.
@@ -203,7 +203,8 @@ export function createSupabaseStore({ url, secretKey }) {
 
     /**
      * Takes the boosters from the player's stock and saves them, in one transaction
-     * (function open_boosters, see supabase/migrations/). Returns the saved boosters,
+     * (function open_boosters, see supabase/migrations/: an All-Stars booster comes from
+     * the All-Stars stock, the others from the era stock). Returns the saved boosters,
      * or { error: 'no_booster', stock, nextIn } when the stock is too small.
      */
     async openBoosters(playerId, setId, boosters, { every, max }) {
@@ -248,24 +249,62 @@ export function createSupabaseStore({ url, secretKey }) {
       };
     },
 
-    /** Latest boosters first: [{ id, setId, openedAt, pulls: [{ cardId, rarity, isNew }] }] */
+    /** Latest boosters first: [{ id, setId, openedAt, kira (paid at the market, or null), pulls: [{ cardId, rarity, isNew }] }] */
     async history(playerId, limit) {
       const rows = await get(
-        `boosters?select=id,set_id,opened_at,pulls(position,card_id,rarity,is_new)&player_id=${eq(playerId)}` +
+        `boosters?select=id,set_id,opened_at,kira,pulls(position,card_id,rarity,is_new)&player_id=${eq(playerId)}` +
           `&order=id.desc&limit=${Number(limit)}&pulls.order=position.asc`,
       );
       return rows.map((booster) => ({
         id: booster.id,
         setId: booster.set_id,
         openedAt: booster.opened_at,
+        kira: booster.kira,
         pulls: booster.pulls.map((pull) => ({ cardId: pull.card_id, rarity: pull.rarity, isNew: pull.is_new })),
       }));
     },
 
-    /** Date (ISO) the player's booster stock counts from (null = full), see boosterStock() in booster.js. */
-    async boostersFrom(playerId) {
-      const [row] = await get(`players?select=boosters_from&id=${eq(playerId)}`);
-      return row?.boosters_from ?? null;
+    /**
+     * { boostersFrom, starsFrom, kira }: the dates (ISO) the era and the All-Stars stocks count
+     * from (null = full, see boosterStock() in booster.js), and the player's Kira.
+     */
+    async wallet(playerId) {
+      const [row] = await get(`players?select=boosters_from,stars_from,kira&id=${eq(playerId)}`);
+      return { boostersFrom: row?.boosters_from ?? null, starsFrom: row?.stars_from ?? null, kira: row?.kira ?? 0 };
+    },
+
+    /**
+     * Recycles duplicates into Kira (function recycle_cards): `cards` = [{ cardId, count, kira }]
+     * (kira for one copy), one entry per card. Returns { kira: new balance, recycled, earned },
+     * or { error: 'not_enough', id } when a card has fewer duplicates.
+     */
+    async recycleCards(playerId, cards) {
+      return request('POST', 'rpc/recycle_cards', {
+        body: { p_player_id: playerId, p_cards: cards.map(({ cardId, count, kira }) => ({ id: cardId, count, kira })) },
+      });
+    },
+
+    /**
+     * Buys a booster of `setId` (its `cards`) for `price` Kira, in one transaction (function
+     * buy_booster). Returns the saved booster, or { error: 'no_kira', kira } when the player cannot pay.
+     */
+    async buyBooster(playerId, setId, cards, price) {
+      const result = await request('POST', 'rpc/buy_booster', {
+        body: {
+          p_player_id: playerId,
+          p_set_id: setId,
+          p_booster: cards.map((card) => ({ id: card.id, rarity: card.rarity })),
+          p_price: price,
+        },
+      });
+      if (result.error) return result;
+      const [booster] = result.boosters;
+      return {
+        id: booster.id,
+        setId,
+        openedAt: booster.openedAt,
+        pulls: cards.map((card, j) => ({ card, isNew: booster.pulls[j].isNew })),
+      };
     },
 
     /** { claims, lastDay }: daily rewards the player claimed, and the day ('YYYY-MM-DD') of the last one (null if none). */
@@ -299,7 +338,7 @@ export function createSupabaseStore({ url, secretKey }) {
       };
     },
 
-    /** Deletes the player's boosters and traded cards, and cancels their open trades (function reset_collection). */
+    /** Deletes the player's boosters, traded and recycled cards and Kira, and cancels their open trades (function reset_collection). */
     async resetCollection(playerId) {
       return request('POST', 'rpc/reset_collection', { body: { p_player_id: playerId } });
     },

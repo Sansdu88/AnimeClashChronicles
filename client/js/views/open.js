@@ -1,22 +1,24 @@
 /**
- * "Open" page: the booster shelf, the booster stock and the opening stage
+ * "Open" page: the booster shelf, the booster stocks and the opening stage
  * (shake → tear → 5 face-down cards → flip them one by one).
- * A player gets one booster every 2 minutes (BOOSTER.cooldownSeconds) and can
- * keep up to 10 (BOOSTER.stackMax): several boosters can be opened in a row
- * (the packs burst one after the other, then all the cards flip in a cascade),
+ * A player gets an era booster every 2 minutes and an All-Stars one every 10
+ * (meta.stocks), and keeps up to 10 of each: several boosters can be opened in a
+ * row (the packs burst one after the other, then all the cards flip in a cascade),
  * and a full stock of 10 gets the ×10 show: a giant booster whose seal breaks
  * in 3 taps, with anime cut-ins themed after the set (components/booster-show.js).
- * The daily reward (views/daily.js) opens here too: the chosen booster, or every
- * 5 days the Super Booster with its own entrance.
+ * The daily reward (views/daily.js) and the boosters bought with Kira
+ * (views/market.js) open here too.
  */
 import { $, $$, escapeHtml, everySecond, fmt, html, mount, raw, wait } from '../dom.js';
 import { cardText, errorText, rarityName, setName, setTagline, t, tHtml } from '../i18n.js';
 import {
   boosterStock,
+  buyBooster,
   byRarity,
   claimDaily,
   dailyStatus,
   openBoosters,
+  priceOf,
   refreshDaily,
   reloadPlayer,
   setOf,
@@ -26,6 +28,7 @@ import { cardBackHTML, cardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
 import { clearCutIns, confettiStorm, cutIn, scatterPacks, showFor } from '../components/booster-show.js';
 import { RARITY_COLORS, burst, flash, onomatopoeia, reverseWorld, shakeScreen } from '../ui/effects.js';
+import { kiraHTML } from '../ui/kira.js';
 import { pushLayer } from '../ui/layers.js';
 import { sfx } from '../ui/sfx.js';
 import { toast } from '../ui/toast.js';
@@ -67,7 +70,7 @@ const tearablePackHTML = (set) => html`<span class="stage-pack__half stage-pack_
 function packTileHTML(set) {
   const cards = setCards(set);
   const have = cards.filter((card) => state.owned.has(card.id)).length;
-  return html`<div class="pack-tile">
+  return html`<div class="pack-tile" data-set="${set.id}" data-stock="${set.stock}">
     <button class="pack" type="button" data-open="${set.id}" data-count="1" aria-label="${t('open.openOne', { set: setName(set.id) })}">${packHTML(set)}</button>
     <div class="pack-tile__progress" title="${t('open.progress', { have, total: cards.length })}">
       <span class="meter"><span class="meter__fill" style="width:${((have / cards.length) * 100).toFixed(1)}%"></span></span>
@@ -76,20 +79,35 @@ function packTileHTML(set) {
     <div class="pack-tile__actions">
       <button class="btn btn--primary" type="button" data-open="${set.id}" data-count="1">${t('open.open')}</button>
       <button class="btn btn--secondary" type="button" data-open="${set.id}" data-count="many" hidden></button>
+      <button class="btn btn--kira" type="button" data-buy="${set.id}" hidden
+        aria-label="${t('market.buyLabel', { set: setName(set.id), price: priceOf(set.id) })}">${t('market.buy')} · ${kiraHTML(priceOf(set.id))}</button>
     </div>
   </div>`;
 }
 
-/** Opens `count` boosters of a set: one, several in a row, or the ×10 show for a full stock. */
+/** A booster stock ('era' or 'all-stars'): its slots fill up one by one. */
+function stockHTML(id) {
+  const { stackMax: max } = state.meta.stocks[id];
+  return html`<div class="stock stock--${id}" role="status" data-stock="${id}">
+    <span class="stock__label">${t(`open.stocks.${id}`)}</span>
+    <div class="stock__slots" aria-hidden="true">
+      ${Array.from({ length: max }, (_, i) => html`<span class="stock__slot" style="--i:${i}"></span>`)}
+    </div>
+    <p class="stock__text"><b class="stock__count">0</b>/${max}</p>
+    <p class="stock__next"></p>
+  </div>`;
+}
+
+/** Opens `count` boosters of a set from its stock: one, several in a row, or the ×10 show for a full stock. */
 function startOpening(setId, count, stage) {
-  if (count >= state.meta.booster.stackMax) openTen(setId, stage);
+  if (count >= state.meta.stocks[setOf(setId).stock].stackMax) openTen(setId, stage);
   else if (count > 1) openMany(setId, count, stage);
   else openSingle(setId, stage);
 }
 
 /** Text and look of an "Open ×N" button (the full stock gets the ×10 show). */
 function paintManyButton(button, count, setId) {
-  const special = count >= state.meta.booster.stackMax;
+  const special = count >= state.meta.stocks[setOf(setId).stock].stackMax;
   button.textContent = special ? t('open.openTen', { count }) : t('open.openMany', { count });
   button.classList.toggle('btn--special', special);
   button.setAttribute('aria-label', t(special ? 'open.openTenLabel' : 'open.openManyLabel', { count, set: setName(setId) }));
@@ -97,21 +115,20 @@ function paintManyButton(button, count, setId) {
 
 export function renderOpen(main) {
   const { player, meta } = state;
-  const max = meta.booster.stackMax;
   mount(
     main,
     html`<section class="view view-open">
       <div class="hero">
         <h1 class="hero__title">${t('open.title')}</h1>
-        <p class="hero__sub">${raw(tHtml('open.sub', { minutes: meta.booster.cooldownSeconds / 60, max }))}</p>
+        <p class="hero__sub">${raw(
+          tHtml('open.sub', {
+            era: meta.stocks.era.cooldownSeconds / 60,
+            stars: meta.stocks['all-stars'].cooldownSeconds / 60,
+            max: meta.stocks.era.stackMax,
+          }),
+        )}</p>
       </div>
-      <div class="stock" role="status">
-        <div class="stock__slots" aria-hidden="true">
-          ${Array.from({ length: max }, (_, i) => html`<span class="stock__slot" style="--i:${i}"></span>`)}
-        </div>
-        <p class="stock__text"><b class="stock__count">0</b>/${max} <span>${t('open.stockLabel')}</span></p>
-        <p class="stock__next"></p>
-      </div>
+      <div class="stocks">${Object.keys(meta.stocks).map(stockHTML)}</div>
       <a class="daily-banner" href="#/daily" hidden>
         <span class="daily-banner__text"></span>
         <span class="daily-banner__cta">${t('open.dailyClaim')} →</span>
@@ -121,61 +138,76 @@ export function renderOpen(main) {
         <span>${t('open.collection')} <strong>${player.stats.uniqueCards}/${player.stats.totalCards}</strong>
           (${fmt.percent(player.stats.completion)})</span>
         <span>${t('open.opened')} <strong>${fmt.number(player.stats.boostersOpened)}</strong></span>
+        <a class="link" href="#/market">${t('open.market')}</a>
         <a class="link" href="#/rules">${t('open.howRarity')}</a>
       </p>
     </section>`,
   );
 
   $('.shelf', main).addEventListener('click', (event) => {
+    const buy = event.target.closest('[data-buy]');
     const button = event.target.closest('[data-open]');
-    if (!button) return;
+    if (!buy && !button) return;
     sfx.play('click');
-    const { stock } = boosterStock();
+    if (buy) {
+      openBought(buy.dataset.buy);
+      return;
+    }
+    const { stock } = boosterStock(setOf(button.dataset.open).stock);
     startOpening(button.dataset.open, button.dataset.count === 'many' ? Math.min(stock, meta.booster.maxPerRequest) : 1);
   });
 
-  // The stock fills up while the page is open: slots, countdown, buttons.
-  // The daily reward banner shows while it is waiting to be claimed.
-  const panel = $('.stock', main);
-  const slots = $$('.stock__slot', panel);
-  const openButtons = $$('[data-open]', main);
-  const manyButtons = $$('[data-count="many"]', main);
+  // The stocks fill up while the page is open: slots, countdowns, buttons (an empty
+  // stock offers to buy a booster at the market). The daily reward banner shows while
+  // it is waiting to be claimed.
+  const panels = $$('.stock', main);
+  const tiles = $$('.pack-tile', main);
   const banner = $('.daily-banner', main);
-  let previous = null;
+  const previous = {};
   everySecond(() => {
-    if (!panel.isConnected) return false; // the page was left or redrawn
+    if (!banner.isConnected) return false; // the page was left or redrawn
     const daily = dailyStatus();
     banner.hidden = !daily.available;
     banner.classList.toggle('daily-banner--super', daily.super);
     $('.daily-banner__text', banner).textContent = `🎁 ${t(daily.super ? 'open.dailySuper' : 'open.dailyReady')}`;
-    const { stock, nextIn } = boosterStock();
-    const every = meta.booster.cooldownSeconds;
-    slots.forEach((slot, i) => {
-      slot.classList.toggle('is-full', i < stock);
-      slot.classList.toggle('is-charging', i === stock);
-      if (i === stock) slot.style.setProperty('--progress', ((every - nextIn) / every).toFixed(3));
-    });
-    panel.classList.toggle('is-full', stock >= max);
-    panel.classList.toggle('is-empty', stock === 0);
-    $('.stock__count', panel).textContent = stock;
-    $('.stock__next', panel).textContent =
-      stock >= max ? t('open.stockFull') : `⏳ ${t('open.nextIn', { time: fmt.duration(nextIn) })}`;
-    for (const button of openButtons) button.disabled = stock === 0;
-    const many = Math.min(stock, meta.booster.maxPerRequest);
-    for (const button of manyButtons) {
-      button.hidden = many < 2;
-      paintManyButton(button, many, button.dataset.open);
-    }
-    // A booster arrived while the player was waiting on this page.
-    if (previous !== null && stock > previous && !document.querySelector('.stage')) {
-      if (previous === 0) {
-        sfx.play('R');
-        toast(t('open.ready'), 'success');
-      } else if (stock >= max) {
-        toast(t('open.stockFullToast', { max }), 'info');
+
+    for (const panel of panels) {
+      const id = panel.dataset.stock;
+      const label = t(`open.stocks.${id}`);
+      const { stock, max, every, nextIn } = boosterStock(id);
+      $$('.stock__slot', panel).forEach((slot, i) => {
+        slot.classList.toggle('is-full', i < stock);
+        slot.classList.toggle('is-charging', i === stock);
+        if (i === stock) slot.style.setProperty('--progress', ((every - nextIn) / every).toFixed(3));
+      });
+      panel.classList.toggle('is-full', stock >= max);
+      panel.classList.toggle('is-empty', stock === 0);
+      $('.stock__count', panel).textContent = stock;
+      $('.stock__next', panel).textContent =
+        stock >= max ? t('open.stockFull') : `⏳ ${t('open.nextIn', { time: fmt.duration(nextIn) })}`;
+      // A booster arrived while the player was waiting on this page.
+      if (previous[id] !== undefined && stock > previous[id] && !document.querySelector('.stage')) {
+        if (previous[id] === 0) {
+          sfx.play('R');
+          toast(t('open.ready', { stock: label }), 'success');
+        } else if (stock >= max) {
+          toast(t('open.stockFullToast', { stock: label, max }), 'info');
+        }
       }
+      previous[id] = stock;
     }
-    previous = stock;
+
+    for (const tile of tiles) {
+      const { stock } = boosterStock(tile.dataset.stock);
+      for (const button of $$('[data-open]', tile)) button.disabled = stock === 0;
+      const many = Math.min(stock, meta.booster.maxPerRequest);
+      const manyButton = $('[data-count="many"]', tile);
+      manyButton.hidden = many < 2;
+      paintManyButton(manyButton, many, tile.dataset.set);
+      const buy = $('[data-buy]', tile);
+      buy.hidden = stock > 0;
+      buy.disabled = state.player.kira < priceOf(tile.dataset.set);
+    }
     return true;
   });
 }
@@ -242,8 +274,8 @@ function preloadImages(cards, timeout = 3500) {
 const nextClick = (element) => new Promise((resolve) => element.addEventListener('click', resolve, { once: true }));
 
 /**
- * Asks the server for boosters (`ask()`: openBoosters or claimDaily); a failed request closes
- * the stage (the stock or the daily reward is reloaded if it was wrong).
+ * Asks the server for boosters (`ask()`: openBoosters, claimDaily or buyBooster); a failed request
+ * closes the stage (the stock, the Kira or the daily reward is reloaded if it was wrong).
  */
 async function requestBoosters(stage, ask, minWait) {
   try {
@@ -251,23 +283,28 @@ async function requestBoosters(stage, ask, minWait) {
     return boosters;
   } catch (err) {
     toast(errorText(err), 'error');
-    if (err.code === 'booster_cooldown') reloadPlayer().catch(() => {});
+    if (err.code === 'booster_cooldown' || err.code === 'not_enough_kira') reloadPlayer().catch(() => {});
     if (err.code === 'daily_claimed' || err.code === 'not_super_day') refreshDaily().catch(() => {});
     stage.close();
     return null;
   }
 }
 
+/** A "Buy · 50 ✦" button for the stage (disabled without enough Kira). */
+const buyButtonHTML = (set, label = t('market.buy')) =>
+  html`<button class="btn btn--kira btn--big" type="button" data-buy="${set.id}" ${state.player.kira < priceOf(set.id) ? 'disabled' : ''}
+    aria-label="${t('market.buyLabel', { set: setName(set.id), price: priceOf(set.id) })}">${label} · ${kiraHTML(priceOf(set.id))}</button>`;
+
 /**
- * "Open another" / "Open ×N" buttons at the end of an opening, or a countdown
- * when the stock is empty. Kept up to date every second while shown.
+ * "Open another" / "Open ×N" buttons at the end of an opening, or a countdown (and
+ * a booster to buy with Kira) when the stock is empty. Kept up to date every second while shown.
  */
 function nextButtons(slot, set, stage) {
   let shown = null;
   let waited = false;
   everySecond(() => {
     if (!slot.isConnected || stage.closed) return false;
-    const { stock, nextIn } = boosterStock();
+    const { stock, nextIn } = boosterStock(set.stock);
     const many = Math.min(stock, state.meta.booster.maxPerRequest);
     const key = stock > 0 ? `stock ${stock}` : `wait ${nextIn}`;
     if (key === shown) return true;
@@ -279,7 +316,8 @@ function nextButtons(slot, set, stage) {
       stock > 0
         ? html`<button class="btn btn--primary btn--big" type="button" data-again="1">${t('stage.again')}</button>
             ${many >= 2 && html`<button class="btn btn--secondary btn--big" type="button" data-again="${many}"></button>`}`
-        : html`<button class="btn btn--primary btn--big" type="button" disabled>⏳ ${t('open.nextIn', { time: fmt.duration(nextIn) })}</button>`,
+        : html`<button class="btn btn--primary btn--big" type="button" disabled>⏳ ${t('open.nextIn', { time: fmt.duration(nextIn) })}</button>
+            ${buyButtonHTML(set)}`,
     );
     const manyButton = $('[data-again]:not([data-again="1"])', slot);
     if (manyButton) paintManyButton(manyButton, many, set.id);
@@ -294,13 +332,18 @@ function nextButtons(slot, set, stage) {
   slot.onclick = (event) => {
     const count = Number(event.target.closest('[data-again]')?.dataset.again);
     if (count) startOpening(set.id, count, stage);
+    if (event.target.closest('[data-buy]')) openSingle(set.id, stage, { price: priceOf(set.id) });
   };
 }
 
 // ── Single booster ──────────────────────────────────────────────────────────
 
-/** `daily` ({ day, cycle }): the daily reward, claimed when the pack is torn open. */
-async function openSingle(setId, stage = createStage(), daily = null) {
+/**
+ * One booster from its stock, or from `source`: { daily: { day, cycle } } for the
+ * daily reward, { price } for a booster bought with Kira. Either is claimed or paid
+ * when the pack is torn open (closing the stage before keeps it).
+ */
+async function openSingle(setId, stage = createStage(), source = null) {
   const set = setOf(setId);
   const run = ++stage.run;
   const stale = () => stage.closed || stage.run !== run;
@@ -311,9 +354,13 @@ async function openSingle(setId, stage = createStage(), daily = null) {
   mount(
     stage.content,
     html`<div class="stage-pack-wrap">
-      ${daily && html`<div class="daily-intro">
+      ${source?.daily && html`<div class="stage-intro">
         <p class="mega__title mega__title--small">🎁 ${t('daily.stageTitle')}</p>
-        <p class="giant__sub">${t('daily.stageDay', daily)}</p>
+        <p class="giant__sub">${t('daily.stageDay', source.daily)}</p>
+      </div>`}
+      ${source?.price && html`<div class="stage-intro">
+        <p class="mega__title mega__title--small">✦ ${t('market.stageTitle')}</p>
+        <p class="giant__sub">${t('market.stageSub', { price: source.price })}</p>
       </div>`}
       <button class="stage-pack" type="button" aria-label="${t('stage.tearLabel', { set: setName(set.id) })}">
         ${tearablePackHTML(set)}
@@ -321,8 +368,8 @@ async function openSingle(setId, stage = createStage(), daily = null) {
       <p class="stage__hint bubble">${t('stage.tapPack')}</p>
     </div>`,
   );
-  if (daily) {
-    sfx.play('R');
+  if (source) {
+    sfx.play(source.price ? 'coin' : 'R');
     burst(window.innerWidth * 0.1, window.innerHeight * 0.9, { colors: ['#fff', '#ffd23f', ...set.colors], count: 40, power: 1.6 });
     burst(window.innerWidth * 0.9, window.innerHeight * 0.9, { colors: ['#fff', '#ffd23f', ...set.colors], count: 40, power: 1.6 });
   }
@@ -336,7 +383,8 @@ async function openSingle(setId, stage = createStage(), daily = null) {
   $('.stage__hint', stage.content).textContent = t('stage.opening');
   sfx.play('shake');
 
-  const boosters = await requestBoosters(stage, daily ? () => claimDaily(setId) : () => openBoosters(setId, 1), 650);
+  const ask = source?.daily ? () => claimDaily(setId) : source?.price ? () => buyBooster(setId) : () => openBoosters(setId, 1);
+  const boosters = await requestBoosters(stage, ask, 650);
   if (!boosters) return;
   const [booster] = boosters;
   await preloadImages(booster.cards);
@@ -350,11 +398,14 @@ async function openSingle(setId, stage = createStage(), daily = null) {
   onomatopoeia(t('fx.tear'), { x: box.left + box.width / 2, y: box.top + box.height * 0.12, color: '#fff', size: 'l' });
   await wait(600);
   if (stale()) return;
-  showReveal(stage, set, booster, run, daily);
+  showReveal(stage, set, booster, run, source);
 }
 
-/** `daily`: the daily reward, which ends with a link to the shelf instead of "Open another". */
-function showReveal(stage, set, booster, run, daily = null) {
+/**
+ * `source` (see openSingle): the daily reward ends with a link to the shelf, a booster
+ * bought with Kira with "Buy another", instead of "Open another".
+ */
+function showReveal(stage, set, booster, run, source = null) {
   const cards = booster.cards;
   const stale = () => stage.closed || stage.run !== run;
   stage.element.dataset.phase = 'reveal';
@@ -432,18 +483,19 @@ function showReveal(stage, set, booster, run, daily = null) {
           ${t('stage.best')} <strong class="rarity-text r-${best.rarity}">${best.rarity}</strong> ${cardText(best).name}
         </p>
         <div class="btn-row">
-          ${daily
-            ? html`<a class="btn btn--primary btn--big" href="#/">${t('daily.openStock')}</a>`
-            : html`<span class="btn-row" data-slot="next"></span>`}
+          ${source?.daily && html`<a class="btn btn--primary btn--big" href="#/">${t('daily.openStock')}</a>`}
+          ${source?.price && html`${buyButtonHTML(set, t('market.buyAnother'))}<a class="btn btn--ghost-light" href="#/market">${t('nav.market')}</a>`}
+          ${!source && html`<span class="btn-row" data-slot="next"></span>`}
           <a class="btn btn--ghost-light" href="#/collection">${t('stage.myCollection')}</a>
         </div>`,
     );
-    if (daily) $('.reveal__footer .btn', stage.content).focus({ preventScroll: true });
-    else nextButtons($('[data-slot="next"]', stage.content), set, stage);
+    if (!source) nextButtons($('[data-slot="next"]', stage.content), set, stage);
+    else ($('.reveal__footer .btn:not(:disabled)', stage.content) ?? $('.reveal__footer a', stage.content)).focus({ preventScroll: true });
   }
 
   stage.content.onclick = (event) => {
     if (event.target.closest('[data-action="reveal-all"]')) revealAll();
+    if (event.target.closest('.reveal__footer [data-buy]')) openSingle(set.id, stage, { price: priceOf(set.id) });
     const flip = event.target.closest('.flip');
     if (!flip) return;
     if (flip.dataset.state === 'revealed') openCardModal(cards[Number(flip.dataset.index)], { list: cards });
@@ -471,7 +523,12 @@ export function openDaily(setId) {
   const { day, cycle, super: isSuperDay } = dailyStatus();
   const stage = createStage();
   if (isSuperDay) openSuper(stage, { day, cycle });
-  else openSingle(setId, stage, { day, cycle });
+  else openSingle(setId, stage, { daily: { day, cycle } });
+}
+
+/** Buys a booster of `setId` with Kira and opens it at once (paid when the pack is torn open). */
+export function openBought(setId) {
+  openSingle(setId, createStage(), { price: priceOf(setId) });
 }
 
 /** The Super Booster drops from the sky in a rainbow halo; one tap charges it up until it blows. */
@@ -528,7 +585,7 @@ async function openSuper(stage, daily) {
   onomatopoeia(t('daily.superBoom'), { x: box.left + box.width / 2, y: box.top + box.height * 0.25, color: '#ffd23f', size: 'xl', tilt: -8 });
   await wait(1100);
   if (stale()) return;
-  showReveal(stage, set, booster, run, daily);
+  showReveal(stage, set, booster, run, { daily });
 }
 
 // ── Several boosters in a row ───────────────────────────────────────────────
@@ -628,7 +685,7 @@ function displayHTML(set, count) {
 
 async function openTen(setId, stage = createStage()) {
   const set = setOf(setId);
-  const count = state.meta.booster.stackMax;
+  const count = state.meta.stocks[set.stock].stackMax;
   const show = showFor(set);
   const run = ++stage.run;
   const stale = () => stage.closed || stage.run !== run;

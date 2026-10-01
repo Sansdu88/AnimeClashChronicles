@@ -11,6 +11,7 @@ import {
   state,
 } from '../state.js';
 import { confirmDialog, formDialog } from '../components/modal.js';
+import { kiraHTML } from '../ui/kira.js';
 import { toast } from '../ui/toast.js';
 
 let renderId = 0;
@@ -47,7 +48,7 @@ function historyHTML(boosters) {
   return html`<ol class="history">
     ${boosters.map((booster) => html`<li class="history__item">
       <div class="history__head">
-        <strong>${setName(booster.setId)}</strong>
+        <strong>${setName(booster.setId)}${booster.kira ? html` <span class="history__price" title="${t('stats.bought')}">${kiraHTML(booster.kira)}</span>` : ''}</strong>
         <time datetime="${booster.openedAt}" title="${fmt.date(booster.openedAt)}">${fmt.timeAgo(booster.openedAt)}</time>
       </div>
       <div class="history__cards">

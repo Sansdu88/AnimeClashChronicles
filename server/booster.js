@@ -1,7 +1,7 @@
 /**
  * Booster opening rules (pure functions, no I/O, so they are easy to test).
  */
-import { BOOSTER, DAILY, RARITY_IDS, RARITY_RANK, SCORE } from './config.js';
+import { BOOSTER, DAILY, RARITY_IDS, RARITY_RANK, SCORE, STOCKS } from './config.js';
 
 /** Picks a key of `weights` ({ key: relativeWeight }) at random. */
 function weightedPick(weights, rng = Math.random) {
@@ -48,12 +48,13 @@ export function openBooster(set, { rng = Math.random, rules = BOOSTER } = {}) {
 }
 
 /**
- * Boosters in stock. The stock counts from `since` (players.boosters_from, null =
- * never counted: full): one booster every `cooldownSeconds`, at most `stackMax`.
+ * Boosters in a stock (`rules`: one of STOCKS). The stock counts from `since`
+ * (players.boosters_from or stars_from, null = never counted: full): one booster
+ * every `cooldownSeconds`, at most `stackMax`.
  * Returns { stock, nextIn }: `nextIn` = seconds before the next one (0 when full).
  * Same formula as the SQL function open_boosters (see supabase/migrations/).
  */
-export function boosterStock(since, now = Date.now(), rules = BOOSTER) {
+export function boosterStock(since, now = Date.now(), rules = STOCKS.era) {
   const every = rules.cooldownSeconds * 1000;
   // A full stock does not grow: count from at most `stackMax` boosters ago.
   const start = Math.max(since ? new Date(since).getTime() : -Infinity, now - rules.stackMax * every);

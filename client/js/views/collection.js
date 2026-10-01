@@ -1,13 +1,18 @@
-/** "Collection" page: every card, owned ones face up, missing ones as ??? silhouettes. */
-import { $, fmt, html, mount, raw } from '../dom.js';
+/**
+ * "Collection" page: every card, owned ones face up, missing ones as ??? silhouettes,
+ * 50 or 100 per page.
+ */
+import { $, $$, fmt, html, mount, raw } from '../dom.js';
 import { cardText, eraName, rarityName, t, tHtml, typeName } from '../i18n.js';
 import { byLocalName, byRarity, state } from '../state.js';
 import { cardHTML, lockedCardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
+import { PAGE_SIZES, onPageClick, pageCount, pageSize, paginationHTML } from '../components/pagination.js';
 import { toast } from '../ui/toast.js';
 
-// Kept between visits of the page.
+// Kept between visits of the page (the page number too, unless it shows another player's cards).
 const filters = { q: '', show: 'all', rarity: '', type: '', era: '', copies: '', sort: 'number' };
+const paging = { page: 1, playerId: null };
 
 // The collection on screen: yours, or a friend's (see renderCollection's options).
 let owned = new Map();
@@ -82,6 +87,7 @@ export function renderCollection(main, options) {
   const { meta } = state;
   const friend = player.id !== state.player.id;
   owned = shown;
+  if (paging.playerId !== player.id) Object.assign(paging, { page: 1, playerId: player.id });
   mount(
     main,
     html`<section class="view view-collection">
@@ -148,25 +154,46 @@ export function renderCollection(main, options) {
         </label>
       </form>
 
-      <p class="result-count" aria-live="polite"></p>
+      <div class="result-bar">
+        <p class="result-count" aria-live="polite"></p>
+        <label class="page-size">
+          <span>${t('pager.perPage')}</span>
+          <select class="input" name="pageSize">
+            ${PAGE_SIZES.map((size) => option(String(size), String(size), String(pageSize.get())))}
+          </select>
+        </label>
+      </div>
+      <div class="pager-slot" data-pager="top"></div>
       <div class="card-grid"></div>
+      <div class="pager-slot" data-pager="bottom"></div>
     </section>`,
   );
 
   const grid = $('.card-grid', main);
   const count = $('.result-count', main);
+  const bar = $('.result-bar', main);
+  const pagers = $$('.pager-slot', main);
   let ownedList = [];
 
   function renderGrid() {
     const cards = visibleCards();
+    // Every owned card of the filters, not only this page: the detail view goes from one to the next.
     ownedList = cards.filter((card) => owned.has(card.id));
+    const size = pageSize.get();
+    const pages = pageCount(cards.length, size);
+    paging.page = Math.min(Math.max(1, paging.page), pages);
+    const first = (paging.page - 1) * size;
+    const pageCards = cards.slice(first, first + size);
     count.textContent = cards.length
-      ? t('collection.count', { count: cards.length, owned: ownedList.length, missing: cards.length - ownedList.length })
+      ? `${t('collection.count', { count: cards.length, owned: ownedList.length, missing: cards.length - ownedList.length })}${
+          pages > 1 ? ` · ${t('pager.showing', { from: first + 1, to: first + pageCards.length })}` : ''
+        }`
       : '';
+    for (const pager of pagers) mount(pager, paginationHTML(paging.page, pages));
     mount(
       grid,
       cards.length
-        ? cards.map((card) =>
+        ? pageCards.map((card) =>
             owned.has(card.id)
               ? cardHTML(card, { count: ownedEntry(card).count, tilt: true })
               : lockedCardHTML(card),
@@ -183,8 +210,21 @@ export function renderCollection(main, options) {
     const { name, value } = event.target;
     if (name in filters) {
       filters[name] = value;
+      paging.page = 1;
       renderGrid();
     }
+  });
+  $('[name="pageSize"]', main).addEventListener('change', (event) => {
+    // Stay on the page that shows the first card on screen.
+    const firstShown = (paging.page - 1) * pageSize.get();
+    pageSize.set(Number(event.target.value));
+    paging.page = Math.floor(firstShown / pageSize.get()) + 1;
+    renderGrid();
+  });
+
+  onPageClick(pagers, bar, (page) => {
+    paging.page = page;
+    renderGrid();
   });
   $('.filters', main).addEventListener('submit', (event) => event.preventDefault());
 

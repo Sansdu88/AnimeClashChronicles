@@ -1,7 +1,8 @@
-/** "Rules" page: how boosters and rarities work, the daily reward, types and credits. */
+/** "Rules" page: how boosters and rarities work, the daily reward, the Kira market, types and credits. */
 import { fmt, html, mount, raw } from '../dom.js';
 import { rarityName, setName, setTagline, t, tHtml, typeName } from '../i18n.js';
 import { state } from '../state.js';
+import { kiraHTML } from '../ui/kira.js';
 
 function atLeastOneLabel(rarityId, chance) {
   if (rarityId === 'N') return '—';
@@ -12,7 +13,7 @@ function atLeastOneLabel(rarityId, chance) {
 
 export function renderRules(main) {
   const { meta } = state;
-  const { booster } = meta;
+  const { booster, stocks, market } = meta;
   const superOdds = meta.daily.superBooster;
   const rarities = [...meta.rarities].reverse();
   const popularity = meta.catalog.popularity;
@@ -31,7 +32,12 @@ export function renderRules(main) {
       <ol class="steps">
         <li class="panel step"><span class="step__num">1</span><h2>${t('rules.step1Title')}</h2><p>${t('rules.step1')}</p></li>
         <li class="panel step"><span class="step__num">2</span><h2>${t('rules.step2Title')}</h2>
-          <p>${raw(tHtml('rules.step2', { size: booster.size, minutes: booster.cooldownSeconds / 60, max: booster.stackMax }))}</p></li>
+          <p>${raw(tHtml('rules.step2', {
+            size: booster.size,
+            era: stocks.era.cooldownSeconds / 60,
+            stars: stocks['all-stars'].cooldownSeconds / 60,
+            max: stocks.era.stackMax,
+          }))}</p></li>
         <li class="panel step"><span class="step__num">3</span><h2>${t('rules.step3Title')}</h2>
           <p>${t('rules.step3', { rev: meta.rarities.find((r) => r.id === 'REV').cardCount })}</p></li>
       </ol>
@@ -94,6 +100,16 @@ export function renderRules(main) {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel__title">${t('rules.marketTitle')}</h2>
+        <p>${raw(tHtml('rules.market', { era: market.prices.era, stars: market.prices['all-stars'] }))}</p>
+        <ul class="rates__list">
+          ${rarities.map((r) => html`<li class="r-${r.id}" title="${rarityName(r.id)}">
+            <span class="rarity-badge">${r.id}</span> ${kiraHTML(market.recycle[r.id])}
+          </li>`)}
+        </ul>
       </section>
 
       <div class="rules-grid">

@@ -1325,10 +1325,6 @@
   transition: transform 0.15s;
 }
 
-.daily-banner[hidden] {
-  display: none;
-}
-
 .daily-banner:hover {
   transform: translateY(-2px) rotate(-1deg);
 }
@@ -1670,5 +1666,346 @@
   .daily-info {
     flex-direction: column;
     text-align: center;
+  }
+}
+
+/* ── Pages of cards (collection, market) ────────────────────────────────── */
+
+.result-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 4px;
+}
+
+.result-bar .result-count {
+  margin: 0;
+}
+
+.page-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.page-size .input {
+  min-height: 36px;
+  padding: 4px 8px;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 14px 0 20px;
+}
+
+.pager__btn {
+  min-width: 40px;
+  height: 40px;
+  padding: 3px 10px 0;
+  background: var(--panel);
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: 2px 2px 0 var(--ink);
+  font-family: var(--font-display);
+  font-size: 19px;
+  letter-spacing: 1px;
+  line-height: 1;
+  transition: transform 0.1s;
+}
+
+.pager__btn:hover:not(:disabled) {
+  background: var(--paper-2);
+  transform: translateY(-2px);
+}
+
+.pager__btn[aria-current='page'] {
+  background: var(--yellow);
+  transform: rotate(-3deg) scale(1.12);
+}
+
+.pager__btn:disabled {
+  opacity: 0.35;
+  box-shadow: none;
+  cursor: default;
+}
+
+.pager__gap {
+  padding: 0 2px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+/* ── Kira market ────────────────────────────────────────────────────────── */
+
+/* A night market: deep purple, gold dots and rays. */
+.hero--market {
+  background:
+    radial-gradient(rgba(255, 210, 63, 0.2) 1.2px, transparent 1.6px) 0 0 / 11px 11px,
+    repeating-conic-gradient(from 0deg at 50% 60%, rgba(255, 210, 63, 0.13) 0deg 5deg, transparent 5deg 12deg),
+    linear-gradient(160deg, #3c096c, #10002b);
+}
+
+.hero--market .hero__title {
+  color: var(--yellow);
+}
+
+.market-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 22px;
+  margin: 24px 0;
+}
+
+.wallet {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  perspective: 600px;
+}
+
+.wallet p {
+  margin: 0;
+}
+
+.wallet__label {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.wallet__amount {
+  font-family: var(--font-display);
+  font-size: 26px;
+  letter-spacing: 1px;
+}
+
+.wallet__amount b {
+  font-weight: 400;
+  font-size: 56px;
+  line-height: 1;
+  color: var(--red-dark);
+}
+
+.wallet__hint {
+  margin-top: 6px !important;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.rates .panel__title {
+  margin-bottom: 10px;
+}
+
+.rates__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.rates__list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 900;
+}
+
+.market-shop,
+.market-recycle {
+  margin-bottom: 26px;
+}
+
+.shop {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 22px;
+  margin-top: 18px;
+}
+
+.shop-item {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.shop-item__pack {
+  max-width: 130px;
+  pointer-events: none;
+}
+
+.shop-item__name {
+  font-family: var(--font-display);
+  font-size: 19px;
+  letter-spacing: 1px;
+  line-height: 1.1;
+}
+
+.shop-item__price {
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: 1px;
+}
+
+.shop-item__need {
+  min-height: 1.3em;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--red-dark);
+}
+
+.recycle-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 16px 0 18px;
+}
+
+.rarity-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rarity-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 5px 8px;
+  background: var(--panel);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 2px 2px 0 var(--ink);
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.rarity-pick input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--red);
+}
+
+.rarity-pick:has(input:checked) {
+  background: color-mix(in srgb, var(--rc) 22%, #fff);
+}
+
+.rarity-pick.is-empty {
+  opacity: 0.55;
+}
+
+.rarity-pick__kira {
+  color: var(--ink-soft);
+}
+
+.recycle-card {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.recycle-card .card {
+  width: 100%;
+}
+
+.recycle-card__info {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.recycle-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.recycle-card__actions .btn {
+  min-height: 36px;
+  padding: 5px 12px 3px;
+  font-size: 17px;
+}
+
+/* A copy leaving its card: it lights up, spins away and bursts into sparkles. */
+.recycle-ghost {
+  position: fixed;
+  z-index: 94;
+  margin: 0;
+  pointer-events: none;
+  animation: recycle-out 0.75s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+
+@keyframes recycle-out {
+  30% {
+    transform: translateY(-14px) scale(1.04) rotate(-3deg);
+    filter: brightness(1.6) saturate(1.4);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-60px) scale(0.3) rotate(18deg);
+    filter: brightness(3) blur(6px);
+    opacity: 0;
+  }
+}
+
+.history__price {
+  margin-left: 6px;
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .market-top {
+    grid-template-columns: 1fr;
+  }
+
+  .shop {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wallet {
+    gap: 16px;
+  }
+
+  .wallet .kira-coin--big {
+    font-size: 32px;
+  }
+
+  .wallet__amount b {
+    font-size: 44px;
+  }
+}
+
+@media (max-width: 600px) {
+  .recycle-bar .btn {
+    width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .recycle-card__actions .btn {
+    padding-inline: 9px;
+    font-size: 15px;
+  }
+
+  .recycle-card__info {
+    font-size: 12px;
   }
 }

@@ -26,17 +26,36 @@ export const RARITY_RANK = Object.fromEntries(RARITY_IDS.map((id, i) => [id, i])
  * Booster rules. Each card slot rolls its rarity with the weights below
  * (weights are relative, they do not need to add up to 100).
  * The last slot is the "rare slot": it can never be a Normal card.
- * A player gets one booster every `cooldownSeconds` and can keep up to `stackMax`
- * of them (the stock stops growing when full); they can open up to
- * `maxPerRequest` at once.
+ * A player can open up to `maxPerRequest` boosters at once.
  */
 export const BOOSTER = {
   size: 5,
   slotWeights: { N: 580, R: 270, SR: 100, SSR: 40, UR: 9, REV: 1 },
   rareSlotWeights: { R: 620, SR: 250, SSR: 100, UR: 25, REV: 5 },
   maxPerRequest: 10,
-  cooldownSeconds: 120,
-  stackMax: 10,
+};
+
+/**
+ * Booster stocks: a player gets a booster every `cooldownSeconds` and keeps up to
+ * `stackMax` of them (a full stock stops growing). The era boosters (Shōwa, Heisei,
+ * Reiwa) share the fast stock; All-Stars, with every card, has its own slower one.
+ */
+export const STOCKS = {
+  era: { cooldownSeconds: 120, stackMax: 10 },
+  'all-stars': { cooldownSeconds: 600, stackMax: 10 },
+};
+
+/** The stock a booster set is opened from: 'era' for the sets of one era, 'all-stars' for the set of every card. */
+export const stockOf = (set) => (set.era ? 'era' : 'all-stars');
+
+/**
+ * The Kira market. Kira (✦) is the game's money: a duplicate (a copy beyond the
+ * first, not promised in a trade) is recycled into `recycle[rarity]` Kira, and Kira
+ * buys boosters, opened at once: `prices[stockOf(set)]`.
+ */
+export const MARKET = {
+  recycle: { N: 2, R: 5, SR: 12, SSR: 30, UR: 100, REV: 400 },
+  prices: { era: 50, 'all-stars': 120 },
 };
 
 /**

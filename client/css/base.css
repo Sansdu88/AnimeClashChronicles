@@ -34,6 +34,7 @@
   --font-body: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
 
   --page-width: 1240px;
+  --header-width: 1440px; /* a bit wider than the page: the header has a lot to hold */
   color-scheme: light;
 }
 
@@ -109,6 +110,11 @@ code {
   padding: 0.05em 0.35em;
 }
 
+/* The hidden attribute wins over the display of components (.btn, banners…). */
+[hidden] {
+  display: none !important;
+}
+
 .sr-only {
   position: absolute !important;
   width: 1px;
@@ -160,8 +166,8 @@ code {
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 10px max(16px, calc((100vw - var(--page-width)) / 2));
+  gap: 12px;
+  padding: 10px max(16px, calc((100vw - var(--header-width)) / 2));
   background: var(--panel);
   border-bottom: var(--border);
   box-shadow: 0 4px 0 rgba(22, 19, 15, 0.12);
@@ -196,7 +202,7 @@ code {
 
 .nav {
   display: flex;
-  gap: 6px;
+  gap: 2px;
   margin-inline: auto;
 }
 
@@ -204,11 +210,11 @@ code {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 14px 5px;
+  padding: 8px 9px 5px;
   border: 2px solid transparent;
   border-radius: 10px;
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 18px;
   letter-spacing: 1px;
   text-decoration: none;
   line-height: 1.1;
@@ -237,7 +243,7 @@ code {
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: 260px;
+  max-width: 220px;
   padding: 6px 12px;
   background: var(--panel);
   border: 2px solid var(--ink);
@@ -333,6 +339,110 @@ body.is-logged-out .icon-btn--logout {
   display: none;
 }
 
+/* ── Kira (✦), the game's money ─────────────────────────────────────────── */
+
+/* A gold coin stamped with a sparkle, sized after the text around it. */
+.kira-coin {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.8em;
+  height: 1.8em;
+  font-size: 0.75em;
+  font-family: var(--font-body);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--ink);
+  vertical-align: -0.35em;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fffbe0, #ffd23f 45%, #f4a100 80%, #c77800);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.45), 1px 1px 0 var(--ink);
+}
+
+.kira-coin--big {
+  width: 1.9em;
+  height: 1.9em;
+  font-size: 46px;
+  border-width: 4px;
+  box-shadow: inset 0 0 0 5px rgba(255, 255, 255, 0.45), 4px 4px 0 var(--ink);
+  animation: coin-flip 4s ease-in-out infinite;
+}
+
+/* Every few seconds the coin flips, catching the light. */
+@keyframes coin-flip {
+  0%,
+  72%,
+  100% {
+    transform: rotateY(0);
+  }
+  86% {
+    transform: rotateY(180deg);
+    filter: brightness(1.25);
+  }
+}
+
+/* Kira just landed in it. */
+.kira-coin.is-bumped {
+  animation: coin-bump 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.6);
+}
+
+@keyframes coin-bump {
+  40% {
+    transform: scale(1.4) rotate(-12deg);
+    filter: brightness(1.35);
+  }
+}
+
+/* "120 ✦": a number and its coin. */
+.kira-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.kira-amount .kira-coin {
+  vertical-align: 0;
+}
+
+/* The wallet in the header (a link to the market). */
+.kira-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 4px 5px;
+  color: var(--yellow);
+  background: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 2px 2px 0 rgba(22, 19, 15, 0.35);
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 1px;
+  line-height: 1;
+  text-decoration: none;
+  transition: transform 0.15s;
+}
+
+.kira-chip:hover {
+  transform: translateY(-1px) rotate(-2deg);
+}
+
+/* The sparkles a recycled card turns into, flying to the wallet (ui/kira.js). */
+.kira-spark {
+  position: fixed;
+  z-index: 95;
+  pointer-events: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--yellow);
+  -webkit-text-stroke: 1.5px var(--ink);
+  paint-order: stroke fill;
+  filter: drop-shadow(0 0 6px rgba(255, 210, 63, 0.9));
+}
+
 /* ── Page ───────────────────────────────────────────────────────────────── */
 
 .page {
@@ -393,6 +503,11 @@ body.is-logged-out .icon-btn--logout {
 
 .btn--secondary {
   background: var(--yellow);
+}
+
+/* Paid with Kira. */
+.btn--kira {
+  background: linear-gradient(180deg, #ffe680, #ffc21a 55%, #f4a100);
 }
 
 .btn--danger {
@@ -899,24 +1014,19 @@ select.input {
 
 /* ── Small screens ──────────────────────────────────────────────────────── */
 
-/* A tighter navigation… */
-@media (max-width: 1500px) {
-  .topbar {
-    gap: 12px;
+/* Only the player's name in their chip… */
+@media (min-width: 1421px) and (max-width: 1600px) {
+  .player-chip {
+    max-width: 170px;
   }
 
-  .nav {
-    gap: 2px;
-  }
-
-  .nav a {
-    padding-inline: 9px;
-    font-size: 18px;
+  .player-chip__progress {
+    display: none;
   }
 }
 
-/* …then it gets its own line under the logo. */
-@media (max-width: 1240px) {
+/* …then the navigation gets its own line under the logo. */
+@media (max-width: 1420px) {
   .topbar {
     flex-wrap: wrap;
     gap: 8px 12px;
@@ -956,7 +1066,12 @@ select.input {
     font-size: 19px;
   }
 
+  /* A long player name pushes the last buttons to a second line instead of off screen. */
   .topbar__side {
+    flex-wrap: wrap;
+    flex-shrink: 1;
+    justify-content: flex-end;
+    max-width: 100%;
     gap: 6px;
   }
 
