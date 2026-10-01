@@ -27,6 +27,7 @@
       <nav class="nav" aria-label="Main" data-i18n-aria="nav.main">
         <a href="#/" data-route="open"><span data-i18n="nav.open">Open</span><span class="nav__badge nav__badge--stock" id="open-badge" hidden></span></a>
         <a href="#/daily" data-route="daily"><span data-i18n="nav.daily">Daily</span><span class="nav__badge nav__badge--daily" id="daily-badge" hidden>!</span></a>
+        <a href="#/market" data-route="market"><span data-i18n="nav.market">Market</span></a>
         <a href="#/collection" data-route="collection"><span data-i18n="nav.collection">Collection</span></a>
         <a href="#/friends" data-route="friends"><span data-i18n="nav.friends">Friends</span><span class="nav__badge" id="friends-badge" hidden></span></a>
         <a href="#/trades" data-route="trades"><span data-i18n="nav.trades">Trades</span><span class="nav__badge" id="trades-badge" hidden></span></a>
@@ -38,6 +39,11 @@
           <button type="button" data-lang="en" lang="en" aria-pressed="false">EN</button>
           <button type="button" data-lang="fr" lang="fr" aria-pressed="false">FR</button>
         </div>
+        <a class="kira-chip" id="kira-chip" href="#/market" data-i18n-title="header.kira">
+          <span class="kira-coin" aria-hidden="true">✦</span>
+          <span class="kira-chip__amount" id="kira-balance">0</span>
+          <span class="sr-only" data-i18n="header.kiraUnit">Kira</span>
+        </a>
         <button class="player-chip" id="player-chip" type="button" data-i18n-title="header.rename">
           <span aria-hidden="true">👤</span>
           <span class="player-chip__name" id="player-name">…</span>

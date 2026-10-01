@@ -27,9 +27,10 @@ function emit() {
   for (const listener of listeners) listener(state);
 }
 
-// Booster stock: the server tells how many boosters the player has and when the
-// next one comes; from that, the page counts on its own (one every cooldownSeconds).
-let stockFrom = 0; // local time (ms) the stock counts from
+// Booster stocks (era boosters, All-Stars): the server tells how many boosters the
+// player has in each and when the next one comes; from that, the page counts on its
+// own (one every cooldownSeconds of that stock, see meta.stocks).
+const stockFrom = {}; // stock id → local time (ms) it counts from
 let nextDayAt = 0; // local time (ms) the daily reward's day changes
 
 function setDaily(daily) {
@@ -39,22 +40,31 @@ function setDaily(daily) {
 
 function setPlayer(player) {
   state.player = player;
-  const every = state.meta.booster.cooldownSeconds * 1000;
-  const { boosterStock: stock = 0, nextBoosterIn: nextIn = 0 } = player ?? {};
-  // nextIn = 0 means a full stock: counted as one more period (the count stops at the maximum).
-  stockFrom = Date.now() - stock * every - (nextIn ? every - nextIn * 1000 : every);
-  if (player) setDaily(player.daily);
+  if (!player) return;
+  for (const [id, { cooldownSeconds }] of Object.entries(state.meta.stocks)) {
+    const every = cooldownSeconds * 1000;
+    const { stock = 0, nextIn = 0 } = player.stocks?.[id] ?? {};
+    // nextIn = 0 means a full stock: counted as one more period (the count stops at the maximum).
+    stockFrom[id] = Date.now() - stock * every - (nextIn ? every - nextIn * 1000 : every);
+  }
+  setDaily(player.daily);
 }
 
-/** { stock, max, nextIn }: boosters you can open now, and seconds before the next one (0 when full). */
-export function boosterStock() {
-  const { cooldownSeconds, stackMax: max } = state.meta.booster;
-  const every = cooldownSeconds * 1000;
-  const elapsed = Date.now() - stockFrom;
-  const stock = Math.max(0, Math.min(max, Math.floor(elapsed / every)));
-  const nextIn = stock >= max ? 0 : Math.ceil((every - (elapsed % every)) / 1000);
-  return { stock, max, nextIn };
+/**
+ * A booster stock ('era' or 'all-stars', see setOf(id).stock): { stock, max, every, nextIn }:
+ * boosters you can open now, the most you can keep, seconds between two of them, and
+ * seconds before the next one (0 when full).
+ */
+export function boosterStock(id) {
+  const { cooldownSeconds: every, stackMax: max } = state.meta.stocks[id];
+  const elapsed = Date.now() - stockFrom[id];
+  const stock = Math.max(0, Math.min(max, Math.floor(elapsed / (every * 1000))));
+  const nextIn = stock >= max ? 0 : Math.ceil((every * 1000 - (elapsed % (every * 1000))) / 1000);
+  return { stock, max, every, nextIn };
 }
+
+/** Kira price of a booster of a set at the market (an era booster costs less than All-Stars). */
+export const priceOf = (setId) => state.meta.market.prices[setOf(setId).stock];
 
 /**
  * Today's daily reward (see dailyStatus in server/booster.js): { today, available, claims, day,
@@ -180,7 +190,7 @@ function addPulls(boosters) {
   emit();
 }
 
-/** Opens `count` boosters of a set. Returns the boosters (cards in reveal order, with isNew). */
+/** Opens `count` boosters of a set from its stock. Returns the boosters (cards in reveal order, with isNew). */
 export async function openBoosters(setId, count = 1) {
   const result = await api(playerPath('/boosters'), { method: 'POST', body: { setId, count } });
   setPlayer(result.player);
@@ -203,6 +213,39 @@ export async function refreshDaily() {
  */
 export async function claimDaily(setId) {
   const result = await api(playerPath('/daily'), { method: 'POST', body: { setId } });
+  setPlayer(result.player);
+  addPulls([result.booster]);
+  return [result.booster];
+}
+
+// ── Kira market ──────────────────────────────────────────────────────────────
+
+/** { kira, spare: { cardId: duplicates you can recycle } } */
+export async function fetchMarket() {
+  const market = await api(playerPath('/market'));
+  state.player.kira = market.kira;
+  emit();
+  return market;
+}
+
+/**
+ * Recycles duplicates into Kira: `cards` = [{ cardId, count }].
+ * Returns { recycled, earned, kira, spare } (spare: what is left to recycle).
+ */
+export async function recycleCards(cards) {
+  const result = await api(playerPath('/market/recycle'), { method: 'POST', body: { cards } });
+  for (const { cardId, count } of cards) {
+    const entry = state.owned.get(cardId);
+    if (entry) entry.count -= count;
+  }
+  setPlayer(result.player);
+  emit();
+  return result;
+}
+
+/** Buys a booster of `setId` with Kira, opened at once. Returns [booster], like openBoosters. */
+export async function buyBooster(setId) {
+  const result = await api(playerPath('/market/buy'), { method: 'POST', body: { setId } });
   setPlayer(result.player);
   addPulls([result.booster]);
   return [result.booster];

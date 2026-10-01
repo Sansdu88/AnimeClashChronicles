@@ -9,6 +9,8 @@ import { toast } from './ui/toast.js';
 import { renderAuth } from './views/auth.js';
 import { renderOpen } from './views/open.js';
 import { openDailyPopup, renderDaily } from './views/daily.js';
+import { renderMarket } from './views/market.js';
+import { rollNumber } from './ui/kira.js';
 import { renderCollection } from './views/collection.js';
 import { renderStats } from './views/stats.js';
 import { renderRules } from './views/rules.js';
@@ -19,6 +21,7 @@ import { boosterStock, dailyStatus, fetchNotifications, refreshDaily, syncCollec
 const ROUTES = {
   open: renderOpen,
   daily: renderDaily,
+  market: renderMarket,
   collection: renderCollection,
   stats: renderStats,
   rules: renderRules,
@@ -105,7 +108,7 @@ function stopNotifications() {
 function paintStockBadge() {
   if (screen !== 'app' || !state.player) return;
   const badge = $('#open-badge');
-  const { stock } = boosterStock();
+  const stock = Object.keys(state.meta.stocks).reduce((sum, id) => sum + boosterStock(id).stock, 0);
   if (badge.textContent !== String(stock)) badge.textContent = stock;
   badge.hidden = !stock;
 }
@@ -186,6 +189,7 @@ function updateHeader() {
   if (!player) return;
   $('#player-name').textContent = player.name;
   $('#player-progress').textContent = `${player.stats.uniqueCards}/${player.stats.totalCards}`;
+  rollNumber($('#kira-balance'), player.kira);
 }
 
 function setupHeader() {
@@ -322,7 +326,7 @@ async function start() {
   window.addEventListener('mb:logout', doLogout);
   window.addEventListener('mb:friend-requests', (event) => pageBadge('friends', event.detail));
   window.addEventListener('mb:trades-waiting', (event) => pageBadge('trades', event.detail));
-  // Boosters in stock, on the "Open" link (the stock grows every 2 minutes), and the daily reward.
+  // Boosters in stock (both stocks), on the "Open" link, and the daily reward.
   setInterval(() => {
     paintStockBadge();
     paintDaily();

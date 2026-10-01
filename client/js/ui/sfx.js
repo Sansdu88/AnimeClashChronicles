@@ -104,6 +104,16 @@ const SOUNDS = {
     tone(1400, { start: 0.9, duration: 0.9, type: 'sawtooth', gain: 0.035, slideTo: 90 });
     [311, 370, 466, 554].forEach((note, i) => tone(note, { start: 1.1 + i * 0.05, duration: 2.6, type: 'triangle', gain: 0.05 }));
   },
+  // Kira market: a coin lands in the wallet, a pile of them (recycling many cards).
+  coin: () => {
+    tone(988, { duration: 0.08, type: 'square', gain: 0.05 });
+    tone(1319, { start: 0.08, duration: 0.3, type: 'square', gain: 0.05 });
+  },
+  kaching: () => {
+    noise({ duration: 0.25, gain: 0.12, from: 6000, to: 3000 });
+    arpeggio([1319, 1568, 1976, 2637], { start: 0.05, duration: 0.25, type: 'square', gain: 0.035, step: 0.06 });
+    tone(2637, { start: 0.3, duration: 0.6, type: 'triangle', gain: 0.05 });
+  },
   fanfare: () => {
     arpeggio([392, 523, 659, 784], { duration: 0.22, type: 'square', gain: 0.045, step: 0.11 });
     [523, 659, 784, 1047].forEach((note) => tone(note, { start: 0.48, duration: 1, type: 'triangle', gain: 0.07 }));
