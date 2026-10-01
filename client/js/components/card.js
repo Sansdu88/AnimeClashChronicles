@@ -17,7 +17,7 @@ function nameSize(name) {
 
 /**
  * @param card        card from the API
- * @param count       copies owned (a ×N badge is shown above 1)
+ * @param count       copies owned (a ×N badge is shown from 1, none for 0)
  * @param isNew       shows a NEW! sticker
  * @param tilt        enables the 3D/holo effect
  * @param interactive makes the card focusable and clickable on its own
@@ -59,7 +59,7 @@ export function cardHTML(card, { count = 0, isNew = false, tilt = false, interac
       <div class="card__glare" aria-hidden="true"></div>
     </div>
     ${isNew && html`<span class="card__new" aria-label="${t('card.newLabel')}">${t('card.new')}</span>`}
-    ${count > 1 && html`<span class="card__count" title="${t('card.copies', { count })}">×${count}</span>`}
+    ${count >= 1 && html`<span class="card__count" title="${t('card.copies', { count })}">×${count}</span>`}
   </article>`;
 }
 
