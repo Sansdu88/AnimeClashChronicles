@@ -8,7 +8,7 @@ function atLeastOneLabel(rarityId, chance) {
   if (rarityId === 'N') return '—';
   if (chance > 0.9999) return t('rules.guaranteed');
   const isRarest = rarityId === state.meta.rarities.at(-1).id;
-  return `${fmt.percent(chance, 1)}${isRarest ? '' : ` ${t('rules.orBetter')}`}`;
+  return `${fmt.percent(chance, 1, 3)}${isRarest ? '' : ` ${t('rules.orBetter')}`}`;
 }
 
 export function renderRules(main) {
@@ -59,8 +59,8 @@ export function renderRules(main) {
               ${rarities.map((r) => html`<tr class="r-${r.id}">
                 <td><span class="rarity-badge">${r.id}</span> ${rarityName(r.id)}</td>
                 <td>${r.cardCount}</td>
-                <td>${fmt.percent(booster.odds.normalSlot[r.id], 1)}</td>
-                <td>${fmt.percent(booster.odds.rareSlot[r.id], 1)}</td>
+                <td>${fmt.percent(booster.odds.normalSlot[r.id], 1, 3)}</td>
+                <td>${fmt.percent(booster.odds.rareSlot[r.id], 1, 3)}</td>
                 <td>${atLeastOneLabel(r.id, booster.odds.atLeastOne[r.id])}</td>
               </tr>`)}
             </tbody>
@@ -93,8 +93,8 @@ export function renderRules(main) {
             <tbody>
               ${rarities.map((r) => html`<tr class="r-${r.id}">
                 <td><span class="rarity-badge">${r.id}</span> ${rarityName(r.id)}</td>
-                <td>${superOdds.odds.normalSlot[r.id] ? fmt.percent(superOdds.odds.normalSlot[r.id], 1) : '—'}</td>
-                <td>${superOdds.odds.rareSlot[r.id] ? fmt.percent(superOdds.odds.rareSlot[r.id], 1) : '—'}</td>
+                <td>${superOdds.odds.normalSlot[r.id] ? fmt.percent(superOdds.odds.normalSlot[r.id], 1, 3) : '—'}</td>
+                <td>${superOdds.odds.rareSlot[r.id] ? fmt.percent(superOdds.odds.rareSlot[r.id], 1, 3) : '—'}</td>
                 <td>${atLeastOneLabel(r.id, superOdds.odds.atLeastOne[r.id])}</td>
               </tr>`)}
             </tbody>

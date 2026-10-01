@@ -6,8 +6,11 @@
 import { BOOSTER, DAILY, MARKET, RARITY_IDS, SUPER_BOOSTER, stockOf } from './config.js';
 import { HttpError } from './http.js';
 
-/** Odds are weights in tenths of a percent: the 6 rarities of a slot add up to 1000 (100%). */
-export const ODDS_TOTAL = 1000;
+/**
+ * Odds are weights in thousandths of a percent: the 6 rarities of a slot add up to
+ * 100,000 (100%), so an admin can set odds as small as 0.001%.
+ */
+export const ODDS_TOTAL = 100_000;
 const MAX_KIRA = 100_000;
 const MAX_SUPER_EVERY = 60;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -18,7 +21,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
  *   daily: { superEvery, sets: [setId offered], superDays: ['YYYY-MM-DD' everyone gets a Super Booster] } }
  */
 export function defaultSettings(shopSets) {
-  const weights = (rules) => ({ slotWeights: { ...rules.slotWeights }, rareSlotWeights: { ...rules.rareSlotWeights } });
+  const weights = (rules) => ({ slotWeights: toOddsTotal(rules.slotWeights), rareSlotWeights: toOddsTotal(rules.rareSlotWeights) });
   return {
     booster: weights(BOOSTER),
     superBooster: weights(SUPER_BOOSTER),
@@ -28,6 +31,20 @@ export function defaultSettings(shopSets) {
     },
     daily: { superEvery: DAILY.superEvery, sets: shopSets.map((set) => set.id), superDays: [] },
   };
+}
+
+/**
+ * Relative weights ({ rarity: weight }, like in config.js, or saved when odds were in tenths
+ * of a percent) brought to ODDS_TOTAL; the rounding difference goes to the biggest one.
+ */
+function toOddsTotal(weights) {
+  const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+  if (!(total > 0)) return weights; // nothing to scale: cleanWeights says what is wrong
+  const scaled = Object.fromEntries(Object.entries(weights).map(([id, weight]) => [id, Math.round((weight * ODDS_TOTAL) / total)]));
+  const drift = ODDS_TOTAL - Object.values(scaled).reduce((sum, weight) => sum + weight, 0);
+  const biggest = Object.keys(scaled).reduce((a, b) => (scaled[a] >= scaled[b] ? a : b));
+  scaled[biggest] += drift;
+  return scaled;
 }
 
 const invalid = (message) => new HttpError(400, message, null, 'invalid_settings');
@@ -40,7 +57,7 @@ function cleanWeights(value, name) {
     if (!isInt(weight, 0, ODDS_TOTAL)) throw invalid(`${name}.${id} must be an integer from 0 to ${ODDS_TOTAL}`);
   }
   const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
-  if (total !== ODDS_TOTAL) throw invalid(`The odds of ${name} add up to ${total / 10}%, not 100%`);
+  if (total !== ODDS_TOTAL) throw invalid(`The odds of ${name} add up to ${(total * 100) / ODDS_TOTAL}%, not 100%`);
   return weights;
 }
 
@@ -106,6 +123,9 @@ export function loadSettings(saved, defaults, context, log = console) {
         prices: { ...defaults.market.prices, ...value.prices },
         recycle: { ...defaults.market.recycle, ...value.recycle },
       };
+    } else if (key === 'booster' || key === 'superBooster') {
+      // Odds saved before (in tenths of a percent) are brought to the current precision.
+      section = { slotWeights: toOddsTotal(value.slotWeights ?? {}), rareSlotWeights: toOddsTotal(value.rareSlotWeights ?? {}) };
     } else if (key === 'daily') {
       const sets = (value.sets ?? []).filter((id) => context.setIds.includes(id));
       section = { ...defaults.daily, ...value, sets: sets.length ? sets : defaults.daily.sets };
