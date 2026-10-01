@@ -169,8 +169,9 @@ update public.players set is_admin = true where email = 'you@example.com';
 ```
 
 (`false` to remove it), then log in again. The server checks it on every admin call, and the admin tools
-never clear nor delete an admin. Admins have unlimited boosters (no waiting for the stocks); they are left
-out of the rankings and of the live drops. The settings are kept in memory by the server (one instance, as on
+never clear nor delete an admin. Admins have unlimited boosters (no waiting for the stocks), and the Super Booster
+as a 5th booster of the Open page (POST `/boosters` with `"setId": "super"`, admins only); they are left out
+of the rankings and of the live drops. The settings are kept in memory by the server (one instance, as on
 Render's free plan) and saved in `game_settings`, read at startup.
 
 ## Accounts and security

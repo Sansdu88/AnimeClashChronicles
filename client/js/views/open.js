@@ -68,10 +68,17 @@ export function packHTML(set) {
 const tearablePackHTML = (set) => html`<span class="stage-pack__half stage-pack__half--top">${packHTML(set)}</span>
   <span class="stage-pack__half stage-pack__half--bottom">${packHTML(set)}</span>`;
 
+/**
+ * The stock a set is opened from. The Super Booster has none (only the daily reward gives it,
+ * and the admins, whose stocks are unlimited): it counts as All-Stars.
+ */
+const stockIdOf = (set) => set.stock ?? 'all-stars';
+
 function packTileHTML(set) {
   const cards = setCards(set);
   const have = cards.filter((card) => state.owned.has(card.id)).length;
-  return html`<div class="pack-tile" data-set="${set.id}" data-stock="${set.stock}">
+  const buyable = Boolean(set.stock);
+  return html`<div class="pack-tile${isSuper(set) ? ' pack-tile--super' : ''}" data-set="${set.id}" data-stock="${stockIdOf(set)}">
     <button class="pack" type="button" data-open="${set.id}" data-count="1" aria-label="${t('open.openOne', { set: setName(set.id) })}">${packHTML(set)}</button>
     <div class="pack-tile__progress" title="${t('open.progress', { have, total: cards.length })}">
       <span class="meter"><span class="meter__fill" style="width:${((have / cards.length) * 100).toFixed(1)}%"></span></span>
@@ -80,9 +87,10 @@ function packTileHTML(set) {
     <div class="pack-tile__actions">
       <button class="btn btn--primary" type="button" data-open="${set.id}" data-count="1">${t('open.open')}</button>
       <button class="btn btn--secondary" type="button" data-open="${set.id}" data-count="many" hidden></button>
-      <button class="btn btn--kira" type="button" data-buy="${set.id}" hidden
-        aria-label="${t('market.buyLabel', { set: setName(set.id), price: priceOf(set.id) })}">${t('market.buy')} · ${kiraHTML(priceOf(set.id))}</button>
+      ${buyable && html`<button class="btn btn--kira" type="button" data-buy="${set.id}" hidden
+        aria-label="${t('market.buyLabel', { set: setName(set.id), price: priceOf(set.id) })}">${t('market.buy')} · ${kiraHTML(priceOf(set.id))}</button>`}
     </div>
+    ${isSuper(set) && html`<span class="admin-badge">${t('open.adminOnly')}</span>`}
   </div>`;
 }
 
@@ -101,14 +109,14 @@ function stockHTML(id) {
 
 /** Opens `count` boosters of a set from its stock: one, several in a row, or the ×10 show for a full stock. */
 function startOpening(setId, count, stage) {
-  if (count >= state.meta.stocks[setOf(setId).stock].stackMax) openTen(setId, stage);
+  if (count >= state.meta.stocks[stockIdOf(setOf(setId))].stackMax) openTen(setId, stage);
   else if (count > 1) openMany(setId, count, stage);
   else openSingle(setId, stage);
 }
 
 /** Text and look of an "Open ×N" button (the full stock gets the ×10 show). */
 function paintManyButton(button, count, setId) {
-  const special = count >= state.meta.stocks[setOf(setId).stock].stackMax;
+  const special = count >= state.meta.stocks[stockIdOf(setOf(setId))].stackMax;
   button.textContent = special ? t('open.openTen', { count }) : t('open.openMany', { count });
   button.classList.toggle('btn--special', special);
   button.setAttribute('aria-label', t(special ? 'open.openTenLabel' : 'open.openManyLabel', { count, set: setName(setId) }));
@@ -116,6 +124,8 @@ function paintManyButton(button, count, setId) {
 
 export function renderOpen(main) {
   const { player, meta } = state;
+  // Admins also get the Super Booster, unlimited like their other boosters.
+  const shelf = player.isAdmin && meta.daily.superSet ? [...meta.sets, meta.daily.superSet] : meta.sets;
   mount(
     main,
     html`<section class="view view-open">
@@ -134,7 +144,7 @@ export function renderOpen(main) {
         <span class="daily-banner__text"></span>
         <span class="daily-banner__cta">${t('open.dailyClaim')} →</span>
       </a>
-      <div class="shelf">${meta.sets.map(packTileHTML)}</div>
+      <div class="shelf${shelf.length > 4 ? ' shelf--five' : ''}">${shelf.map(packTileHTML)}</div>
       <p class="open-footer">
         <span>${t('open.collection')} <strong>${player.stats.uniqueCards}/${player.stats.totalCards}</strong>
           (${fmt.percent(player.stats.completion)})</span>
@@ -154,7 +164,7 @@ export function renderOpen(main) {
       openBought(buy.dataset.buy);
       return;
     }
-    const { stock } = boosterStock(setOf(button.dataset.open).stock);
+    const { stock } = boosterStock(stockIdOf(setOf(button.dataset.open)));
     startOpening(button.dataset.open, button.dataset.count === 'many' ? Math.min(stock, meta.booster.maxPerRequest) : 1);
   });
 
@@ -210,8 +220,10 @@ export function renderOpen(main) {
       manyButton.hidden = many < 2;
       paintManyButton(manyButton, many, tile.dataset.set);
       const buy = $('[data-buy]', tile);
-      buy.hidden = stock > 0;
-      buy.disabled = state.player.kira < priceOf(tile.dataset.set);
+      if (buy) {
+        buy.hidden = stock > 0;
+        buy.disabled = state.player.kira < priceOf(tile.dataset.set);
+      }
     }
     return true;
   });
@@ -310,7 +322,7 @@ function nextButtons(slot, set, stage) {
   let waited = false;
   everySecond(() => {
     if (!slot.isConnected || stage.closed) return false;
-    const { stock, nextIn } = boosterStock(set.stock);
+    const { stock, nextIn } = boosterStock(stockIdOf(set));
     const many = Math.min(stock, state.meta.booster.maxPerRequest);
     const key = stock > 0 ? `stock ${stock}` : `wait ${nextIn}`;
     if (key === shown) return true;
@@ -691,7 +703,7 @@ function displayHTML(set, count) {
 
 async function openTen(setId, stage = createStage()) {
   const set = setOf(setId);
-  const count = state.meta.stocks[set.stock].stackMax;
+  const count = state.meta.stocks[stockIdOf(set)].stackMax;
   const show = showFor(set);
   const run = ++stage.run;
   const stale = () => stage.closed || stage.run !== run;
