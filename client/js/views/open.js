@@ -6,10 +6,22 @@
  * (the packs burst one after the other, then all the cards flip in a cascade),
  * and a full stock of 10 gets the ×10 show: a giant booster whose seal breaks
  * in 3 taps, with anime cut-ins themed after the set (components/booster-show.js).
+ * The daily reward (views/daily.js) opens here too: the chosen booster, or every
+ * 5 days the Super Booster with its own entrance.
  */
-import { $, $$, escapeHtml, fmt, html, mount, raw, wait } from '../dom.js';
+import { $, $$, escapeHtml, everySecond, fmt, html, mount, raw, wait } from '../dom.js';
 import { cardText, errorText, rarityName, setName, setTagline, t, tHtml } from '../i18n.js';
-import { boosterStock, byRarity, openBoosters, reloadPlayer, setOf, state } from '../state.js';
+import {
+  boosterStock,
+  byRarity,
+  claimDaily,
+  dailyStatus,
+  openBoosters,
+  refreshDaily,
+  reloadPlayer,
+  setOf,
+  state,
+} from '../state.js';
 import { cardBackHTML, cardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
 import { clearCutIns, confettiStorm, cutIn, scatterPacks, showFor } from '../components/booster-show.js';
@@ -21,14 +33,24 @@ import { toast } from '../ui/toast.js';
 const setCards = (set) => state.cards.filter((card) => !set.era || card.era === set.era);
 const packStyle = (set) => `--c1:${set.colors[0]};--c2:${set.colors[1]}`;
 const BIG = new Set(['SSR', 'UR', 'REV']);
+const isSuper = (set) => set.id === state.meta.daily.superSet?.id;
 
-function packHTML(set) {
-  const art = set.featured?.image;
-  return html`<span class="pack__inner" style="${packStyle(set)}">
+/** The picture of a pack: its set's most popular card, or the 4 most popular ones on the Super Booster. */
+function packArtHTML(set) {
+  const img = (image) => html`<img src="${image.src}" alt="" loading="lazy" draggable="false">`;
+  if (isSuper(set)) {
+    const top = state.cards.filter((card) => card.image).sort((a, b) => b.power - a.power).slice(0, 4);
+    return html`<span class="pack__art pack__art--mosaic">${top.map((card) => img(card.image))}</span>`;
+  }
+  return html`<span class="pack__art">${set.featured?.image && img(set.featured.image)}</span>`;
+}
+
+export function packHTML(set) {
+  return html`<span class="pack__inner${isSuper(set) ? ' pack__inner--super' : ''}" style="${packStyle(set)}">
     <span class="pack__crimp pack__crimp--top"></span>
     <span class="pack__body">
       <span class="pack__brand">ANIME CLASH</span>
-      <span class="pack__art">${art && html`<img src="${art.src}" alt="" loading="lazy" draggable="false">`}</span>
+      ${packArtHTML(set)}
       <span class="pack__name">${setName(set.id)}</span>
       <span class="pack__tagline">${setTagline(set.id)}</span>
       <span class="pack__count">${t('open.cards')}</span>
@@ -56,14 +78,6 @@ function packTileHTML(set) {
       <button class="btn btn--secondary" type="button" data-open="${set.id}" data-count="many" hidden></button>
     </div>
   </div>`;
-}
-
-/** Calls `paint()` now and every second, until it returns false. */
-function everySecond(paint) {
-  const tick = () => {
-    if (paint() !== false) setTimeout(tick, 1000);
-  };
-  tick();
 }
 
 /** Opens `count` boosters of a set: one, several in a row, or the ×10 show for a full stock. */
@@ -98,6 +112,10 @@ export function renderOpen(main) {
         <p class="stock__text"><b class="stock__count">0</b>/${max} <span>${t('open.stockLabel')}</span></p>
         <p class="stock__next"></p>
       </div>
+      <a class="daily-banner" href="#/daily" hidden>
+        <span class="daily-banner__text"></span>
+        <span class="daily-banner__cta">${t('open.dailyClaim')} →</span>
+      </a>
       <div class="shelf">${meta.sets.map(packTileHTML)}</div>
       <p class="open-footer">
         <span>${t('open.collection')} <strong>${player.stats.uniqueCards}/${player.stats.totalCards}</strong>
@@ -117,13 +135,19 @@ export function renderOpen(main) {
   });
 
   // The stock fills up while the page is open: slots, countdown, buttons.
+  // The daily reward banner shows while it is waiting to be claimed.
   const panel = $('.stock', main);
   const slots = $$('.stock__slot', panel);
   const openButtons = $$('[data-open]', main);
   const manyButtons = $$('[data-count="many"]', main);
+  const banner = $('.daily-banner', main);
   let previous = null;
   everySecond(() => {
     if (!panel.isConnected) return false; // the page was left or redrawn
+    const daily = dailyStatus();
+    banner.hidden = !daily.available;
+    banner.classList.toggle('daily-banner--super', daily.super);
+    $('.daily-banner__text', banner).textContent = `🎁 ${t(daily.super ? 'open.dailySuper' : 'open.dailyReady')}`;
     const { stock, nextIn } = boosterStock();
     const every = meta.booster.cooldownSeconds;
     slots.forEach((slot, i) => {
@@ -192,6 +216,12 @@ function createStage() {
   };
   const removeLayer = pushLayer(() => stage.close());
   element.querySelector('.stage__close').addEventListener('click', () => stage.close());
+  // A link to the page already behind the stage does not change the URL (no hashchange): close the stage.
+  const route = (hash) => hash.replace(/^#\/?/, '');
+  element.addEventListener('click', (event) => {
+    const link = event.target.closest('a[href^="#"]');
+    if (link && route(link.hash) === route(location.hash)) stage.close();
+  });
   return stage;
 }
 
@@ -211,14 +241,18 @@ function preloadImages(cards, timeout = 3500) {
 
 const nextClick = (element) => new Promise((resolve) => element.addEventListener('click', resolve, { once: true }));
 
-/** Asks the server for boosters; a failed request closes the stage (the stock is reloaded if it was wrong). */
-async function requestBoosters(stage, setId, count, minWait) {
+/**
+ * Asks the server for boosters (`ask()`: openBoosters or claimDaily); a failed request closes
+ * the stage (the stock or the daily reward is reloaded if it was wrong).
+ */
+async function requestBoosters(stage, ask, minWait) {
   try {
-    const [boosters] = await Promise.all([openBoosters(setId, count), wait(minWait)]);
+    const [boosters] = await Promise.all([ask(), wait(minWait)]);
     return boosters;
   } catch (err) {
     toast(errorText(err), 'error');
     if (err.code === 'booster_cooldown') reloadPlayer().catch(() => {});
+    if (err.code === 'daily_claimed' || err.code === 'not_super_day') refreshDaily().catch(() => {});
     stage.close();
     return null;
   }
@@ -265,7 +299,8 @@ function nextButtons(slot, set, stage) {
 
 // ── Single booster ──────────────────────────────────────────────────────────
 
-async function openSingle(setId, stage = createStage()) {
+/** `daily` ({ day, cycle }): the daily reward, claimed when the pack is torn open. */
+async function openSingle(setId, stage = createStage(), daily = null) {
   const set = setOf(setId);
   const run = ++stage.run;
   const stale = () => stage.closed || stage.run !== run;
@@ -276,12 +311,21 @@ async function openSingle(setId, stage = createStage()) {
   mount(
     stage.content,
     html`<div class="stage-pack-wrap">
+      ${daily && html`<div class="daily-intro">
+        <p class="mega__title mega__title--small">🎁 ${t('daily.stageTitle')}</p>
+        <p class="giant__sub">${t('daily.stageDay', daily)}</p>
+      </div>`}
       <button class="stage-pack" type="button" aria-label="${t('stage.tearLabel', { set: setName(set.id) })}">
         ${tearablePackHTML(set)}
       </button>
       <p class="stage__hint bubble">${t('stage.tapPack')}</p>
     </div>`,
   );
+  if (daily) {
+    sfx.play('R');
+    burst(window.innerWidth * 0.1, window.innerHeight * 0.9, { colors: ['#fff', '#ffd23f', ...set.colors], count: 40, power: 1.6 });
+    burst(window.innerWidth * 0.9, window.innerHeight * 0.9, { colors: ['#fff', '#ffd23f', ...set.colors], count: 40, power: 1.6 });
+  }
   const pack = $('.stage-pack', stage.content);
   pack.focus({ preventScroll: true });
   await nextClick(pack);
@@ -292,7 +336,7 @@ async function openSingle(setId, stage = createStage()) {
   $('.stage__hint', stage.content).textContent = t('stage.opening');
   sfx.play('shake');
 
-  const boosters = await requestBoosters(stage, setId, 1, 650);
+  const boosters = await requestBoosters(stage, daily ? () => claimDaily(setId) : () => openBoosters(setId, 1), 650);
   if (!boosters) return;
   const [booster] = boosters;
   await preloadImages(booster.cards);
@@ -306,10 +350,11 @@ async function openSingle(setId, stage = createStage()) {
   onomatopoeia(t('fx.tear'), { x: box.left + box.width / 2, y: box.top + box.height * 0.12, color: '#fff', size: 'l' });
   await wait(600);
   if (stale()) return;
-  showReveal(stage, set, booster, run);
+  showReveal(stage, set, booster, run, daily);
 }
 
-function showReveal(stage, set, booster, run) {
+/** `daily`: the daily reward, which ends with a link to the shelf instead of "Open another". */
+function showReveal(stage, set, booster, run, daily = null) {
   const cards = booster.cards;
   const stale = () => stage.closed || stage.run !== run;
   stage.element.dataset.phase = 'reveal';
@@ -387,11 +432,14 @@ function showReveal(stage, set, booster, run) {
           ${t('stage.best')} <strong class="rarity-text r-${best.rarity}">${best.rarity}</strong> ${cardText(best).name}
         </p>
         <div class="btn-row">
-          <span class="btn-row" data-slot="next"></span>
+          ${daily
+            ? html`<a class="btn btn--primary btn--big" href="#/">${t('daily.openStock')}</a>`
+            : html`<span class="btn-row" data-slot="next"></span>`}
           <a class="btn btn--ghost-light" href="#/collection">${t('stage.myCollection')}</a>
         </div>`,
     );
-    nextButtons($('[data-slot="next"]', stage.content), set, stage);
+    if (daily) $('.reveal__footer .btn', stage.content).focus({ preventScroll: true });
+    else nextButtons($('[data-slot="next"]', stage.content), set, stage);
   }
 
   stage.content.onclick = (event) => {
@@ -409,6 +457,78 @@ function showReveal(stage, set, booster, run) {
     }
   };
   flips[0].focus({ preventScroll: true });
+}
+
+// ── Daily reward ────────────────────────────────────────────────────────────
+
+const SUPER_COLORS = ['#ffd23f', '#fff3b0', '#ff2e88', '#8338ec', '#3a86ff', '#06d6a0', '#ffffff'];
+
+/**
+ * Opens today's daily reward at once: the booster of `setId`, or on its day the
+ * Super Booster. It is claimed when the pack is torn open (closing before keeps it).
+ */
+export function openDaily(setId) {
+  const { day, cycle, super: isSuperDay } = dailyStatus();
+  const stage = createStage();
+  if (isSuperDay) openSuper(stage, { day, cycle });
+  else openSingle(setId, stage, { day, cycle });
+}
+
+/** The Super Booster drops from the sky in a rainbow halo; one tap charges it up until it blows. */
+async function openSuper(stage, daily) {
+  const set = setOf(state.meta.daily.superSet.id);
+  const run = ++stage.run;
+  const stale = () => stage.closed || stage.run !== run;
+  stage.element.dataset.phase = 'super';
+  stage.element.dataset.show = 'super';
+  stage.element.style.cssText = packStyle(set);
+
+  mount(
+    stage.content,
+    html`<div class="super">
+      <p class="mega__title super__title">${t('daily.stageSuper')}</p>
+      <p class="giant__sub">${t('daily.stageDay', daily)} · ${t('daily.stageSuperSub')}</p>
+      <div class="super__scene">
+        <div class="giant__rays" aria-hidden="true"></div>
+        <span class="super__aura" aria-hidden="true"></span>
+        <button class="stage-pack stage-pack--super" type="button" aria-label="${t('daily.superTearLabel')}">${tearablePackHTML(set)}</button>
+      </div>
+      <p class="stage__hint bubble">${t('daily.superTap')}</p>
+    </div>`,
+  );
+  const scene = $('.super', stage.content);
+  const pack = $('.stage-pack', stage.content);
+  sfx.play('fanfare');
+  setTimeout(() => !stale() && confettiStorm(SUPER_COLORS, { rounds: 3 }), 500);
+  pack.focus({ preventScroll: true });
+  await nextClick(pack);
+  if (stale()) return;
+
+  // It shakes harder and harder and the halo swells while the server answers…
+  pack.disabled = true;
+  scene.classList.add('is-charging');
+  $('.stage__hint', stage.content).textContent = t('stage.opening');
+  sfx.play('charge');
+  setTimeout(() => !stale() && sfx.play('charge'), 700);
+  const boosters = await requestBoosters(stage, () => claimDaily(set.id), 1500);
+  if (!boosters) return;
+  const [booster] = boosters;
+  await preloadImages(booster.cards);
+  if (stale()) return;
+
+  // …then it blows up.
+  scene.classList.remove('is-charging');
+  scene.classList.add('is-open');
+  pack.classList.add('is-torn');
+  const box = pack.getBoundingClientRect();
+  sfx.play('boom');
+  flash('#fff', 750);
+  shakeScreen();
+  confettiStorm(SUPER_COLORS, { rounds: 6 });
+  onomatopoeia(t('daily.superBoom'), { x: box.left + box.width / 2, y: box.top + box.height * 0.25, color: '#ffd23f', size: 'xl', tilt: -8 });
+  await wait(1100);
+  if (stale()) return;
+  showReveal(stage, set, booster, run, daily);
 }
 
 // ── Several boosters in a row ───────────────────────────────────────────────
@@ -443,7 +563,7 @@ async function openMany(setId, count, stage = createStage()) {
   sfx.play('shake');
   setTimeout(() => !stale() && sfx.play('charge'), 350);
 
-  const boosters = await requestBoosters(stage, setId, count, 1100);
+  const boosters = await requestBoosters(stage, () => openBoosters(setId, count), 1100);
   if (!boosters) return;
   await preloadImages(boosters.flatMap((booster) => booster.cards), 5000);
   if (stale()) return;
@@ -566,7 +686,7 @@ async function openTen(setId, stage = createStage()) {
   for (let hit = 1; hit <= SEALS && !skipped; hit++) {
     await Promise.race([nextClick(display), skip]);
     if (stale()) return;
-    request ??= requestBoosters(stage, setId, count, 0); // asked at the first tap, ready at the last
+    request ??= requestBoosters(stage, () => openBoosters(setId, count), 0); // asked at the first tap, ready at the last
     if (skipped) break;
     display.disabled = true;
     scene.dataset.hit = hit;

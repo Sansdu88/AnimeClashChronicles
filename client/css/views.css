@@ -1291,3 +1291,384 @@
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   }
 }
+
+/* ── Daily reward ───────────────────────────────────────────────────────── */
+
+/* Ready to claim: a pulsing "!" on the "Daily" link. */
+.nav__badge--daily {
+  animation: daily-ping 1.4s ease-in-out infinite;
+}
+
+@keyframes daily-ping {
+  50% {
+    transform: scale(1.25) rotate(-8deg);
+  }
+}
+
+/* Banner of the Open page while the daily reward waits. */
+.daily-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 14px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 18px auto -10px;
+  padding: 7px 8px 7px 20px;
+  background: var(--yellow);
+  border: var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  font-weight: 900;
+  text-decoration: none;
+  transition: transform 0.15s;
+}
+
+.daily-banner[hidden] {
+  display: none;
+}
+
+.daily-banner:hover {
+  transform: translateY(-2px) rotate(-1deg);
+}
+
+.daily-banner--super {
+  background: linear-gradient(100deg, #ffd23f, #ff9f1c 30%, #ffd23f 50%, #fff3b0 60%, #ffd23f 80%);
+  background-size: 250% 100%;
+  animation: special-shine 2.2s linear infinite;
+}
+
+.daily-banner__cta {
+  padding: 5px 14px 3px;
+  background: var(--red);
+  color: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 1px;
+  text-shadow: 1px 1px 0 var(--ink);
+}
+
+/* The daily panel (page and popup): the stamp card of the cycle, then today's reward. */
+.daily {
+  display: grid;
+  justify-items: center;
+  gap: 26px;
+  margin-top: 24px;
+  text-align: center;
+}
+
+.daily-track {
+  display: grid;
+  grid-template-columns: repeat(var(--days, 5), minmax(0, 1fr));
+  gap: 12px;
+  width: min(100%, 660px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daily-day {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 10px 6px 8px;
+  background: var(--paper-2);
+  border: var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.daily-day__label {
+  font-family: var(--font-display);
+  font-size: 19px;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
+/* Today's box says "Today" (just its day number on phones, where the word is too long). */
+.daily-day__today + .daily-day__number {
+  display: none;
+}
+
+.daily-day__pack {
+  display: block;
+  width: min(54px, 100%);
+  aspect-ratio: 5 / 8;
+  filter: drop-shadow(2px 3px 0 rgba(22, 19, 15, 0.8));
+}
+
+.daily-day__reward {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.daily-day.is-today {
+  z-index: 1;
+  background: var(--yellow);
+  animation: today-bounce 1.4s ease-in-out infinite;
+}
+
+@keyframes today-bounce {
+  50% {
+    transform: translateY(-6px) rotate(-1.5deg);
+  }
+}
+
+.daily-day.is-claimed .daily-day__pack {
+  opacity: 0.35;
+  filter: grayscale(0.8);
+}
+
+/* An ink stamp on the days already claimed. */
+.daily-day__stamp {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  padding-top: 3px;
+  border: 3px solid var(--red);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--red);
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1;
+  transform: rotate(-14deg);
+  animation: stamp-in 0.35s calc(var(--i) * 90ms) cubic-bezier(0.2, 0.9, 0.3, 1.5) both;
+}
+
+@keyframes stamp-in {
+  from {
+    transform: rotate(-14deg) scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* The last day: the Super Booster. */
+.daily-day--super {
+  color: #fff;
+  background: linear-gradient(160deg, #3c096c, #7b2cbf 55%, #10002b);
+  box-shadow: var(--shadow-sm), inset 0 0 0 3px var(--yellow);
+}
+
+.daily-day--super .daily-day__reward {
+  color: var(--yellow);
+}
+
+.daily-day--super.is-today {
+  background: linear-gradient(160deg, #5a189a, #9d4edd 55%, #240046);
+  box-shadow: var(--shadow-sm), inset 0 0 0 3px var(--yellow), 0 0 20px 6px rgba(255, 210, 63, 0.75);
+}
+
+.daily__claim {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.daily__heading {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(28px, 4vw, 38px);
+  letter-spacing: 1px;
+  line-height: 1.05;
+}
+
+.daily__hint {
+  margin: -8px 0 6px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+/* The 4 boosters to choose from. */
+.daily-choice {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 150px));
+  justify-content: center;
+  gap: 20px 24px;
+  width: 100%;
+}
+
+.daily-pick {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.daily-pick .pack,
+.daily-super .pack,
+.daily-info__pack {
+  pointer-events: none;
+}
+
+.daily-pick:hover .pack,
+.daily-pick:focus-visible .pack {
+  transform: translateY(-10px) rotate(-2.5deg) scale(1.03);
+}
+
+.daily-pick:hover .pack__foil {
+  background-position: -60% 0;
+}
+
+.daily-pick__name {
+  font-family: var(--font-display);
+  font-size: 19px;
+  letter-spacing: 1px;
+  line-height: 1.1;
+}
+
+/* Super Booster day: the pack floats in its rainbow halo. */
+.daily-super {
+  display: grid;
+  place-items: center;
+  width: 170px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.daily-super > * {
+  grid-area: 1 / 1;
+}
+
+.daily-super .pack {
+  position: relative;
+  animation: giant-float 3s ease-in-out infinite;
+}
+
+.daily-super__aura {
+  width: 150%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: conic-gradient(#ff2e88, #ffbe0b, #06d6a0, #3a86ff, #8338ec, #ff2e88);
+  filter: blur(30px);
+  opacity: 0.45;
+  animation: aura-spin 4s linear infinite;
+  transition: opacity 0.2s;
+}
+
+.daily-super:hover .daily-super__aura,
+.daily-super:focus-visible .daily-super__aura {
+  opacity: 0.75;
+}
+
+/* Already claimed: the countdown. */
+.daily-done {
+  display: grid;
+  gap: 8px;
+}
+
+.daily-done p {
+  margin: 0;
+}
+
+.daily-done__title {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 5vw, 44px);
+  letter-spacing: 1px;
+  line-height: 1;
+  color: var(--red-dark);
+}
+
+.daily-done__next {
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: 1px;
+}
+
+.daily-done__tomorrow {
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+/* The Super Booster, explained (Daily page). */
+.daily-info {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  margin-top: 24px;
+}
+
+.daily-info__pack {
+  flex: 0 0 110px;
+}
+
+.daily-info p {
+  margin: 0 0 8px;
+}
+
+/* The popup. */
+.modal--daily .modal__panel {
+  width: min(780px, 100%);
+}
+
+.hero--popup {
+  padding: 18px 16px 20px;
+}
+
+.hero--popup .hero__title {
+  font-size: clamp(38px, 7vw, 62px);
+}
+
+.daily-popup .btn-row {
+  margin-top: 18px;
+}
+
+@media (max-width: 600px) {
+  .daily-track {
+    gap: 6px;
+  }
+
+  .daily-day {
+    padding-inline: 2px;
+  }
+
+  .daily-day__label {
+    font-size: 15px;
+  }
+
+  .daily-day__today {
+    display: none;
+  }
+
+  .daily-day__today + .daily-day__number {
+    display: inline;
+  }
+
+  .daily-day__reward {
+    font-size: 9px;
+    letter-spacing: 0;
+  }
+
+  .daily-day__stamp {
+    width: 38px;
+    height: 38px;
+    margin: -19px 0 0 -19px;
+    font-size: 24px;
+  }
+
+  .daily-choice {
+    grid-template-columns: repeat(2, minmax(0, 140px));
+  }
+
+  .daily-info {
+    flex-direction: column;
+    text-align: center;
+  }
+}

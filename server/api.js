@@ -3,8 +3,8 @@
  * Player routes need a session (cookie set by /api/auth/login, or an
  * "Authorization: Bearer <token>" header) and only give access to your own player.
  */
-import { BOOSTER, ERAS, RARITIES, RARITY_IDS, SCORE, TYPES } from './config.js';
-import { boosterOdds, boosterStock, collectionScore, openBooster } from './booster.js';
+import { BOOSTER, DAILY, ERAS, RARITIES, RARITY_IDS, SCORE, SUPER_BOOSTER, TYPES } from './config.js';
+import { boosterOdds, boosterStock, collectionScore, dailyStatus, openBooster } from './booster.js';
 import { compareByRarity } from './catalog.js';
 import { HttpError, createRouter, reply } from './http.js';
 import {
@@ -67,9 +67,13 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   const router = createRouter();
   const odds = boosterOdds();
   const totalCards = catalog.cards.length;
-  const setIds = catalog.sets.map((set) => set.id);
+  // The Super Booster is only given by the daily reward: the shop sets are the others.
+  const superSet = catalog.getSet(DAILY.superSetId);
+  const shopSets = catalog.sets.filter((set) => set !== superSet);
+  const setIds = shopSets.map((set) => set.id);
   const loginLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
   const opening = new Set(); // players whose booster is being saved (blocks double clicks)
+  const claiming = new Set(); // players whose daily reward is being saved
 
   const publicSet = (set) => ({
     id: set.id,
@@ -130,7 +134,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
         byRarity: Object.fromEntries(
           RARITY_IDS.map((id) => [id, progress(catalog.cards.filter((card) => card.rarity === id))]),
         ),
-        bySet: Object.fromEntries(catalog.sets.map((set) => [set.id, progress(set.cards)])),
+        bySet: Object.fromEntries(shopSets.map((set) => [set.id, progress(set.cards)])),
       },
     };
   }
@@ -140,15 +144,27 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   /** { stock, nextIn }: boosters the player can open now, seconds before the next one (0 when full). */
   const stockOf = async (playerId) => boosterStock(await store.boostersFrom(playerId));
 
+  /** Daily reward status (see dailyStatus in booster.js). */
+  const dailyOf = async (playerId) => dailyStatus(await store.dailyClaims(playerId));
+
+  /** A booster just opened, as the API returns it: its cards in reveal order, with `isNew`. */
+  const openedBooster = (booster) => ({
+    id: booster.id,
+    setId: booster.setId,
+    openedAt: booster.openedAt,
+    cards: booster.pulls.map(({ card, isNew }) => ({ ...card, isNew })),
+  });
+
   /** Seconds before the stock holds `count` boosters. */
   const secondsUntil = ({ stock, nextIn }, count) =>
     stock >= count ? 0 : nextIn + (count - stock - 1) * BOOSTER.cooldownSeconds;
 
   async function profile(player) {
-    const [stats, { entries, summary }, { stock, nextIn }] = await Promise.all([
+    const [stats, { entries, summary }, { stock, nextIn }, daily] = await Promise.all([
       store.stats(player.id),
       collectionOf(player.id),
       stockOf(player.id),
+      dailyOf(player.id),
     ]);
     const cardsPulled = Object.values(stats.pullsByRarity).reduce((sum, n) => sum + n, 0);
     return {
@@ -161,12 +177,14 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       // Boosters in stock (at most BOOSTER.stackMax), seconds before the next one (0 when full).
       boosterStock: stock,
       nextBoosterIn: nextIn,
+      // Today's daily reward: claimed or not, day of the cycle, Super Booster or not.
+      daily,
     };
   }
 
-  /** What friends can see of a player (no e-mail). */
+  /** What friends can see of a player (no e-mail, no daily reward). */
   async function publicProfile(player) {
-    const { email, ...rest } = await profile(player);
+    const { email, daily, ...rest } = await profile(player);
     return rest;
   }
 
@@ -284,8 +302,13 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     })),
     types: Object.entries(TYPES).map(([id, type]) => ({ id, ...type })),
     eras: ERAS,
-    sets: catalog.sets.map(publicSet),
+    sets: shopSets.map(publicSet),
     booster: { ...BOOSTER, odds },
+    daily: {
+      superEvery: DAILY.superEvery,
+      superSet: superSet ? publicSet(superSet) : null,
+      superBooster: { ...SUPER_BOOSTER, odds: boosterOdds(SUPER_BOOSTER) },
+    },
     catalog: catalog.meta,
   }));
 
@@ -315,7 +338,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return card;
   });
 
-  router.get('/api/sets', () => ({ sets: catalog.sets.map(publicSet) }));
+  router.get('/api/sets', () => ({ sets: shopSets.map(publicSet) }));
 
   router.get('/api/sets/:setId', ({ params }) => {
     const set = catalog.getSet(params.setId);
@@ -426,15 +449,40 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     }
     if (saved.error === 'no_booster') throw notEnough(saved);
     if (saved.error) throw new HttpError(404, 'Player not found');
-    return reply(201, {
-      boosters: saved.map((booster) => ({
-        id: booster.id,
-        setId: booster.setId,
-        openedAt: booster.openedAt,
-        cards: booster.pulls.map(({ card, isNew }) => ({ ...card, isNew })),
-      })),
-      player: await profile(player),
-    });
+    return reply(201, { boosters: saved.map(openedBooster), player: await profile(player) });
+  });
+
+  // ── Daily reward ───────────────────────────────────────────────────────────
+  // Once a day, a free booster of the player's choice, opened at once (the stock
+  // is not used); every DAILY.superEvery-th one is a Super Booster.
+
+  router.get('/api/players/:playerId/daily', async ({ req, params }) => dailyOf((await requireSelf(req, params.playerId)).id));
+
+  /** Body: { setId } — the booster chosen, or the Super Booster on its day (any setId is fine that day). */
+  router.post('/api/players/:playerId/daily', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
+    const setId = oneOf(body.setId, [...setIds, DAILY.superSetId], 'setId') ?? 'all-stars';
+    const claimed = (daily) =>
+      new HttpError(409, "Today's daily reward is already claimed", daily && { nextIn: daily.nextIn }, 'daily_claimed');
+    if (claiming.has(player.id)) throw claimed(null);
+    claiming.add(player.id);
+    let saved;
+    try {
+      const daily = await dailyOf(player.id);
+      if (!daily.available) throw claimed(daily);
+      if (setId === DAILY.superSetId && !daily.super) {
+        throw new HttpError(409, `The Super Booster is every ${DAILY.superEvery}th daily reward: choose another booster`, { day: daily.day }, 'not_super_day');
+      }
+      const set = daily.super ? superSet : catalog.getSet(setId);
+      const cards = openBooster(set, { rng, rules: daily.super ? SUPER_BOOSTER : BOOSTER });
+      // The database checks the day again, in the same transaction as the save.
+      saved = await store.claimDaily(player.id, { day: daily.today, number: daily.claims + 1, setId: set.id, cards });
+    } finally {
+      claiming.delete(player.id);
+    }
+    if (saved.error === 'claimed') throw claimed(await dailyOf(player.id));
+    if (saved.error) throw new HttpError(404, 'Player not found');
+    return reply(201, { booster: openedBooster(saved), player: await profile(player) });
   });
 
   router.get('/api/players/:playerId/boosters', async ({ req, params, query }) => {

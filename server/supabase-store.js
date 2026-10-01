@@ -1,6 +1,6 @@
 /**
  * Data storage in Supabase (PostgreSQL): the card catalog, and the players'
- * accounts, sessions, boosters, collections and friends. It talks to the Supabase REST API (PostgREST) with
+ * accounts, sessions, boosters, daily rewards, collections and friends. It talks to the Supabase REST API (PostgREST) with
  * fetch and the secret key from .env, so the project has no dependency.
  *
  * The tables are created by the SQL files of supabase/migrations/.
@@ -266,6 +266,37 @@ export function createSupabaseStore({ url, secretKey }) {
     async boostersFrom(playerId) {
       const [row] = await get(`players?select=boosters_from&id=${eq(playerId)}`);
       return row?.boosters_from ?? null;
+    },
+
+    /** { claims, lastDay }: daily rewards the player claimed, and the day ('YYYY-MM-DD') of the last one (null if none). */
+    async dailyClaims(playerId) {
+      const [row] = await get(`player_daily?select=claims,last_day&player_id=${eq(playerId)}`);
+      return { claims: row?.claims ?? 0, lastDay: row?.last_day ?? null };
+    },
+
+    /**
+     * Saves the daily reward `number` of `day` (a booster of `setId`), in one transaction
+     * (function claim_daily, see supabase/migrations/). Returns the saved booster, or
+     * { error: 'claimed' } when today's reward is already claimed.
+     */
+    async claimDaily(playerId, { day, number, setId, cards }) {
+      const result = await request('POST', 'rpc/claim_daily', {
+        body: {
+          p_player_id: playerId,
+          p_day: day,
+          p_number: number,
+          p_set_id: setId,
+          p_booster: cards.map((card) => ({ id: card.id, rarity: card.rarity })),
+        },
+      });
+      if (result.error) return result;
+      const [booster] = result.boosters;
+      return {
+        id: booster.id,
+        setId,
+        openedAt: booster.openedAt,
+        pulls: cards.map((card, j) => ({ card, isNew: booster.pulls[j].isNew })),
+      };
     },
 
     /** Deletes the player's boosters and traded cards, and cancels their open trades (function reset_collection). */
