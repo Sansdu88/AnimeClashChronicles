@@ -233,7 +233,7 @@ Admin routes (an admin's session only, 403 `not_admin` otherwise):
 
 | Method | Route | Description |
 |---|---|---|
-| GET | `/api/admin/settings` | `{ settings, defaults }`: `{ booster, superBooster: { slotWeights, rareSlotWeights }, market: { prices, recycle }, daily: { superEvery, sets, superDays } }`; odds in tenths of a percent (each slot adds up to 1000) |
+| GET | `/api/admin/settings` | `{ settings, defaults }`: `{ booster, superBooster: { slotWeights, rareSlotWeights }, market: { prices, recycle }, daily: { superEvery, sets, superDays } }`; odds in thousandths of a percent (each slot adds up to 100000, so 0.001% is the smallest step); `oddsTotal` |
 | PATCH | `/api/admin/settings` | Change sections of the settings (each given whole), e.g. `{ "market": { "prices": {…}, "recycle": {…} } }`. Wrong values → 400 `invalid_settings` |
 | GET | `/api/admin/players` | Every player with their cards, boosters, Kira and daily reward |
 | POST | `/api/admin/players/:id/daily/reset` | The player can claim today's daily reward again |

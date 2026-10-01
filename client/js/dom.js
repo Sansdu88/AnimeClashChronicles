@@ -72,8 +72,9 @@ export const storage = {
 /** Numbers and dates in the format of the current language. */
 export const fmt = {
   number: (n) => Number(n).toLocaleString(locale()),
-  percent: (ratio, digits = 0) =>
-    new Intl.NumberFormat(locale(), { style: 'percent', minimumFractionDigits: digits, maximumFractionDigits: digits }).format(ratio),
+  /** `digits` decimals, or from `digits` to `maxDigits` (0.1 %, 0.02 %…). */
+  percent: (ratio, digits = 0, maxDigits = digits) =>
+    new Intl.NumberFormat(locale(), { style: 'percent', minimumFractionDigits: digits, maximumFractionDigits: maxDigits }).format(ratio),
   date: (iso) => new Intl.DateTimeFormat(locale(), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)),
   day: (iso) => new Intl.DateTimeFormat(locale(), { dateStyle: 'long' }).format(new Date(`${iso}T12:00:00Z`)),
   pad: (n) => String(n).padStart(3, '0'),

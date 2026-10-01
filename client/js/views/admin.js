@@ -23,8 +23,9 @@ import { onPageClick, pageCount, pageSize, paginationHTML } from '../components/
 import { coinHTML, kiraHTML } from '../ui/kira.js';
 import { toast } from '../ui/toast.js';
 
-// Odds are weights in tenths of a percent: each column adds up to 1000 (server/settings.js).
-const ODDS_TOTAL = 1000;
+// Odds are weights adding up to `oddsTotal` (100%) in each column, given by the server
+// (thousandths of a percent: odds as small as 0.001%, see server/settings.js).
+let oddsTotal = 100_000;
 const ODDS_COLUMNS = [
   { section: 'booster', slot: 'slotWeights', label: 'admin.boosterSlots' },
   { section: 'booster', slot: 'rareSlotWeights', label: 'admin.boosterLast' },
@@ -36,8 +37,8 @@ const search = { q: '', page: 1 };
 let renderId = 0;
 
 const rarestFirst = () => [...state.meta.rarities].reverse().map((rarity) => rarity.id);
-const percent = (weight) => String(weight / 10); // 580 → "58", 9 → "0.9"
-const weightOf = (value) => Math.round(Number(value) * 10);
+const percent = (weight) => String(weight / (oddsTotal / 100)); // 58000 → "58", 20 → "0.02"
+const weightOf = (value) => Math.round(Number(value) * (oddsTotal / 100));
 const numberField = (name, value, { min = 0, max = 100000, step = 1 } = {}) =>
   html`<input class="input" type="number" name="${name}" value="${value}" min="${min}" max="${max}" step="${step}" inputmode="decimal" required>`;
 
@@ -95,7 +96,7 @@ function oddsRowsHTML(settings) {
   return rarestFirst().map((id) => html`<tr class="r-${id}">
     <td><span class="rarity-badge">${id}</span> ${rarityName(id)}</td>
     ${ODDS_COLUMNS.map(({ section, slot }, column) => html`<td>
-      <span class="input-percent">${numberField(`odds:${column}:${id}`, percent(settings[section][slot][id] ?? 0), { max: 100, step: 0.1 })}%</span>
+      <span class="input-percent">${numberField(`odds:${column}:${id}`, percent(settings[section][slot][id] ?? 0), { max: 100, step: 0.001 })}%</span>
     </td>`)}
   </tr>`);
 }
@@ -144,6 +145,7 @@ export async function renderAdmin(main) {
   if (id !== renderId || !main.isConnected) return;
   let { settings } = data;
   const { defaults } = data;
+  oddsTotal = data.oddsTotal ?? oddsTotal;
 
   mount(
     main,
@@ -235,8 +237,8 @@ export async function renderAdmin(main) {
       const total = rarestFirst().reduce((sum, rarity) => sum + weightOf(forms.odds.elements[`odds:${column}:${rarity}`].value || 0), 0);
       const cell = $(`[data-total="${column}"]`, forms.odds);
       cell.textContent = `${percent(total)}%`;
-      cell.classList.toggle('is-wrong', total !== ODDS_TOTAL);
-      right &&= total === ODDS_TOTAL;
+      cell.classList.toggle('is-wrong', total !== oddsTotal);
+      right &&= total === oddsTotal;
     });
     $('[type="submit"]', forms.odds).disabled = !right;
   }

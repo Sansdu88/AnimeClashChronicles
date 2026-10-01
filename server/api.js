@@ -6,7 +6,7 @@
  */
 import { BOOSTER, DAILY, ERAS, RARITIES, RARITY_IDS, SCORE, STOCKS, SUPER_BOOSTER, TYPES, stockOf } from './config.js';
 import { boosterOdds, boosterStock, collectionScore, dailyStatus, openBooster, rewardDay } from './booster.js';
-import { defaultSettings, loadSettings, mergeSettings } from './settings.js';
+import { ODDS_TOTAL, defaultSettings, loadSettings, mergeSettings } from './settings.js';
 import { compareByRarity } from './catalog.js';
 import { HttpError, createRouter, reply } from './http.js';
 import {
@@ -615,10 +615,10 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return target;
   }
 
-  /** { settings, defaults } */
+  /** { settings, defaults, oddsTotal }: odds are weights adding up to oddsTotal (100%) in each slot. */
   router.get('/api/admin/settings', async ({ req }) => {
     await requireAdmin(req);
-    return { settings, defaults };
+    return { settings, defaults, oddsTotal: ODDS_TOTAL };
   });
 
   /** Body: the sections to change, each whole: { booster, superBooster, market, daily }. */
@@ -627,7 +627,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     const next = mergeSettings(settings, body, settingsContext());
     await store.saveSettings(next, admin.id);
     settings = next;
-    return { settings, defaults };
+    return { settings, defaults, oddsTotal: ODDS_TOTAL };
   });
 
   /** Every player with their numbers, for the list of the admin panel. */
