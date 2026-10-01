@@ -12,7 +12,7 @@ import { cardText, errorText, rarityName, setName, setTagline, t, tHtml } from '
 import { boosterStock, byRarity, openBoosters, reloadPlayer, setOf, state } from '../state.js';
 import { cardBackHTML, cardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
-import { confettiStorm, cutIn, scatterPacks, showFor } from '../components/booster-show.js';
+import { clearCutIns, confettiStorm, cutIn, scatterPacks, showFor } from '../components/booster-show.js';
 import { RARITY_COLORS, burst, flash, onomatopoeia, reverseWorld, shakeScreen } from '../ui/effects.js';
 import { pushLayer } from '../ui/layers.js';
 import { sfx } from '../ui/sfx.js';
@@ -471,7 +471,40 @@ async function openMany(setId, count, stage = createStage()) {
 
 // ── ×10 show ────────────────────────────────────────────────────────────────
 
-const SEALS = 3; // taps to break the giant booster's seal (2 anime cut-ins per tap)
+const SEALS = 3; // taps to break the display's seal (2 anime cut-ins per tap)
+
+/**
+ * A booster display, like the boxes of the Pokémon card game: the boosters
+ * stand in two rows behind the printed front panel, under an open lid and a
+ * plastic wrap sealed with a ×10 sticker.
+ */
+function displayHTML(set, count) {
+  const art = set.featured?.image;
+  const packs = Array.from({ length: count }, (_, i) => html`<span class="display__pack" style="--i:${i}">${packHTML(set)}</span>`);
+  const half = Math.ceil(count / 2);
+  return html`<span class="display__body" style="${packStyle(set)}">
+    <span class="display__lid"><span class="display__lid-brand">ANIME CLASH</span></span>
+    <span class="display__box">
+      <span class="display__row display__row--back">${packs.slice(0, half)}</span>
+      <span class="display__row display__row--front">${packs.slice(half)}</span>
+      <span class="display__front">
+        <span class="display__art">${art && html`<img src="${art.src}" alt="" draggable="false">`}</span>
+        <span class="display__brand">ANIME<br>CLASH</span>
+        <span class="display__label">
+          <span class="display__name">${setName(set.id)}</span>
+          <span class="display__count">${t('show.displayCount', { count })}</span>
+        </span>
+      </span>
+    </span>
+    <span class="display__wrap"></span>
+    <svg class="display__cracks" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
+      <g class="crack crack--1"><polyline points="50,30 44,22 40,10 42,1" /></g>
+      <g class="crack crack--2"><polyline points="50,30 62,36 74,34 87,42" /><polyline points="50,30 56,18 66,12" /></g>
+      <g class="crack crack--3"><polyline points="50,30 44,40 32,44 17,42" /><polyline points="50,30 53,44 48,59" /><polyline points="66,12 79,4" /></g>
+    </svg>
+    <span class="display__seal">×${count}</span>
+  </span>`;
+}
 
 async function openTen(setId, stage = createStage()) {
   const set = setOf(setId);
@@ -490,22 +523,14 @@ async function openTen(setId, stage = createStage()) {
       <p class="giant__sub">${t(`show.sub.${show.theme}`)}</p>
       <div class="giant__scene">
         <div class="giant__rays" aria-hidden="true"></div>
-        <button class="giant-pack" type="button" aria-label="${t('show.tearLabel', { set: setName(set.id) })}">
-          ${tearablePackHTML(set)}
-          <svg class="giant-pack__cracks" viewBox="0 0 100 160" preserveAspectRatio="none" aria-hidden="true">
-            <g class="crack crack--1"><polyline points="50,0 45,20 55,33 47,52" /></g>
-            <g class="crack crack--2"><polyline points="47,52 59,70 48,90" /><polyline points="55,33 73,43 84,38" /></g>
-            <g class="crack crack--3"><polyline points="48,90 39,112 53,130 47,160" /><polyline points="45,20 25,29 14,24" /><polyline points="59,70 78,86 88,84" /></g>
-          </svg>
-          <span class="giant-pack__badge">×${count}</span>
-        </button>
+        <button class="display" type="button" aria-label="${t('show.tearLabel', { set: setName(set.id) })}">${displayHTML(set, count)}</button>
       </div>
       <div class="giant__seals" aria-hidden="true">${Array.from({ length: SEALS }, () => html`<span></span>`)}</div>
       <p class="stage__hint bubble">${t('show.tap', { left: SEALS })}</p>
     </div>`,
   );
   const scene = $('.giant', stage.content);
-  const pack = $('.giant-pack', stage.content);
+  const display = $('.display', stage.content);
   const hint = $('.stage__hint', stage.content);
   sfx.play('fanfare');
   setTimeout(() => {
@@ -513,53 +538,85 @@ async function openTen(setId, stage = createStage()) {
     burst(window.innerWidth * 0.1, window.innerHeight * 0.9, { colors: show.colors, count: 50, power: 1.8 });
     burst(window.innerWidth * 0.9, window.innerHeight * 0.9, { colors: show.colors, count: 50, power: 1.8 });
   }, 450);
-  pack.focus({ preventScroll: true });
+  display.focus({ preventScroll: true });
 
-  // Each tap cracks the booster a bit more and calls two anime on stage.
+  // "Skip" (bottom right): no more taps nor cut-ins, straight to the cards. It is
+  // put on the stage itself, not in the content, which shakes.
+  const skipButton = document.createElement('button');
+  skipButton.className = 'btn btn--ghost-light stage__skip';
+  skipButton.type = 'button';
+  skipButton.textContent = t('show.skip');
+  stage.element.append(skipButton);
+  let skipped = false;
+  const skip = new Promise((resolve) =>
+    skipButton.addEventListener(
+      'click',
+      () => {
+        skipped = true;
+        clearCutIns();
+        skipButton.remove();
+        resolve();
+      },
+      { once: true },
+    ),
+  );
+
+  // Each tap tears the wrap a bit more and calls two anime on stage.
   let request = null;
-  for (let hit = 1; hit <= SEALS; hit++) {
-    await nextClick(pack);
+  for (let hit = 1; hit <= SEALS && !skipped; hit++) {
+    await Promise.race([nextClick(display), skip]);
     if (stale()) return;
     request ??= requestBoosters(stage, setId, count, 0); // asked at the first tap, ready at the last
-    pack.disabled = true;
+    if (skipped) break;
+    display.disabled = true;
     scene.dataset.hit = hit;
-    pack.classList.remove('is-hit');
-    void pack.offsetWidth; // restart the animation
-    pack.classList.add('is-hit');
+    display.classList.remove('is-hit');
+    void display.offsetWidth; // restart the animation
+    display.classList.add('is-hit');
     sfx.play('crack');
     shakeScreen();
-    const box = pack.getBoundingClientRect();
-    burst(box.left + box.width / 2, box.top + box.height * 0.4, { colors: show.colors, count: 40 + hit * 20, power: 1 + hit * 0.25 });
+    const box = display.getBoundingClientRect();
+    burst(box.left + box.width / 2, box.top + box.height * 0.55, { colors: show.colors, count: 40 + hit * 20, power: 1 + hit * 0.25 });
     for (const [i, side] of ['left', 'right'].entries()) {
       const anime = show.anime[(hit - 1) * 2 + i];
-      if (!anime) continue;
+      if (!anime || skipped) continue;
       stage.announce(`${cardText(anime.card).name}: ${anime.shout}`);
-      await cutIn(anime, { side, theme: show.theme });
+      await Promise.race([cutIn(anime, { side, theme: show.theme }), skip]);
       if (stale()) return;
     }
-    hint.textContent = hit < SEALS ? t('show.tap', { left: SEALS - hit }) : t('stage.opening');
-    pack.disabled = hit === SEALS;
-    if (hit < SEALS) pack.focus({ preventScroll: true });
+    hint.textContent = hit < SEALS && !skipped ? t('show.tap', { left: SEALS - hit }) : t('stage.opening');
+    display.disabled = hit === SEALS || skipped;
+    if (hit < SEALS && !skipped) display.focus({ preventScroll: true });
   }
 
-  pack.classList.add('is-charging');
+  display.disabled = true;
+  scene.dataset.hit = SEALS;
+  hint.textContent = t('stage.opening');
+  display.classList.add('is-charging');
   sfx.play('charge');
   const boosters = await request;
   if (!boosters) return;
-  await Promise.all([preloadImages(boosters.flatMap((booster) => booster.cards), 5000), wait(900)]);
+  await Promise.all([preloadImages(boosters.flatMap((booster) => booster.cards), 5000), wait(skipped ? 300 : 900)]);
   if (stale()) return;
 
-  // The seal breaks: explosion, confetti storm, and the 10 boosters fly out.
-  const box = pack.getBoundingClientRect();
-  pack.classList.remove('is-charging');
-  pack.classList.add('is-torn');
+  // The seal breaks: the wrap flies off, the lid opens and the boosters pop up…
+  display.classList.remove('is-charging');
+  display.classList.add('is-open');
+  sfx.play('tear');
+  await wait(skipped ? 350 : 650);
+  if (stale()) return;
+
+  // …then explosion, confetti storm, and the 10 boosters fly out.
+  const box = display.getBoundingClientRect();
+  display.classList.add('is-empty');
   sfx.play('boom');
   flash('#fff', 750);
   shakeScreen();
   confettiStorm(show.colors, { rounds: 8 });
-  scatterPacks(packHTML(set), count, box.left + box.width / 2, box.top + box.height / 2);
-  onomatopoeia(t('show.boom'), { x: box.left + box.width / 2, y: box.top + box.height * 0.35, color: '#ffd23f', size: 'xl', tilt: -10 });
-  await wait(1500);
+  scatterPacks(packHTML(set), count, box.left + box.width / 2, box.top + box.height * 0.45);
+  onomatopoeia(t('show.boom'), { x: box.left + box.width / 2, y: box.top + box.height * 0.3, color: '#ffd23f', size: 'xl', tilt: -10 });
+  await Promise.race([wait(1500), skip.then(() => wait(400))]);
+  skipButton.remove();
   if (stale()) return;
   showManyReveal(stage, set, boosters, run, show);
 }
