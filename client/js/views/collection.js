@@ -7,17 +7,20 @@ import { openCardModal } from '../components/card-modal.js';
 import { toast } from '../ui/toast.js';
 
 // Kept between visits of the page.
-const filters = { q: '', show: 'all', rarity: '', type: '', era: '', sort: 'number' };
+const filters = { q: '', show: 'all', rarity: '', type: '', era: '', copies: '', sort: 'number' };
 
 // The collection on screen: yours, or a friend's (see renderCollection's options).
 let owned = new Map();
 const ownedEntry = (card) => owned.get(card.id);
+const copiesOf = (card) => ownedEntry(card)?.count ?? 0;
 const SORTS = {
   number: (a, b) => a.number - b.number,
   rarity: byRarity,
   name: byLocalName,
   year: (a, b) => a.year - b.year || a.number - b.number,
-  copies: (a, b) => (ownedEntry(b)?.count ?? 0) - (ownedEntry(a)?.count ?? 0) || a.number - b.number,
+  copies: (a, b) => copiesOf(b) - copiesOf(a) || a.number - b.number,
+  // Fewest copies first; the cards not owned come last.
+  fewest: (a, b) => (copiesOf(a) || Infinity) - (copiesOf(b) || Infinity) || a.number - b.number,
   recent: (a, b) =>
     (ownedEntry(b)?.lastPulledAt ?? '').localeCompare(ownedEntry(a)?.lastPulledAt ?? '') || a.number - b.number,
 };
@@ -54,6 +57,13 @@ function visibleCards() {
       if (filters.rarity && card.rarity !== filters.rarity) return false;
       if (filters.type && card.type !== filters.type) return false;
       if (filters.era && card.era !== filters.era) return false;
+      // Copies: exactly ×1 to ×4, "5" = ×5 or more, "dupes" = ×2 or more (cards not owned never match).
+      if (filters.copies) {
+        const count = copiesOf(card);
+        if (filters.copies === 'dupes' ? count < 2 : filters.copies === '5' ? count < 5 : count !== Number(filters.copies)) {
+          return false;
+        }
+      }
       // Missing cards keep their name secret, so they never match a search.
       if (query) {
         if (!isOwned) return false;
@@ -119,11 +129,21 @@ export function renderCollection(main, options) {
           </select>
         </label>
         <label class="field">
+          <span class="field__label">${t('collection.copies')}</span>
+          <select class="input" name="copies">
+            ${option('', t('collection.anyCopies'), filters.copies)}
+            ${['1', '2', '3', '4'].map((n) => option(n, `×${n}`, filters.copies))}
+            ${option('5', t('collection.copiesOrMore', { count: 5 }), filters.copies)}
+            ${option('dupes', t('collection.duplicates'), filters.copies)}
+          </select>
+        </label>
+        <label class="field">
           <span class="field__label">${t('collection.sort')}</span>
           <select class="input" name="sort">
             ${option('number', t('collection.sortNumber'), filters.sort)}${option('rarity', t('collection.sortRarity'), filters.sort)}
             ${option('name', t('collection.sortName'), filters.sort)}${option('year', t('collection.sortYear'), filters.sort)}
-            ${option('copies', t('collection.sortCopies'), filters.sort)}${option('recent', t('collection.sortRecent'), filters.sort)}
+            ${option('copies', t('collection.sortCopies'), filters.sort)}${option('fewest', t('collection.sortFewest'), filters.sort)}
+            ${option('recent', t('collection.sortRecent'), filters.sort)}
           </select>
         </label>
       </form>
