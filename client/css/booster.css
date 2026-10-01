@@ -2063,3 +2063,228 @@
 .fx-reverse-title.is-still * {
   animation: none;
 }
+
+/* ── Daily reward ───────────────────────────────────────────────────────── */
+
+/* A daily booster: its title above the pack. */
+.daily-intro {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-bottom: -14px;
+}
+
+/* The Super Booster pack: golden crimps, a holographic foil that keeps shining,
+   a star sticker and the 4 most popular cards in its window. */
+.pack__inner--super .pack__crimp {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.6) 0 1.2cqw, rgba(120, 70, 0, 0.25) 1.2cqw 2.4cqw),
+    linear-gradient(180deg, #fff3b0, #f4a100 50%, #ffe169);
+}
+
+.pack__inner--super .pack__body {
+  background:
+    radial-gradient(rgba(0, 0, 0, 0.22) 0.7cqw, transparent 0.9cqw) 0 0 / 3.6cqw 3.6cqw,
+    repeating-conic-gradient(from 0deg at 50% 42%, rgba(255, 210, 63, 0.2) 0deg 6deg, transparent 6deg 14deg),
+    linear-gradient(165deg, #3c096c 0%, var(--c1) 50%, #10002b 100%);
+}
+
+.pack__inner--super .pack__body::before {
+  content: '★';
+  position: absolute;
+  top: 17cqw;
+  right: 3cqw;
+  z-index: 1;
+  font-size: 16cqw;
+  line-height: 1;
+  color: var(--yellow);
+  -webkit-text-stroke: 0.7cqw var(--ink);
+  paint-order: stroke fill;
+  transform: rotate(14deg);
+  animation: star-twinkle 1.6s ease-in-out infinite;
+}
+
+@keyframes star-twinkle {
+  50% {
+    transform: rotate(14deg) scale(1.2);
+    filter: brightness(1.3);
+  }
+}
+
+.pack__inner--super .pack__art {
+  border-color: var(--yellow);
+  background: var(--yellow);
+  box-shadow: 0 0 0 1.1cqw var(--ink), 0 0 7cqw 1cqw rgba(255, 210, 63, 0.7);
+}
+
+.pack__art--mosaic {
+  display: grid;
+  grid-template: 1fr 1fr / 1fr 1fr;
+  gap: 0.8cqw;
+}
+
+.pack__inner--super .pack__name {
+  color: var(--yellow);
+}
+
+.pack__inner--super .pack__foil {
+  background: linear-gradient(115deg, transparent 25%, rgba(255, 46, 136, 0.45) 35%, rgba(255, 190, 11, 0.5) 43%, rgba(6, 214, 160, 0.45) 51%, rgba(58, 134, 255, 0.45) 59%, transparent 70%);
+  background-size: 300% 100%;
+  animation: super-foil 3s linear infinite;
+}
+
+@keyframes super-foil {
+  from {
+    background-position: 130% 0;
+  }
+  to {
+    background-position: -130% 0;
+  }
+}
+
+/* The Super Booster on stage: it drops from the sky in a rainbow halo, charges
+   up when tapped (harder and harder shaking, the halo swells), then blows. */
+.stage[data-show='super'] {
+  --ray: rgba(255, 210, 63, 0.24);
+  background: radial-gradient(circle at 50% 45%, #6a1fb0, #1f0742 52%, #07020f 80%);
+}
+
+.super {
+  --w: min(260px, 56vw, 32vh);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.super__title {
+  color: transparent;
+  background: linear-gradient(100deg, #ffd23f, #fff3b0 25%, #ff9f1c 50%, #fff3b0 75%, #ffd23f);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(4px 4px 0 #000);
+  animation: pack-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both, rainbow-slide 2.4s linear infinite;
+}
+
+.super__scene {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: calc(var(--w) * 1.6 + 50px);
+}
+
+.super__scene > * {
+  grid-area: 1 / 1;
+}
+
+.super__aura {
+  width: calc(var(--w) * 1.7);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(#ff2e88, #ffbe0b, #06d6a0, #3a86ff, #8338ec, #ff2e88);
+  filter: blur(40px);
+  opacity: 0.5;
+  animation: aura-spin 4s linear infinite, aura-pulse 2.2s ease-in-out infinite;
+}
+
+/* The halo turns and swells with rotate/scale only: the blurred layer is painted once. */
+@keyframes aura-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes aura-pulse {
+  50% {
+    opacity: 0.75;
+    scale: 1.1;
+  }
+}
+
+.stage-pack--super {
+  width: var(--w);
+  filter: drop-shadow(0 24px 30px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 24px rgba(255, 210, 63, 0.75));
+  animation: super-drop 0.9s cubic-bezier(0.2, 0.9, 0.3, 1.25) both, giant-float 3s 0.9s ease-in-out infinite;
+}
+
+.stage-pack--super:not(:disabled):hover {
+  filter: drop-shadow(0 24px 30px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 36px rgba(255, 210, 63, 0.95)) brightness(1.08);
+}
+
+@keyframes super-drop {
+  from {
+    transform: translateY(-80vh) scale(0.5) rotate(20deg);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(14px) scale(1.04) rotate(-2deg);
+    opacity: 1;
+  }
+}
+
+.super.is-charging .super__scene {
+  animation: super-swell 1.5s ease-in forwards;
+}
+
+.super.is-charging .stage-pack--super {
+  animation: super-shake 0.09s linear infinite;
+}
+
+.super.is-charging .super__aura {
+  animation: aura-spin 0.7s linear infinite, aura-charge 1.5s ease-in forwards;
+}
+
+@keyframes super-swell {
+  to {
+    transform: scale(1.12);
+  }
+}
+
+@keyframes super-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0);
+  }
+  25% {
+    transform: translate(-6px, 3px) rotate(-2.5deg);
+  }
+  75% {
+    transform: translate(6px, -3px) rotate(2.5deg);
+  }
+}
+
+@keyframes aura-charge {
+  to {
+    scale: 1.5;
+    opacity: 1;
+  }
+}
+
+/* Open: the halo bursts into light while the pack tears. */
+.super.is-open .super__scene {
+  transform: scale(1.12);
+}
+
+.super.is-open .stage-pack--super {
+  animation: none;
+}
+
+.super.is-open .super__aura {
+  animation: aura-blast 0.8s ease-out forwards;
+}
+
+@keyframes aura-blast {
+  from {
+    scale: 1.5;
+    opacity: 1;
+  }
+  to {
+    scale: 3.2;
+    opacity: 0;
+  }
+}

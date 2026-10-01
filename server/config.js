@@ -39,6 +39,25 @@ export const BOOSTER = {
   stackMax: 10,
 };
 
+/**
+ * Daily reward: once a day, a free booster of the player's choice, opened at
+ * once (it does not use the stock). Every `superEvery`-th daily reward is a
+ * Super Booster instead (the set `superSetId`, opened with SUPER_BOOSTER).
+ * The day changes at midnight in `timeZone`.
+ */
+export const DAILY = {
+  superEvery: 5,
+  superSetId: 'super',
+  timeZone: 'Europe/Paris',
+};
+
+/** Super Booster: every card is Rare or better, and the last one SSR or better. */
+export const SUPER_BOOSTER = {
+  ...BOOSTER,
+  slotWeights: { R: 500, SR: 300, SSR: 140, UR: 50, REV: 10 },
+  rareSlotWeights: { SSR: 700, UR: 250, REV: 50 },
+};
+
 /** Card types, like Pokémon energy types. */
 export const TYPES = {
   action: { name: 'Action', icon: '⚔️', color: '#e63946' },

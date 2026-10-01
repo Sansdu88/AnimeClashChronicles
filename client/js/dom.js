@@ -42,6 +42,14 @@ export const $$ = (selector, root = document) => [...root.querySelectorAll(selec
 
 export const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Calls `paint()` now and every second, until it returns false. */
+export function everySecond(paint) {
+  const tick = () => {
+    if (paint() !== false) setTimeout(tick, 1000);
+  };
+  tick();
+}
+
 export const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export const storage = {
@@ -69,7 +77,12 @@ export const fmt = {
   date: (iso) => new Intl.DateTimeFormat(locale(), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)),
   day: (iso) => new Intl.DateTimeFormat(locale(), { dateStyle: 'long' }).format(new Date(`${iso}T12:00:00Z`)),
   pad: (n) => String(n).padStart(3, '0'),
-  duration: (seconds) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`,
+  /** "1:05", or "7:01:05" from one hour. */
+  duration: (seconds) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    const [hours, minutes] = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60)];
+    return hours ? `${hours}:${pad(minutes)}:${pad(seconds % 60)}` : `${minutes}:${pad(seconds % 60)}`;
+  },
   timeAgo(iso) {
     const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
     const relative = new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' });

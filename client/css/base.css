@@ -899,7 +899,24 @@ select.input {
 
 /* ── Small screens ──────────────────────────────────────────────────────── */
 
-@media (max-width: 860px) {
+/* A tighter navigation… */
+@media (max-width: 1500px) {
+  .topbar {
+    gap: 12px;
+  }
+
+  .nav {
+    gap: 2px;
+  }
+
+  .nav a {
+    padding-inline: 9px;
+    font-size: 18px;
+  }
+}
+
+/* …then it gets its own line under the logo. */
+@media (max-width: 1240px) {
   .topbar {
     flex-wrap: wrap;
     gap: 8px 12px;
@@ -916,12 +933,17 @@ select.input {
 
   .nav a {
     flex: 1;
-    padding-inline: 8px;
-    font-size: 17px;
   }
 
   .topbar__side {
     margin-left: auto;
+  }
+}
+
+@media (max-width: 860px) {
+  .nav a {
+    padding-inline: 8px;
+    font-size: 17px;
   }
 
   .player-chip {

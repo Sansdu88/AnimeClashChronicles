@@ -30,6 +30,12 @@ function emit() {
 // Booster stock: the server tells how many boosters the player has and when the
 // next one comes; from that, the page counts on its own (one every cooldownSeconds).
 let stockFrom = 0; // local time (ms) the stock counts from
+let nextDayAt = 0; // local time (ms) the daily reward's day changes
+
+function setDaily(daily) {
+  state.player.daily = daily;
+  nextDayAt = Date.now() + daily.nextIn * 1000;
+}
 
 function setPlayer(player) {
   state.player = player;
@@ -37,6 +43,7 @@ function setPlayer(player) {
   const { boosterStock: stock = 0, nextBoosterIn: nextIn = 0 } = player ?? {};
   // nextIn = 0 means a full stock: counted as one more period (the count stops at the maximum).
   stockFrom = Date.now() - stock * every - (nextIn ? every - nextIn * 1000 : every);
+  if (player) setDaily(player.daily);
 }
 
 /** { stock, max, nextIn }: boosters you can open now, and seconds before the next one (0 when full). */
@@ -49,9 +56,20 @@ export function boosterStock() {
   return { stock, max, nextIn };
 }
 
+/**
+ * Today's daily reward (see dailyStatus in server/booster.js): { today, available, claims, day,
+ * cycle, super, nextIn }, `nextIn` counted down here. `newDay`: the day changed since the
+ * server said it was claimed, ask it again (refreshDaily).
+ */
+export function dailyStatus() {
+  const nextIn = Math.max(0, Math.ceil((nextDayAt - Date.now()) / 1000));
+  return { ...state.player.daily, nextIn, newDay: nextIn === 0 };
+}
+
 export const rarityOf = (id) => state.meta.rarities.find((r) => r.id === id);
 export const typeOf = (id) => state.meta.types.find((t) => t.id === id);
-export const setOf = (id) => state.meta.sets.find((s) => s.id === id);
+/** A booster set: the ones of the shelf, or the Super Booster of the daily reward. */
+export const setOf = (id) => state.meta.sets.find((s) => s.id === id) ?? (state.meta.daily.superSet?.id === id ? state.meta.daily.superSet : undefined);
 const rarityRank = (id) => state.meta.rarities.findIndex((r) => r.id === id);
 
 /** Rarest first, then most popular. */
@@ -141,11 +159,9 @@ export async function reloadPlayer() {
   return state.player;
 }
 
-/** Opens `count` boosters of a set. Returns the boosters (cards in reveal order, with isNew). */
-export async function openBoosters(setId, count = 1) {
-  const result = await api(playerPath('/boosters'), { method: 'POST', body: { setId, count } });
-  setPlayer(result.player);
-  for (const booster of result.boosters) {
+/** Adds the cards of boosters just opened to your collection. */
+function addPulls(boosters) {
+  for (const booster of boosters) {
     for (const card of booster.cards) {
       const entry = state.owned.get(card.id);
       if (entry) {
@@ -162,7 +178,34 @@ export async function openBoosters(setId, count = 1) {
     }
   }
   emit();
+}
+
+/** Opens `count` boosters of a set. Returns the boosters (cards in reveal order, with isNew). */
+export async function openBoosters(setId, count = 1) {
+  const result = await api(playerPath('/boosters'), { method: 'POST', body: { setId, count } });
+  setPlayer(result.player);
+  addPulls(result.boosters);
   return result.boosters;
+}
+
+// ── Daily reward ─────────────────────────────────────────────────────────────
+
+/** Asks the server about today's daily reward (the day changed, or it was claimed elsewhere). */
+export async function refreshDaily() {
+  setDaily(await api(playerPath('/daily')));
+  emit();
+  return dailyStatus();
+}
+
+/**
+ * Claims today's daily reward: a booster of `setId` (or the Super Booster on its day), opened at once.
+ * Returns [booster] (cards in reveal order, with isNew), like openBoosters.
+ */
+export async function claimDaily(setId) {
+  const result = await api(playerPath('/daily'), { method: 'POST', body: { setId } });
+  setPlayer(result.player);
+  addPulls([result.booster]);
+  return [result.booster];
 }
 
 export async function renamePlayer(name) {

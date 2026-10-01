@@ -1,7 +1,7 @@
 /**
  * Booster opening rules (pure functions, no I/O, so they are easy to test).
  */
-import { BOOSTER, RARITY_IDS, RARITY_RANK, SCORE } from './config.js';
+import { BOOSTER, DAILY, RARITY_IDS, RARITY_RANK, SCORE } from './config.js';
 
 /** Picks a key of `weights` ({ key: relativeWeight }) at random. */
 function weightedPick(weights, rng = Math.random) {
@@ -60,6 +60,48 @@ export function boosterStock(since, now = Date.now(), rules = BOOSTER) {
   const stock = Math.min(rules.stackMax, Math.floor((now - start) / every));
   const nextIn = stock >= rules.stackMax ? 0 : Math.ceil((every - ((now - start) % every)) / 1000);
   return { stock, nextIn };
+}
+
+/** Milliseconds `timeZone`'s clock is ahead of UTC at `date`. */
+function zoneOffset(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  }).formatToParts(date);
+  const part = (type) => Number(parts.find((p) => p.type === type).value);
+  const wall = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second'));
+  return wall - Math.floor(date.getTime() / 1000) * 1000;
+}
+
+/**
+ * The day of the daily reward: { today: 'YYYY-MM-DD' in `timeZone`, nextIn: seconds before the next day }.
+ */
+export function rewardDay(now = Date.now(), timeZone = DAILY.timeZone) {
+  const offset = zoneOffset(new Date(now), timeZone);
+  const wall = new Date(now + offset);
+  const midnight = Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate() + 1);
+  // The clock may change before midnight (daylight saving time): use the offset of that night.
+  const next = midnight - zoneOffset(new Date(midnight - offset), timeZone);
+  return { today: wall.toISOString().slice(0, 10), nextIn: Math.max(1, Math.ceil((next - now) / 1000)) };
+}
+
+/**
+ * Daily reward of a player who claimed `claims` of them, the last one on `lastDay` ('YYYY-MM-DD').
+ * `day` is the day of the cycle (1 to superEvery) of today's reward: the one to claim
+ * when `available`, else the one already claimed. `super`: that reward is a Super Booster.
+ */
+export function dailyStatus({ claims = 0, lastDay = null } = {}, now = Date.now(), rules = DAILY) {
+  const { today, nextIn } = rewardDay(now, rules.timeZone);
+  const available = !lastDay || lastDay < today;
+  const number = available ? claims + 1 : claims;
+  const day = ((number - 1) % rules.superEvery) + 1;
+  return { today, available, claims, day, cycle: rules.superEvery, super: day === rules.superEvery, nextIn };
 }
 
 /** Probability that one slot gives each rarity. */

@@ -39,6 +39,7 @@ can take a minute.
 | | |
 |---|---|
 | **Boosters** | 4 boosters: *All-Stars* (every card) and one per Japanese era: *Shōwa* (before 1989), *Heisei* (1989–2018), *Reiwa* (2019+). One more booster every 2 minutes, up to 10 kept in stock: open them one by one, or several in a row with their own show (the packs burst one after the other, then all the cards flip in a cascade). A full stock of 10 gets the **×10 show**: a booster display (like the display boxes of the Pokémon card game) whose seal breaks in 3 taps or with the Skip button, with manga cut-ins of the favorite anime of that booster (Dragon Ball and Akira for Shōwa, One Piece and Naruto for Heisei, Demon Slayer and Jujutsu Kaisen for Reiwa, Pokémon and Sailor Moon for All-Stars…), a different theme per booster and a confetti storm. The server keeps the stock; the page shows it with a countdown. |
+| **Daily reward** | Once a day, a **free booster of your choice** (one of the 4), opened at once: it does not use the stock. Every 5th daily reward is a **Super Booster**, a booster of every card with much better odds (see below), with its own entrance: it drops in a rainbow halo, charges up and blows. The first visit of the day opens a popup to claim it, then the **Daily** page (a 5-day stamp card with a countdown to the next day) and a badge on its link remind you. Missing a day loses nothing: it is your 5th reward that is the Super Booster, not your 5th day in a row. The day changes at midnight, Paris time (`DAILY.timeZone`). |
 | **Opening** | Shake and tear the pack, then flip 5 face-down cards. Rare cards glow before you flip them, and SSR/UR reveals trigger manga effects (RUMBLE, BOOM!!), confetti and sounds (synthesized, can be muted). A REV card gets its own moment: two heartbeats, then the whole screen turns negative for a few seconds under a giant **REVERSE**. |
 | **Cards** | Picture, type (Action, Mecha, Romance…), year, power level, and a one-sentence summary from Wikipedia. SSR, UR and REV are full-art cards with a holographic effect that follows your mouse; REV (Reversed) cards have inverted colors. |
 | **Collection** | A pokédex-style grid: missing cards show up as `???`. Filters, sorting, and completion per rarity. Click a card for its full Wikipedia summary. |
@@ -73,7 +74,18 @@ rarest: full-art cards with inverted colors, about 20 of them in the whole catal
   | R | 27% | 62% | guaranteed |
   | N | 58% | — | — |
 
-The rules live in [server/config.js](server/config.js). Change the numbers there to tweak the game.
+- **Super Booster** (every 5th daily reward). Every card can drop, none is a Normal, and the last
+  card is SSR or better:
+
+  | Rarity | Cards 1–4 | Card 5 | At least one per booster |
+  |---|---|---|---|
+  | REV | 1% | 5% | 8.7% |
+  | UR | 5% | 25% | 45.3% (or better) |
+  | SSR | 14% | 70% | guaranteed |
+  | SR | 30% | — | guaranteed |
+  | R | 50% | — | guaranteed |
+
+The rules live in [server/config.js](server/config.js) (`BOOSTER`, `DAILY`, `SUPER_BOOSTER`). Change the numbers there to tweak the game.
 
 ## Project structure
 
@@ -85,10 +97,10 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 │   ├── api.js              API route handlers
 │   ├── auth.js             passwords (scrypt), session tokens, cookies
 │   ├── http.js             tiny router, JSON helpers, static file server
-│   ├── booster.js          booster opening logic (pure functions)
+│   ├── booster.js          booster opening logic, booster stock, daily reward day (pure functions)
 │   ├── catalog.js          builds the card catalog and booster sets (read from Supabase)
-│   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, friends, trades
-│   └── config.js           rarities, drop rates, types, eras
+│   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, daily rewards, friends, trades
+│   └── config.js           rarities, drop rates, daily reward, types, eras
 ├── client/                 web UI (HTML/CSS/JS modules, no build step)
 │   ├── index.html
 │   ├── css/                base, card, booster, views
@@ -108,7 +120,7 @@ The rules live in [server/config.js](server/config.js). Change the numbers there
 ## Database: Supabase
 
 Everything is stored in a **Supabase** (PostgreSQL) database: the card catalog (`cards`,
-`booster_sets`, `catalog_info`) and the players, sessions, boosters, friends and trades.
+`booster_sets`, `catalog_info`) and the players, sessions, boosters, daily rewards, friends and trades.
 The database is described by the SQL files of [supabase/migrations/](supabase/migrations/): the
 tables first, then the card catalog. The project is linked to Supabase with the **GitHub
 integration**, which applies new migrations when they are pushed on `main`. Without it, paste the
@@ -163,6 +175,8 @@ with the token returned by register/login.
 | PATCH | `/api/players/:playerId` | Rename. Body: `{ "name": "…" }` (1–24 characters) |
 | POST | `/api/players/:playerId/boosters` | Open boosters from your stock. Body: `{ "setId": "all-stars", "count": 1 }` (`count` 1–10). One booster is added every 2 minutes, 10 at most: not enough → 429 `booster_cooldown` with `details.retryIn` (seconds) and `details.stock`. Profiles include `boosterStock` and `nextBoosterIn` (seconds before the next one, 0 when the stock is full) |
 | GET | `/api/players/:playerId/boosters?limit=20` | Booster history, newest first |
+| GET | `/api/players/:playerId/daily` | Today's daily reward: `{ today, available, claims, day, cycle, super, nextIn }` (`day` 1–5 of the cycle, `super` on Super Booster days, `nextIn` = seconds before the next day). Profiles include it as `daily` |
+| POST | `/api/players/:playerId/daily` | Claim today's daily reward, opened at once. Body: `{ "setId": "heisei" }` (ignored on Super Booster days, when `"super"` is accepted). Returns `{ booster, player }`. Already claimed → 409 `daily_claimed` with `details.nextIn` |
 | GET | `/api/players/:playerId/collection` | Owned cards (with copies) and completion |
 | DELETE | `/api/players/:playerId/collection` | Reset the collection |
 | GET | `/api/players/:playerId/friends` | Your friend code, friends, requests received/sent and the friends ranking |

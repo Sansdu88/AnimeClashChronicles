@@ -1,4 +1,4 @@
-/** "Rules" page: how boosters and rarities work, types and credits. */
+/** "Rules" page: how boosters and rarities work, the daily reward, types and credits. */
 import { fmt, html, mount, raw } from '../dom.js';
 import { rarityName, setName, setTagline, t, tHtml, typeName } from '../i18n.js';
 import { state } from '../state.js';
@@ -13,6 +13,7 @@ function atLeastOneLabel(rarityId, chance) {
 export function renderRules(main) {
   const { meta } = state;
   const { booster } = meta;
+  const superOdds = meta.daily.superBooster;
   const rarities = [...meta.rarities].reverse();
   const popularity = meta.catalog.popularity;
   const share = (id) => fmt.percent(meta.rarities.find((r) => r.id === id).share);
@@ -68,6 +69,31 @@ export function renderRules(main) {
             ur: share('UR'),
           }),
         )}</p>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel__title">${raw(tHtml('rules.dailyTitle'))}</h2>
+        <p>${raw(tHtml('rules.daily', { cycle: meta.daily.superEvery }))}</p>
+        <div class="table-wrap">
+          <table class="odds">
+            <thead>
+              <tr>
+                <th scope="col">${t('rules.colRarity')}</th>
+                <th scope="col">${t('rules.colSlots', { n: superOdds.size - 1 })}</th>
+                <th scope="col">${t('rules.colLast', { n: superOdds.size })}</th>
+                <th scope="col">${t('rules.colAtLeast')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rarities.map((r) => html`<tr class="r-${r.id}">
+                <td><span class="rarity-badge">${r.id}</span> ${rarityName(r.id)}</td>
+                <td>${superOdds.odds.normalSlot[r.id] ? fmt.percent(superOdds.odds.normalSlot[r.id], 1) : '—'}</td>
+                <td>${superOdds.odds.rareSlot[r.id] ? fmt.percent(superOdds.odds.rareSlot[r.id], 1) : '—'}</td>
+                <td>${atLeastOneLabel(r.id, superOdds.odds.atLeastOne[r.id])}</td>
+              </tr>`)}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <div class="rules-grid">

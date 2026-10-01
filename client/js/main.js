@@ -1,4 +1,4 @@
-import { $, $$, html, mount } from './dom.js';
+import { $, $$, html, mount, storage } from './dom.js';
 import { errorText, getLang, setLang, t, tHtml } from './i18n.js';
 import { loadCatalog, logout, renamePlayer, restoreSession, state, subscribe } from './state.js';
 import { enableCardEffects } from './components/card.js';
@@ -8,15 +8,17 @@ import { sfx } from './ui/sfx.js';
 import { toast } from './ui/toast.js';
 import { renderAuth } from './views/auth.js';
 import { renderOpen } from './views/open.js';
+import { openDailyPopup, renderDaily } from './views/daily.js';
 import { renderCollection } from './views/collection.js';
 import { renderStats } from './views/stats.js';
 import { renderRules } from './views/rules.js';
 import { renderFriendCollection, renderFriends } from './views/friends.js';
 import { renderTrades } from './views/trades.js';
-import { boosterStock, fetchNotifications, syncCollection } from './state.js';
+import { boosterStock, dailyStatus, fetchNotifications, refreshDaily, syncCollection } from './state.js';
 
 const ROUTES = {
   open: renderOpen,
+  daily: renderDaily,
   collection: renderCollection,
   stats: renderStats,
   rules: renderRules,
@@ -106,6 +108,40 @@ function paintStockBadge() {
   const { stock } = boosterStock();
   if (badge.textContent !== String(stock)) badge.textContent = stock;
   badge.hidden = !stock;
+}
+
+// ── Daily reward ─────────────────────────────────────────────────────────────
+// A popup shows it at the first visit of the day (once a day per player in this
+// browser), then the badge of the "Daily" link. At midnight the server is asked again.
+
+const DAILY_POPUP_KEY = 'animeClashChronicles.dailyPopup';
+let dailyCheckAt = 0; // no new-day check before this time (ms): checks are spaced out when they fail
+
+function maybeDailyPopup() {
+  const daily = dailyStatus();
+  const key = `${state.player.id} ${daily.today}`;
+  if (!daily.available || storage.get(DAILY_POPUP_KEY) === key) return;
+  storage.set(DAILY_POPUP_KEY, key);
+  if (currentRoute()[0] === 'daily') return; // the page shows it already
+  if (isBusy() || document.body.classList.contains('has-stage')) toast(t('daily.ready'), 'info', 5000);
+  else openDailyPopup();
+}
+
+async function paintDaily() {
+  if (screen !== 'app' || !state.player) return;
+  const daily = dailyStatus();
+  $('#daily-badge').hidden = !daily.available;
+  if (!daily.newDay || document.hidden || Date.now() < dailyCheckAt) return;
+  dailyCheckAt = Date.now() + 30_000;
+  try {
+    await refreshDaily();
+  } catch {
+    return; /* offline or server restarting: try again later */
+  }
+  dailyCheckAt = 0;
+  if (screen !== 'app') return;
+  $('#daily-badge').hidden = !dailyStatus().available;
+  maybeDailyPopup();
 }
 
 // ── Header & static texts ────────────────────────────────────────────────────
@@ -230,6 +266,8 @@ function enterApp() {
   render();
   startNotifications();
   paintStockBadge();
+  paintDaily();
+  maybeDailyPopup();
 }
 
 async function doLogout() {
@@ -284,8 +322,11 @@ async function start() {
   window.addEventListener('mb:logout', doLogout);
   window.addEventListener('mb:friend-requests', (event) => pageBadge('friends', event.detail));
   window.addEventListener('mb:trades-waiting', (event) => pageBadge('trades', event.detail));
-  // Boosters in stock, on the "Open" link (the stock grows every 2 minutes).
-  setInterval(paintStockBadge, 1000);
+  // Boosters in stock, on the "Open" link (the stock grows every 2 minutes), and the daily reward.
+  setInterval(() => {
+    paintStockBadge();
+    paintDaily();
+  }, 1000);
   // Back on the tab: check at once instead of waiting for the next check.
   document.addEventListener('visibilitychange', checkNotifications);
   window.addEventListener('mb:unauthorized', () => {
