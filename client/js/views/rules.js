@@ -15,6 +15,9 @@ export function renderRules(main) {
   const { meta } = state;
   const { booster, stocks, market } = meta;
   const superOdds = meta.daily.superBooster;
+  // The shop boosters, then the Super Booster (only given by the daily reward).
+  const superSet = meta.daily.superSet;
+  const shelfAndSuper = superSet ? [...meta.sets, superSet] : meta.sets;
   const rarities = [...meta.rarities].reverse();
   const popularity = meta.catalog.popularity;
   const share = (id) => fmt.percent(meta.rarities.find((r) => r.id === id).share);
@@ -121,9 +124,10 @@ export function renderRules(main) {
         <section class="panel">
           <h2 class="panel__title">${t('rules.sets')}</h2>
           <ul class="set-list">
-            ${meta.sets.map((set) => html`<li style="--c1:${set.colors[0]};--c2:${set.colors[1]}">
+            ${shelfAndSuper.map((set) => html`<li style="--c1:${set.colors[0]};--c2:${set.colors[1]}">
               <span class="set-list__swatch" aria-hidden="true"></span>
-              <span><b>${setName(set.id)}</b><br><span class="muted">${setTagline(set.id)} · ${t('rules.setCards', { count: set.cardCount })}</span></span>
+              <span><b>${setName(set.id)}</b><br><span class="muted">${setTagline(set.id)} · ${t('rules.setCards', { count: set.cardCount })}</span>
+                ${set === superSet ? html`<br><span class="muted">${raw(tHtml('rules.setSuper'))}</span>` : ''}</span>
             </li>`)}
           </ul>
         </section>
