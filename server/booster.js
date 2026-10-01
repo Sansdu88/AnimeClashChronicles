@@ -31,10 +31,12 @@ export function openBooster(set, { rng = Math.random, rules = BOOSTER } = {}) {
     const isRareSlot = slot === rules.size - 1;
     const baseWeights = isRareSlot ? rules.rareSlotWeights : rules.slotWeights;
     // Rarities with no card left in this set are skipped (their odds are spread over the others).
-    let weights = Object.fromEntries(Object.entries(baseWeights).filter(([rarity]) => available(rarity).length));
-    if (Object.keys(weights).length === 0) {
-      weights = Object.fromEntries(Object.entries(rules.slotWeights).filter(([rarity]) => available(rarity).length));
-    }
+    const usable = (weights) =>
+      Object.fromEntries(Object.entries(weights).filter(([rarity, weight]) => weight > 0 && available(rarity).length));
+    let weights = usable(baseWeights);
+    if (Object.keys(weights).length === 0) weights = usable(rules.slotWeights);
+    // The odds (set by an admin) only give rarities this set does not have: any of its cards.
+    if (Object.keys(weights).length === 0) weights = usable(Object.fromEntries(RARITY_IDS.map((id) => [id, 1])));
     if (Object.keys(weights).length === 0) break; // tiny set: fewer cards than slots
 
     const rarity = weightedPick(weights, rng);
@@ -95,14 +97,29 @@ export function rewardDay(now = Date.now(), timeZone = DAILY.timeZone) {
 /**
  * Daily reward of a player who claimed `claims` of them, the last one on `lastDay` ('YYYY-MM-DD').
  * `day` is the day of the cycle (1 to superEvery) of today's reward: the one to claim
- * when `available`, else the one already claimed. `super`: that reward is a Super Booster.
+ * when `available`, else the one already claimed. `super`: that reward is a Super Booster,
+ * because of `superReason`: 'cycle' (every superEvery-th one), 'event' (today is one of
+ * `rules.superDays`, for everyone) or 'gift' (`gift`: given by an admin to this player).
+ * `choices`: the boosters a player can choose (`rules.sets`).
  */
-export function dailyStatus({ claims = 0, lastDay = null } = {}, now = Date.now(), rules = DAILY) {
+export function dailyStatus({ claims = 0, lastDay = null, gift = false } = {}, now = Date.now(), rules = DAILY) {
   const { today, nextIn } = rewardDay(now, rules.timeZone);
   const available = !lastDay || lastDay < today;
   const number = available ? claims + 1 : claims;
   const day = ((number - 1) % rules.superEvery) + 1;
-  return { today, available, claims, day, cycle: rules.superEvery, super: day === rules.superEvery, nextIn };
+  let superReason = day === rules.superEvery ? 'cycle' : null;
+  if (available && !superReason) superReason = rules.superDays?.includes(today) ? 'event' : gift ? 'gift' : null;
+  return {
+    today,
+    available,
+    claims,
+    day,
+    cycle: rules.superEvery,
+    super: Boolean(superReason),
+    superReason,
+    choices: rules.sets ?? [],
+    nextIn,
+  };
 }
 
 /** Probability that one slot gives each rarity. */

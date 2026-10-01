@@ -2009,3 +2009,257 @@
     font-size: 12px;
   }
 }
+
+/* ── Admin panel ────────────────────────────────────────────────────────── */
+
+.view-admin > .panel,
+.admin-columns {
+  margin-bottom: 22px;
+}
+
+.admin-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  align-items: start;
+}
+
+.admin-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 22px;
+}
+
+/* Long button labels wrap on small screens. */
+.admin-events .btn,
+.admin-form .btn {
+  white-space: normal;
+  text-align: center;
+}
+
+.admin-form__subtitle {
+  margin: 4px 0 10px;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.admin-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin-bottom: 18px;
+}
+
+.admin-fields--rarities {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.input-kira,
+.input-percent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.input-kira .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.input-percent .input {
+  width: 86px;
+  min-height: 36px;
+  padding: 4px 8px;
+}
+
+.admin-field--short .input {
+  max-width: 120px;
+}
+
+.admin-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  min-inline-size: 0; /* a fieldset is as wide as its content otherwise */
+  margin: 16px 0 18px;
+  padding: 0;
+  border: 0;
+}
+
+.admin-checks legend {
+  margin-bottom: 8px;
+}
+
+.admin-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.admin-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--red);
+}
+
+.admin-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-day {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 5px 4px 12px;
+  background: color-mix(in srgb, var(--yellow) 30%, #fff);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.admin-day.is-today {
+  background: var(--yellow);
+}
+
+.admin-day__remove {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.admin-day__remove:hover {
+  color: #fff;
+  background: var(--red);
+}
+
+.admin-days__none {
+  margin: 0 0 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.admin-day-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.admin-odds td {
+  white-space: nowrap;
+}
+
+.admin-odds tfoot th,
+.admin-odds tfoot td {
+  font-weight: 900;
+}
+
+.admin-odds [data-total].is-wrong {
+  color: var(--red-dark);
+}
+
+.admin-odds [data-total].is-wrong::after {
+  content: ' ⚠';
+}
+
+.admin-players .field--search {
+  max-width: 420px;
+  margin-bottom: 12px;
+}
+
+.admin-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-player {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 18px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+
+.admin-player__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.admin-player__name {
+  font-size: 17px;
+}
+
+.admin-player__meta {
+  flex-basis: 100%;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.admin-player__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.admin-player__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-badge {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--yellow);
+  background: var(--ink);
+  border-radius: 999px;
+}
+
+.admin-gift {
+  color: #7b2cbf;
+}
+
+.admin-list__none {
+  padding: 12px 0;
+}
+
+@media (max-width: 900px) {
+  .admin-columns,
+  .admin-player {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-fields--rarities {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

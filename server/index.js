@@ -86,7 +86,15 @@ async function loadCatalog(store) {
 
 const { store, label: databaseLabel } = await openDatabase();
 const catalog = await loadCatalog(store);
-const server = createApp({ catalog, store, clientDir: CLIENT_DIR, secureCookies: process.env.SECURE_COOKIES === '1' });
+// The game settings changed from the admin panel (the defaults are in config.js).
+const savedSettings = await store.loadSettings();
+const server = createApp({
+  catalog,
+  store,
+  clientDir: CLIENT_DIR,
+  secureCookies: process.env.SECURE_COOKIES === '1',
+  savedSettings,
+});
 
 const port = await listen(server, PORT);
 const shownHost = HOST === '0.0.0.0' || HOST === '127.0.0.1' ? 'localhost' : HOST;

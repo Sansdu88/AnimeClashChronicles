@@ -50,6 +50,7 @@ can take a minute.
 | **Stats** | Luck meter (your pulls compared with the official odds), booster history, global leaderboard. |
 | **Accounts** | Sign up with an e-mail and a password, log in from any browser, rename yourself, change your password, log out. Several people on the same network can play on one server (see `HOST` below). |
 | **Colorblind mode** | The 👁 button (off by default) switches rarities to colors that stay distinct with every kind of color blindness and adds card-game symbols: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR · ☆☆☆ REV. |
+| **Admin panel** | For the admins only (set from the database console, see [Admins](#admins)): the Kira price of each booster and the Kira of a recycled duplicate, the daily reward (a Super Booster every N daily rewards, the boosters the players can choose, Super Booster event days for everyone), the rarity odds of the boosters and of the Super Booster. Every change applies at once. A list of all the players with a search bar, to give a player their daily reward back, give them a Super Booster for their next one, clear their data (cards, boosters, Kira, friends, trades, daily rewards; the account stays) or delete them. |
 | **Languages** | An **EN / FR** switch in the header translates the whole interface, and French cards use their French Wikipedia title and text (*Goldorak*, *Ken le Survivant*, *Capitaine Albator*…). The first visit follows the browser's language. |
 
 ## Rarity: how it works
@@ -87,7 +88,9 @@ rarest: full-art cards with inverted colors, about 20 of them in the whole catal
   | SR | 30% | — | guaranteed |
   | R | 50% | — | guaranteed |
 
-The rules live in [server/config.js](server/config.js) (`BOOSTER`, `DAILY`, `SUPER_BOOSTER`). Change the numbers there to tweak the game.
+The rules live in [server/config.js](server/config.js) (`BOOSTER`, `DAILY`, `SUPER_BOOSTER`): these are the
+defaults. The admins change the odds, the Kira prices and values and the daily reward from the admin panel
+(saved in the table `game_settings`), and the game follows at once.
 
 ## Project structure
 
@@ -100,9 +103,10 @@ The rules live in [server/config.js](server/config.js) (`BOOSTER`, `DAILY`, `SUP
 │   ├── auth.js             passwords (scrypt), session tokens, cookies
 │   ├── http.js             tiny router, JSON helpers, static file server
 │   ├── booster.js          booster opening logic, booster stock, daily reward day (pure functions)
+│   ├── settings.js         the game settings changed from the admin panel (checked, over the defaults)
 │   ├── catalog.js          builds the card catalog and booster sets (read from Supabase)
 │   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, daily rewards, Kira, friends, trades
-│   └── config.js           rarities, drop rates, booster stocks, Kira market, daily reward, types, eras
+│   └── config.js           rarities, drop rates, booster stocks, Kira market, daily reward (defaults), types, eras
 ├── client/                 web UI (HTML/CSS/JS modules, no build step)
 │   ├── index.html
 │   ├── css/                base, card, booster, views
@@ -142,8 +146,9 @@ card catalog, nothing else.
 |---|---|---|---|---|---|---|
 | Kira when recycled | 2 | 5 | 12 | 30 | 100 | 400 |
 
-A booster costs **50 Kira** (Shōwa, Heisei, Reiwa) or **120 Kira** (All-Stars). The values are in
-`MARKET` in [server/config.js](server/config.js), the booster stocks in `STOCKS`.
+A booster costs **50 Kira** (Shōwa, Heisei, Reiwa) or **120 Kira** (All-Stars). These are the defaults
+(`MARKET` in [server/config.js](server/config.js)); the admins change them from the admin panel. The booster
+stocks are in `STOCKS`.
 
 ## Score and rankings
 
@@ -151,6 +156,19 @@ Rankings (between friends, and the global leaderboard) use a **collection score*
 with both the number and the rarity of your cards: each different card is worth
 **N 10 · R 25 · SR 60 · SSR 150 · UR 400 · REV 1000** points, and each extra copy adds 10% of that.
 The values are in `SCORE` in [server/config.js](server/config.js).
+
+## Admins
+
+An admin sees the **Admin** link in the menu. Admins are chosen in the database only: in the Supabase
+**SQL Editor**, run
+
+```sql
+update public.players set is_admin = true where email = 'you@example.com';
+```
+
+(`false` to remove it), then log in again. The server checks it on every admin call, and the admin tools
+never clear nor delete an admin. The settings are kept in memory by the server (one instance, as on
+Render's free plan) and saved in `game_settings`, read at startup.
 
 ## Accounts and security
 
@@ -188,8 +206,8 @@ with the token returned by register/login.
 | GET | `/api/players/:playerId/boosters?limit=20` | Booster history, newest first (`kira`: the price of a booster bought at the market) |
 | GET | `/api/players/:playerId/market` | `{ kira, spare }`: your Kira, and for each card the duplicates you can recycle |
 | POST | `/api/players/:playerId/market/recycle` | Recycle duplicates into Kira. Body: `{ "cards": [{ "cardId": "naruto", "count": 2 }] }` (all of them or none). Returns `{ recycled, earned, kira, spare, player }`. Too many → 409 `not_enough_copies` |
-| POST | `/api/players/:playerId/market/buy` | Buy a booster with Kira, opened at once. Body: `{ "setId": "showa" }`. Returns `{ booster, player }`. Not enough Kira → 409 `not_enough_kira` with `details.price` and `details.kira` |
-| GET | `/api/players/:playerId/daily` | Today's daily reward: `{ today, available, claims, day, cycle, super, nextIn }` (`day` 1–5 of the cycle, `super` on Super Booster days, `nextIn` = seconds before the next day). Profiles include it as `daily` |
+| POST | `/api/players/:playerId/market/buy` | Buy a booster with Kira, opened at once. Body: `{ "setId": "showa", "price": 50 }` (`price`: optional, the price the player saw: if an admin changed it → 409 `price_changed`). Returns `{ booster, player }`. Not enough Kira → 409 `not_enough_kira` with `details.price` and `details.kira` |
+| GET | `/api/players/:playerId/daily` | Today's daily reward: `{ today, available, claims, day, cycle, super, superReason, choices, nextIn }` (`day` of the cycle, `super` for a Super Booster because of `superReason`: `cycle`, `event` or `gift`, `choices` = the boosters offered, `nextIn` = seconds before the next day). Profiles include it as `daily` |
 | POST | `/api/players/:playerId/daily` | Claim today's daily reward, opened at once. Body: `{ "setId": "heisei" }` (ignored on Super Booster days, when `"super"` is accepted). Returns `{ booster, player }`. Already claimed → 409 `daily_claimed` with `details.nextIn` |
 | GET | `/api/players/:playerId/collection` | Owned cards (with copies) and completion |
 | DELETE | `/api/players/:playerId/collection` | Reset the collection (and the Kira) |
@@ -209,6 +227,18 @@ with the token returned by register/login.
 | GET | `/api/leaderboard?limit=10` | Best collectors by score |
 
 Routes under `/api/players/:playerId` require being logged in as that player.
+
+Admin routes (an admin's session only, 403 `not_admin` otherwise):
+
+| Method | Route | Description |
+|---|---|---|
+| GET | `/api/admin/settings` | `{ settings, defaults }`: `{ booster, superBooster: { slotWeights, rareSlotWeights }, market: { prices, recycle }, daily: { superEvery, sets, superDays } }`; odds in tenths of a percent (each slot adds up to 1000) |
+| PATCH | `/api/admin/settings` | Change sections of the settings (each given whole), e.g. `{ "market": { "prices": {…}, "recycle": {…} } }`. Wrong values → 400 `invalid_settings` |
+| GET | `/api/admin/players` | Every player with their cards, boosters, Kira and daily reward |
+| POST | `/api/admin/players/:id/daily/reset` | The player can claim today's daily reward again |
+| POST | `/api/admin/players/:id/daily/gift` | Body: `{ "super": true }`: their next daily reward is a Super Booster (`false` takes it back) |
+| POST | `/api/admin/players/:id/clear` | Clear the player's data (the account stays) |
+| DELETE | `/api/admin/players/:id` | Delete the player and everything that is theirs |
 
 ```bash
 curl http://localhost:3000/api/cards?rarity=UR

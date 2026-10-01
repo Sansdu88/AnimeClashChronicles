@@ -32,10 +32,11 @@ function trackHTML({ day, cycle, available }) {
   </ol>`;
 }
 
-/** Today's reward to claim: the 4 boosters to choose from, or the Super Booster. */
-function claimHTML({ cycle, super: isSuperDay }) {
+/** Today's reward to claim: the boosters to choose from (chosen by the admins), or the Super Booster. */
+function claimHTML({ cycle, super: isSuperDay, superReason, choices }) {
   if (isSuperDay) {
-    return html`<h2 class="daily__heading">${t('daily.superDay', { cycle })}</h2>
+    const heading = { event: t('daily.superEvent'), gift: t('daily.superGift') }[superReason] ?? t('daily.superDay', { cycle });
+    return html`<h2 class="daily__heading">${heading}</h2>
       <p class="daily__hint">${t('daily.superInfo')}</p>
       <button class="daily-super" type="button" data-claim="${superSet().id}" aria-label="${t('daily.claimSuper')}">
         <span class="daily-super__aura" aria-hidden="true"></span>
@@ -46,7 +47,7 @@ function claimHTML({ cycle, super: isSuperDay }) {
   return html`<h2 class="daily__heading">${t('daily.choose')}</h2>
     <p class="daily__hint">${t('daily.chooseHint')}</p>
     <div class="daily-choice">
-      ${state.meta.sets.map(
+      ${choices.map(setOf).filter(Boolean).map(
         (set) => html`<button class="daily-pick" type="button" data-claim="${set.id}" aria-label="${t('daily.claimLabel', { set: setName(set.id) })}">
           <span class="pack">${packHTML(set)}</span>
           <span class="daily-pick__name">${setName(set.id)}</span>
@@ -105,7 +106,7 @@ export function renderDaily(main) {
     html`<section class="view view-daily">
       <div class="hero">
         <h1 class="hero__title">🎁 ${t('daily.title')}</h1>
-        <p class="hero__sub">${raw(tHtml('daily.sub', { cycle }))}</p>
+        <p class="hero__sub">${raw(tHtml('daily.sub', { count: cycle }))}</p>
       </div>
       <div class="panel daily"></div>
       <section class="panel daily-info">
@@ -113,7 +114,7 @@ export function renderDaily(main) {
         <div>
           <h2 class="panel__title">${t('daily.superTitle')}</h2>
           <p>${t('daily.superInfo')}</p>
-          <p class="muted">${t('daily.keep', { cycle })}</p>
+          <p class="muted">${t('daily.keep', { count: cycle })}</p>
           <a class="link" href="#/rules">${t('daily.odds')} →</a>
         </div>
       </section>
@@ -129,7 +130,7 @@ export function openDailyPopup() {
     html`<div class="daily-popup">
       <div class="hero hero--popup">
         <h2 class="hero__title">🎁 ${t('daily.title')}</h2>
-        <p class="hero__sub">${raw(tHtml('daily.sub', { cycle }))}</p>
+        <p class="hero__sub">${raw(tHtml('daily.sub', { count: cycle }))}</p>
       </div>
       <div class="daily"></div>
       <div class="btn-row"><button class="btn btn--ghost" type="button" data-close>${t('daily.later')}</button></div>

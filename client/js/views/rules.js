@@ -79,7 +79,7 @@ export function renderRules(main) {
 
       <section class="panel">
         <h2 class="panel__title">${raw(tHtml('rules.dailyTitle'))}</h2>
-        <p>${raw(tHtml('rules.daily', { cycle: meta.daily.superEvery }))}</p>
+        <p>${raw(tHtml('rules.daily', { count: meta.daily.superEvery }))}</p>
         <div class="table-wrap">
           <table class="odds">
             <thead>
@@ -104,11 +104,16 @@ export function renderRules(main) {
 
       <section class="panel">
         <h2 class="panel__title">${t('rules.marketTitle')}</h2>
-        <p>${raw(tHtml('rules.market', { era: market.prices.era, stars: market.prices['all-stars'] }))}</p>
+        <p>${raw(tHtml('rules.market'))}</p>
+        <h3 class="panel__subtitle">${t('rules.marketRecycle')}</h3>
         <ul class="rates__list">
           ${rarities.map((r) => html`<li class="r-${r.id}" title="${rarityName(r.id)}">
             <span class="rarity-badge">${r.id}</span> ${kiraHTML(market.recycle[r.id])}
           </li>`)}
+        </ul>
+        <h3 class="panel__subtitle">${t('rules.marketPrices')}</h3>
+        <ul class="rates__list">
+          ${meta.sets.map((set) => html`<li>${setName(set.id)} ${kiraHTML(market.prices[set.id])}</li>`)}
         </ul>
       </section>
 
