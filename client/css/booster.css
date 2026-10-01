@@ -32,6 +32,18 @@
   flex: 1;
 }
 
+/* Admins: the Super Booster is a 5th booster of the shelf. */
+@media (min-width: 1001px) {
+  .shelf--five {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 32px 18px;
+  }
+}
+
+.pack-tile--super .pack {
+  filter: drop-shadow(6px 8px 0 rgba(22, 19, 15, 0.85)) drop-shadow(0 0 18px rgba(255, 210, 63, 0.7));
+}
+
 .pack-tile__actions {
   display: flex;
   flex-wrap: wrap;

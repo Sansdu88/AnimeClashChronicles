@@ -459,9 +459,12 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
 
   router.post('/api/players/:playerId/boosters', async ({ req, params, body }) => {
     const player = await requireSelf(req, params.playerId);
-    const setId = oneOf(body.setId, setIds, 'setId') ?? 'all-stars';
+    // Admins can open the Super Booster too (the others only get it from the daily reward).
+    const allowed = player.isAdmin && superSet ? [...setIds, superSet.id] : setIds;
+    const setId = oneOf(body.setId, allowed, 'setId') ?? 'all-stars';
     const count = intParam(body.count, { name: 'count', min: 1, max: BOOSTER.maxPerRequest, fallback: 1 });
     const set = catalog.getSet(setId);
+    const rarityRules = set === superSet ? superRules() : boosterRules();
     const stockId = stockOf(set);
     const rules = STOCKS[stockId];
 
@@ -483,7 +486,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     opening.add(player.id);
     let saved;
     try {
-      const opened = Array.from({ length: count }, () => openBooster(set, { rng, rules: boosterRules() }));
+      const opened = Array.from({ length: count }, () => openBooster(set, { rng, rules: rarityRules }));
       // The database checks the stock again (not an admin's), in the same transaction as the save.
       saved = unlimited
         ? await store.recordBoosters(player.id, setId, opened)
