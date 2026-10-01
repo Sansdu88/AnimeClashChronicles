@@ -2,7 +2,7 @@
 
 A manga-style trading card game in the browser: open **a booster of 5 anime cards every 2 minutes**
 (an All-Stars one every 10 minutes), Pokémon-TCG style, and recycle your duplicates into **Kira ✦**, the
-game's money, to buy more. There are **about 2,000 cards**, one per anime or manga, each built from its
+game's money, to buy more. There are **about 3,000 cards**, one per anime or manga, each built from its
 **Wikipedia page**: a picture, a short summary, and a **rarity based on how popular it is**.
 Play in **English or French** (the card texts come from the English or the French Wikipedia),
 with an **account** (e-mail + password) that keeps your collection.
@@ -58,7 +58,7 @@ can take a minute.
 ## Rarity: how it works
 
 Rarities use gacha tiers: **N → R → SR → SSR → UR → REV**. **REV** (*Reversed*) is the
-rarest: full-art cards with inverted colors, about 20 of them in the whole catalog.
+rarest: full-art cards with inverted colors, about 30 of them in the whole catalog.
 
 - **Card rarity comes from popularity.** Every card gets a popularity score that mixes how much
   its English Wikipedia page was read (page views over the last 60 days) and in how many
@@ -293,7 +293,7 @@ The French page is found automatically through Wikipedia's language links (`frTi
 
 When an intro does not tell the story (common on French Wikipedia), the sync also reads the
 article's "Plot"/"Synopsis" section. Wikimedia limits anonymous scripts to 10 requests per
-minute, so a sync of the ~2,000 cards takes hours without `WIKIMEDIA_CONTACT`; later syncs reuse
+minute, so a sync of the ~3,000 cards takes hours without `WIKIMEDIA_CONTACT`; later syncs reuse
 the sections of the articles that did not change. Set `WIKIMEDIA_CONTACT` to your e-mail or
 website to identify yourself and sync much faster
 (`$env:WIKIMEDIA_CONTACT="you@example.com"; npm run sync`).
