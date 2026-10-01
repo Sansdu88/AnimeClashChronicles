@@ -94,7 +94,7 @@ function stockHTML(id) {
     <div class="stock__slots" aria-hidden="true">
       ${Array.from({ length: max }, (_, i) => html`<span class="stock__slot" style="--i:${i}"></span>`)}
     </div>
-    <p class="stock__text"><b class="stock__count">0</b>/${max}</p>
+    <p class="stock__text"><b class="stock__count">0</b><span class="stock__max">/${max}</span></p>
     <p class="stock__next"></p>
   </div>`;
 }
@@ -175,17 +175,21 @@ export function renderOpen(main) {
     for (const panel of panels) {
       const id = panel.dataset.stock;
       const label = t(`open.stocks.${id}`);
-      const { stock, max, every, nextIn } = boosterStock(id);
+      const { stock, max, every, nextIn, unlimited } = boosterStock(id);
       $$('.stock__slot', panel).forEach((slot, i) => {
         slot.classList.toggle('is-full', i < stock);
         slot.classList.toggle('is-charging', i === stock);
         if (i === stock) slot.style.setProperty('--progress', ((every - nextIn) / every).toFixed(3));
       });
-      panel.classList.toggle('is-full', stock >= max);
+      panel.classList.toggle('is-full', stock >= max && !unlimited);
+      panel.classList.toggle('is-unlimited', Boolean(unlimited));
       panel.classList.toggle('is-empty', stock === 0);
-      $('.stock__count', panel).textContent = stock;
-      $('.stock__next', panel).textContent =
-        stock >= max ? t('open.stockFull') : `⏳ ${t('open.nextIn', { time: fmt.duration(nextIn) })}`;
+      $('.stock__count', panel).textContent = unlimited ? '∞' : stock;
+      $('.stock__next', panel).textContent = unlimited
+        ? t('open.unlimited')
+        : stock >= max
+          ? t('open.stockFull')
+          : `⏳ ${t('open.nextIn', { time: fmt.duration(nextIn) })}`;
       // A booster arrived while the player was waiting on this page.
       if (previous[id] !== undefined && stock > previous[id] && !document.querySelector('.stage')) {
         if (previous[id] === 0) {

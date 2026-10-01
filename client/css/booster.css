@@ -1054,6 +1054,19 @@
   color: var(--red-dark);
 }
 
+/* An admin's stock: unlimited. */
+.stock.is-unlimited {
+  background: color-mix(in srgb, #7b2cbf 14%, var(--panel));
+}
+
+.stock.is-unlimited .stock__count {
+  color: #7b2cbf;
+}
+
+.stock.is-unlimited .stock__max {
+  display: none;
+}
+
 .stock.is-empty .stock__count {
   color: var(--muted);
 }

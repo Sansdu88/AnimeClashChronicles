@@ -228,6 +228,23 @@ export function createSupabaseStore({ url, secretKey }) {
       }));
     },
 
+    /** Saves boosters without taking them from a stock (admins, function record_boosters). Same result as openBoosters. */
+    async recordBoosters(playerId, setId, boosters) {
+      const saved = await request('POST', 'rpc/record_boosters', {
+        body: {
+          p_player_id: playerId,
+          p_set_id: setId,
+          p_boosters: boosters.map((cards) => cards.map((card) => ({ id: card.id, rarity: card.rarity }))),
+        },
+      });
+      return saved.map((booster, i) => ({
+        id: booster.id,
+        setId,
+        openedAt: booster.openedAt,
+        pulls: boosters[i].map((card, j) => ({ card, isNew: booster.pulls[j].isNew })),
+      }));
+    },
+
     /** [{ cardId, count, firstPulledAt, lastPulledAt }] */
     async collection(playerId) {
       const rows = await get(`player_collection?select=card_id,count,first_pulled_at,last_pulled_at&player_id=${eq(playerId)}`);

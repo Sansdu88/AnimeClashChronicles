@@ -112,9 +112,11 @@ function stopNotifications() {
 function paintStockBadge() {
   if (screen !== 'app' || !state.player) return;
   const badge = $('#open-badge');
-  const stock = Object.keys(state.meta.stocks).reduce((sum, id) => sum + boosterStock(id).stock, 0);
-  if (badge.textContent !== String(stock)) badge.textContent = stock;
-  badge.hidden = !stock;
+  const stocks = Object.keys(state.meta.stocks).map(boosterStock);
+  // An admin's boosters are unlimited.
+  const stock = stocks.some((each) => each.unlimited) ? '∞' : String(stocks.reduce((sum, each) => sum + each.stock, 0));
+  if (badge.textContent !== stock) badge.textContent = stock;
+  badge.hidden = stock === '0';
 }
 
 // ── Daily reward ─────────────────────────────────────────────────────────────
