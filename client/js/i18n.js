@@ -469,6 +469,7 @@ const DICT = {
         },
       sets: 'Booster sets',
       setCards: '{count} cards',
+      setSuper: 'Only from the <a class="link" href="#/daily">daily reward</a>',
       types: 'Card types',
       credits: 'Credits',
       creditsText:
@@ -1097,6 +1098,7 @@ const DICT = {
         },
       sets: 'Les boosters',
       setCards: '{count} cartes',
+      setSuper: 'Seulement dans le <a class="link" href="#/daily">bonus du jour</a>',
       types: 'Types de cartes',
       credits: 'Crédits',
       creditsText:
