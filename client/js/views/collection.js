@@ -12,6 +12,9 @@ import { toast } from '../ui/toast.js';
 
 // Kept between visits of the page (the page number too, unless it shows another player's cards).
 const filters = { q: '', show: 'all', rarity: '', type: '', era: '', copies: '', sort: 'number' };
+const DEFAULT_FILTERS = { ...filters };
+// Phones: the filters other than the search are folded behind a button.
+let filtersOpen = false;
 const paging = { page: 1, playerId: null };
 
 // The collection on screen: yours, or a friend's (see renderCollection's options).
@@ -107,6 +110,9 @@ export function renderCollection(main, options) {
           <span class="field__label">${t('collection.search')}</span>
           <input class="input" type="search" name="q" placeholder="${t('collection.searchPlaceholder')}" value="${filters.q}" autocomplete="off">
         </label>
+        <button class="filters__toggle" type="button" aria-expanded="false">
+          <span aria-hidden="true">⚙</span> ${t('collection.filters')} <span class="filters__count"></span>
+        </button>
         <label class="field">
           <span class="field__label">${t('collection.show')}</span>
           <select class="input" name="show">
@@ -206,12 +212,28 @@ export function renderCollection(main, options) {
     );
   }
 
-  $('.filters', main).addEventListener('input', (event) => {
+  /** The fold of the filters (phones), and how many of them are set. */
+  const form = $('.filters', main);
+  const toggle = $('.filters__toggle', form);
+  function paintFilters() {
+    form.classList.toggle('is-open', filtersOpen);
+    toggle.setAttribute('aria-expanded', String(filtersOpen));
+    const set = Object.keys(DEFAULT_FILTERS).filter((name) => name !== 'q' && filters[name] !== DEFAULT_FILTERS[name]).length;
+    $('.filters__count', toggle).textContent = set ? `(${set})` : '';
+  }
+  toggle.addEventListener('click', () => {
+    filtersOpen = !filtersOpen;
+    paintFilters();
+  });
+  paintFilters();
+
+  form.addEventListener('input', (event) => {
     const { name, value } = event.target;
     if (name in filters) {
       filters[name] = value;
       paging.page = 1;
       renderGrid();
+      paintFilters();
     }
   });
   $('[name="pageSize"]', main).addEventListener('change', (event) => {

@@ -25,15 +25,19 @@
         <span class="logo__main">ANIME CLASH<span class="logo__accent">CHRONICLES</span></span>
       </a>
       <nav class="nav" aria-label="Main" data-i18n-aria="nav.main">
-        <a href="#/" data-route="open"><span data-i18n="nav.open">Open</span><span class="nav__badge nav__badge--stock" id="open-badge" hidden></span></a>
-        <a href="#/daily" data-route="daily"><span data-i18n="nav.daily">Daily</span><span class="nav__badge nav__badge--daily" id="daily-badge" hidden>!</span></a>
-        <a href="#/market" data-route="market"><span data-i18n="nav.market">Market</span></a>
-        <a href="#/collection" data-route="collection"><span data-i18n="nav.collection">Collection</span></a>
+        <a href="#/" data-route="open"><span class="nav__icon" aria-hidden="true">🎴</span><span data-i18n="nav.open">Open</span><span class="nav__badge nav__badge--stock" id="open-badge" hidden></span></a>
+        <a href="#/daily" data-route="daily"><span class="nav__icon" aria-hidden="true">🎁</span><span data-i18n="nav.daily">Daily</span><span class="nav__badge nav__badge--daily" id="daily-badge" hidden>!</span></a>
+        <a href="#/market" data-route="market"><span class="nav__icon nav__icon--kira" aria-hidden="true">✦</span><span data-i18n="nav.market">Market</span></a>
+        <a href="#/collection" data-route="collection"><span class="nav__icon" aria-hidden="true">📚</span><span data-i18n="nav.collection">Collection</span></a>
         <a href="#/friends" data-route="friends"><span data-i18n="nav.friends">Friends</span><span class="nav__badge" id="friends-badge" hidden></span></a>
         <a href="#/trades" data-route="trades"><span data-i18n="nav.trades">Trades</span><span class="nav__badge" id="trades-badge" hidden></span></a>
         <a href="#/stats" data-route="stats"><span data-i18n="nav.stats">Stats</span></a>
         <a href="#/rules" data-route="rules"><span data-i18n="nav.rules">Rules</span></a>
         <a href="#/admin" data-route="admin" id="admin-link" hidden><span data-i18n="nav.admin">Admin</span></a>
+        <!-- Phones: the other pages and the settings are in the "More" sheet -->
+        <button class="nav__more" id="nav-more" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="more-sheet">
+          <span class="nav__icon" aria-hidden="true">☰</span><span data-i18n="nav.more">More</span><span class="nav__badge" id="more-badge" hidden></span>
+        </button>
       </nav>
       <div class="topbar__side">
         <div class="lang-switch" role="group" aria-label="Language" data-i18n-aria="header.language">
@@ -58,9 +62,38 @@
 
     <!-- The latest drops of the players (components/drops.js) -->
     <section class="drops" id="drops" hidden aria-labelledby="drops-label">
-      <p class="drops__label" id="drops-label"><span class="drops__dot" aria-hidden="true"></span><span data-i18n="drops.label">Live drops</span></p>
+      <p class="drops__label" id="drops-label"><span class="drops__dot" aria-hidden="true"></span><span class="drops__long" data-i18n="drops.label">Live drops</span><span class="drops__short" data-i18n="drops.short">Live</span></p>
       <div class="drops__viewport"><div class="drops__track"></div></div>
     </section>
+
+    <!-- Phones: the sheet of the "More" tab (main.js) -->
+    <div class="sheet" id="more-sheet" hidden>
+      <div class="sheet__backdrop" data-close-sheet></div>
+      <div class="sheet__panel" role="dialog" aria-modal="true" aria-label="Menu" data-i18n-aria="nav.menu" tabindex="-1">
+        <span class="sheet__grip" aria-hidden="true"></span>
+        <button class="sheet__player" type="button" data-proxy="player-chip">
+          <span class="sheet__avatar" aria-hidden="true">👤</span>
+          <span class="sheet__who"><b id="sheet-player-name">…</b><span id="sheet-player-progress"></span></span>
+          <span class="sheet__edit" data-i18n="nav.rename">Rename</span>
+        </button>
+        <nav class="sheet__links" aria-label="Other pages" data-i18n-aria="nav.morePages">
+          <a href="#/friends" data-route="friends"><span aria-hidden="true">👥</span><span data-i18n="nav.friends">Friends</span><span class="nav__badge" id="sheet-friends-badge" hidden></span></a>
+          <a href="#/trades" data-route="trades"><span aria-hidden="true">🔄</span><span data-i18n="nav.trades">Trades</span><span class="nav__badge" id="sheet-trades-badge" hidden></span></a>
+          <a href="#/stats" data-route="stats"><span aria-hidden="true">📊</span><span data-i18n="nav.stats">Stats</span></a>
+          <a href="#/rules" data-route="rules"><span aria-hidden="true">📖</span><span data-i18n="nav.rules">Rules</span></a>
+          <a href="#/admin" data-route="admin" id="sheet-admin-link" hidden><span aria-hidden="true">⚙️</span><span data-i18n="nav.admin">Admin</span></a>
+        </nav>
+        <div class="sheet__settings">
+          <div class="lang-switch" role="group" aria-label="Language" data-i18n-aria="header.language">
+            <button type="button" data-lang="en" lang="en" aria-pressed="false">EN</button>
+            <button type="button" data-lang="fr" lang="fr" aria-pressed="false">FR</button>
+          </div>
+          <button class="sheet__setting" type="button" data-proxy="sound-toggle" aria-pressed="true"><span data-sound-icon aria-hidden="true">🔊</span><span data-i18n="header.sound">Sound</span></button>
+          <button class="sheet__setting" type="button" data-proxy="colorblind-toggle" aria-pressed="false"><span aria-hidden="true">👁</span><span data-i18n="header.colorblind">Colorblind mode</span></button>
+          <button class="sheet__setting sheet__setting--logout" type="button" data-proxy="logout"><span aria-hidden="true">⏻</span><span data-i18n="header.logout">Log out</span></button>
+        </div>
+      </div>
+    </div>
 
     <main id="main" class="page" tabindex="-1"></main>
 

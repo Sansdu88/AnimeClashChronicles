@@ -200,6 +200,12 @@ export function renderOpen(main) {
         : stock >= max
           ? t('open.stockFull')
           : `⏳ ${t('open.nextIn', { time: fmt.duration(nextIn) })}`;
+      // Phones show a shorter text (CSS: attr(data-short)).
+      $('.stock__next', panel).dataset.short = unlimited
+        ? t('open.unlimitedShort')
+        : stock >= max
+          ? t('open.stockFullShort')
+          : `⏳ ${fmt.duration(nextIn)}`;
       // A booster arrived while the player was waiting on this page.
       if (previous[id] !== undefined && stock > previous[id] && !document.querySelector('.stage')) {
         if (previous[id] === 0) {

@@ -2347,3 +2347,65 @@
     opacity: 0;
   }
 }
+
+/* ── Phones: the two stocks side by side ────────────────────────────────── */
+@media (max-width: 760px) {
+  .stocks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 14px 0 -8px;
+  }
+
+  .stocks .stock {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 6px;
+    width: auto;
+    padding: 10px 12px;
+    border-radius: 16px;
+  }
+
+  .stocks .stock.is-full {
+    animation: none;
+  }
+
+  .stock__label {
+    padding: 3px 10px 1px;
+    font-size: 14px;
+  }
+
+  .stock__slots {
+    gap: 3px;
+  }
+
+  .stock__slot {
+    width: 10px;
+    height: 16px;
+    border-radius: 3px;
+  }
+
+  .stock__text {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .stock__count {
+    font-size: 26px;
+  }
+
+  /* The short text (data-short, see views/open.js). */
+  .stock__next {
+    font-size: 0;
+  }
+
+  .stock__next::after {
+    content: attr(data-short);
+    font-size: 13px;
+  }
+
+  .shelf {
+    margin-top: 22px;
+  }
+}
