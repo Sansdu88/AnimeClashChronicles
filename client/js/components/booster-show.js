@@ -75,6 +75,11 @@ export function cutIn({ card, shout }, { side = 'left', theme = 'legends', durat
   );
 }
 
+/** Removes the cut-ins on screen (when the show is skipped). */
+export function clearCutIns() {
+  for (const element of document.querySelectorAll('.cutin')) element.remove();
+}
+
 /** Confetti everywhere: from the bottom corners, rain from the top and a big burst in the middle. */
 export function confettiStorm(colors, { rounds = 6 } = {}) {
   const width = window.innerWidth;
