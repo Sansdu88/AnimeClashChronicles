@@ -1,6 +1,6 @@
 /**
  * Data storage in Supabase (PostgreSQL): the card catalog, and the players'
- * accounts, sessions, boosters, daily rewards, Kira, collections and friends. It talks to the Supabase REST API (PostgREST) with
+ * accounts, sessions, boosters, daily rewards, Kira, collections, friends and the game settings. It talks to the Supabase REST API (PostgREST) with
  * fetch and the secret key from .env, so the project has no dependency.
  *
  * The tables are created by the SQL files of supabase/migrations/.
@@ -14,9 +14,11 @@ const newFriendCode = () => Array.from({ length: 6 }, () => CODE_ALPHABET[random
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (value) => typeof value === 'string' && UUID.test(value);
 
-const PLAYER_COLUMNS = 'id,name,email,friend_code,created_at';
+const PLAYER_COLUMNS = 'id,name,email,friend_code,created_at,is_admin';
 const toPlayer = (row) =>
-  row ? { id: row.id, name: row.name, email: row.email, friendCode: row.friend_code, createdAt: row.created_at } : null;
+  row
+    ? { id: row.id, name: row.name, email: row.email, friendCode: row.friend_code, createdAt: row.created_at, isAdmin: row.is_admin === true }
+    : null;
 const TRADE_COLUMNS =
   'id,status,from_card_id,to_card_id,created_at,proposed_at,closed_at,' +
   'from_player:players!trades_from_fk(id,name,friend_code),to_player:players!trades_to_fk(id,name,friend_code)';
@@ -307,10 +309,29 @@ export function createSupabaseStore({ url, secretKey }) {
       };
     },
 
-    /** { claims, lastDay }: daily rewards the player claimed, and the day ('YYYY-MM-DD') of the last one (null if none). */
+    /**
+     * { claims, lastDay, gift }: daily rewards the player claimed, the day ('YYYY-MM-DD') of the
+     * last one (null if none), and whether an admin gave them a Super Booster for the next one.
+     */
     async dailyClaims(playerId) {
-      const [row] = await get(`player_daily?select=claims,last_day&player_id=${eq(playerId)}`);
-      return { claims: row?.claims ?? 0, lastDay: row?.last_day ?? null };
+      const [[row], [player]] = await Promise.all([
+        get(`player_daily?select=claims,last_day&player_id=${eq(playerId)}`),
+        get(`players?select=daily_super&id=${eq(playerId)}`),
+      ]);
+      return { claims: row?.claims ?? 0, lastDay: row?.last_day ?? null, gift: player?.daily_super === true };
+    },
+
+    /** An admin gives (true) or takes back (false) a Super Booster for the player's next daily reward. */
+    async setDailyGift(playerId, gift) {
+      await request('PATCH', `players?id=${eq(playerId)}`, { body: { daily_super: gift } });
+    },
+
+    /** Deletes the daily reward the player claimed on `day`: they can claim it again. False if there was none. */
+    async resetDaily(playerId, day) {
+      const rows = await request('DELETE', `daily_rewards?player_id=${eq(playerId)}&day=${eq(day)}&select=day`, {
+        prefer: 'return=representation',
+      });
+      return rows.length > 0;
     },
 
     /**
@@ -494,6 +515,45 @@ export function createSupabaseStore({ url, secretKey }) {
         `trades?id=eq.${Number(id)}&${side}_id=${eq(playerId)}&status=in.(pending,proposed)&select=id`,
         { body: { status, closed_at: new Date().toISOString() }, prefer: 'return=representation' },
       );
+      return rows.length === 1;
+    },
+
+    // ── Game settings & admin tools ──────────────────────────────────────────
+
+    /** The settings saved from the admin panel ({} if none), see server/settings.js. */
+    async loadSettings() {
+      const [row] = await get('game_settings?select=settings');
+      return row?.settings ?? {};
+    },
+
+    async saveSettings(settings, playerId) {
+      await request('POST', 'game_settings?on_conflict=id', {
+        body: { id: true, settings, updated_at: new Date().toISOString(), updated_by: playerId },
+        prefer: 'resolution=merge-duplicates',
+      });
+    },
+
+    /** Every player, for the admin panel: [{ id, name, email, friendCode, createdAt, isAdmin, kira, dailyGift }] */
+    async allPlayers() {
+      const rows = await getAll('players?select=id,name,email,friend_code,created_at,is_admin,kira,daily_super&order=created_at');
+      return rows.map((row) => ({ ...toPlayer(row), kira: row.kira, dailyGift: row.daily_super }));
+    },
+
+    /** Map(playerId → { claims, lastDay }) of every player who claimed a daily reward. */
+    async allDailyClaims() {
+      const rows = await getAll('player_daily?select=player_id,claims,last_day&order=player_id');
+      return new Map(rows.map((row) => [row.player_id, { claims: row.claims, lastDay: row.last_day }]));
+    },
+
+    /** Deletes what the player did but keeps the account (function admin_clear_player). Returns the boosters deleted. */
+    async clearPlayer(playerId) {
+      return request('POST', 'rpc/admin_clear_player', { body: { p_player_id: playerId } });
+    },
+
+    /** Deletes the player and everything that is theirs (the tables cascade). False if there was no such player. */
+    async deletePlayer(playerId) {
+      if (!isUuid(playerId)) return false;
+      const rows = await request('DELETE', `players?id=${eq(playerId)}&select=id`, { prefer: 'return=representation' });
       return rows.length === 1;
     },
 

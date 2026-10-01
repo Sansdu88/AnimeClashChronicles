@@ -10,10 +10,11 @@ const CORS_HEADERS = {
 
 /**
  * Creates the HTTP server (not listening yet): the REST API under /api and
- * the web UI (static files of `clientDir`) everywhere else.
+ * the web UI (static files of `clientDir`) everywhere else. `savedSettings`:
+ * the game settings saved from the admin panel.
  */
-export function createApp({ catalog, store, clientDir, rng, secureCookies = false, log = console }) {
-  const api = createApi({ catalog, store, rng, secureCookies });
+export function createApp({ catalog, store, clientDir, rng, secureCookies = false, savedSettings, log = console }) {
+  const api = createApi({ catalog, store, rng, secureCookies, savedSettings });
   const serveStatic = createStaticHandler(clientDir);
 
   return createServer(async (req, res) => {

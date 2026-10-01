@@ -10,6 +10,7 @@ import { renderAuth } from './views/auth.js';
 import { renderOpen } from './views/open.js';
 import { openDailyPopup, renderDaily } from './views/daily.js';
 import { renderMarket } from './views/market.js';
+import { renderAdmin } from './views/admin.js';
 import { rollNumber } from './ui/kira.js';
 import { renderCollection } from './views/collection.js';
 import { renderStats } from './views/stats.js';
@@ -22,6 +23,8 @@ const ROUTES = {
   open: renderOpen,
   daily: renderDaily,
   market: renderMarket,
+  // Shown in the menu to admins only (the server checks every admin call).
+  admin: renderAdmin,
   collection: renderCollection,
   stats: renderStats,
   rules: renderRules,
@@ -190,6 +193,7 @@ function updateHeader() {
   $('#player-name').textContent = player.name;
   $('#player-progress').textContent = `${player.stats.uniqueCards}/${player.stats.totalCards}`;
   rollNumber($('#kira-balance'), player.kira);
+  $('#admin-link').hidden = !player.isAdmin;
 }
 
 function setupHeader() {

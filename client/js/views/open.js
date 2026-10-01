@@ -20,6 +20,7 @@ import {
   openBoosters,
   priceOf,
   refreshDaily,
+  refreshMeta,
   reloadPlayer,
   setOf,
   state,
@@ -284,7 +285,8 @@ async function requestBoosters(stage, ask, minWait) {
   } catch (err) {
     toast(errorText(err), 'error');
     if (err.code === 'booster_cooldown' || err.code === 'not_enough_kira') reloadPlayer().catch(() => {});
-    if (err.code === 'daily_claimed' || err.code === 'not_super_day') refreshDaily().catch(() => {});
+    if (['daily_claimed', 'not_super_day', 'daily_changed'].includes(err.code)) refreshDaily().catch(() => {});
+    if (err.code === 'price_changed') refreshMeta().catch(() => {});
     stage.close();
     return null;
   }
@@ -520,9 +522,9 @@ const SUPER_COLORS = ['#ffd23f', '#fff3b0', '#ff2e88', '#8338ec', '#3a86ff', '#0
  * Super Booster. It is claimed when the pack is torn open (closing before keeps it).
  */
 export function openDaily(setId) {
-  const { day, cycle, super: isSuperDay } = dailyStatus();
+  const { day, cycle, super: isSuperDay, superReason } = dailyStatus();
   const stage = createStage();
-  if (isSuperDay) openSuper(stage, { day, cycle });
+  if (isSuperDay) openSuper(stage, { day, cycle, reason: superReason });
   else openSingle(setId, stage, { daily: { day, cycle } });
 }
 
@@ -544,7 +546,7 @@ async function openSuper(stage, daily) {
     stage.content,
     html`<div class="super">
       <p class="mega__title super__title">${t('daily.stageSuper')}</p>
-      <p class="giant__sub">${t('daily.stageDay', daily)} · ${t('daily.stageSuperSub')}</p>
+      <p class="giant__sub">${{ event: t('daily.stageEvent'), gift: t('daily.stageGift') }[daily.reason] ?? t('daily.stageDay', daily)} · ${t('daily.stageSuperSub')}</p>
       <div class="super__scene">
         <div class="giant__rays" aria-hidden="true"></div>
         <span class="super__aura" aria-hidden="true"></span>

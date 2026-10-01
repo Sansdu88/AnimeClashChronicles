@@ -63,8 +63,8 @@ export function boosterStock(id) {
   return { stock, max, every, nextIn };
 }
 
-/** Kira price of a booster of a set at the market (an era booster costs less than All-Stars). */
-export const priceOf = (setId) => state.meta.market.prices[setOf(setId).stock];
+/** Kira price of a booster of a set at the market (set by the admins: an era booster costs less than All-Stars). */
+export const priceOf = (setId) => state.meta.market.prices[setId];
 
 /**
  * Today's daily reward (see dailyStatus in server/booster.js): { today, available, claims, day,
@@ -93,6 +93,12 @@ export async function loadCatalog() {
   state.meta = meta;
   state.cards = cards;
   state.cardsById = new Map(cards.map((card) => [card.id, card]));
+}
+
+/** Reloads the game rules (an admin changed the prices, the odds or the daily reward). */
+export async function refreshMeta() {
+  state.meta = await api('/meta');
+  emit();
 }
 
 // ── Account ──────────────────────────────────────────────────────────────────
@@ -243,9 +249,12 @@ export async function recycleCards(cards) {
   return result;
 }
 
-/** Buys a booster of `setId` with Kira, opened at once. Returns [booster], like openBoosters. */
+/**
+ * Buys a booster of `setId` with Kira, opened at once. Returns [booster], like openBoosters.
+ * The price shown is sent: if an admin changed it since, the server refuses (price_changed).
+ */
 export async function buyBooster(setId) {
-  const result = await api(playerPath('/market/buy'), { method: 'POST', body: { setId } });
+  const result = await api(playerPath('/market/buy'), { method: 'POST', body: { setId, price: priceOf(setId) } });
   setPlayer(result.player);
   addPulls([result.booster]);
   return [result.booster];
@@ -309,6 +318,27 @@ export async function syncCollection() {
   emit();
   return signature() !== before;
 }
+
+// ── Admin panel (admins only, the server checks it) ──────────────────────────
+
+/** { settings, defaults }: the game settings (see server/settings.js). */
+export const fetchAdminSettings = () => api('/admin/settings');
+
+/** Changes some sections of the settings ({ booster, superBooster, market, daily }); the game follows at once. */
+export async function saveAdminSettings(sections) {
+  const result = await api('/admin/settings', { method: 'PATCH', body: sections });
+  await Promise.all([refreshMeta(), refreshDaily()]);
+  return result;
+}
+
+/** { today, players: [{ id, name, email, friendCode, createdAt, isAdmin, kira, cards, copies, boosters, daily }] } */
+export const fetchAdminPlayers = () => api('/admin/players');
+
+const adminPlayerPath = (id, suffix = '') => `/admin/players/${encodeURIComponent(id)}${suffix}`;
+export const adminResetDaily = (id) => api(adminPlayerPath(id, '/daily/reset'), { method: 'POST' });
+export const adminDailyGift = (id, gift) => api(adminPlayerPath(id, '/daily/gift'), { method: 'POST', body: { super: gift } });
+export const adminClearPlayer = (id) => api(adminPlayerPath(id, '/clear'), { method: 'POST' });
+export const adminDeletePlayer = (id) => api(adminPlayerPath(id), { method: 'DELETE' });
 
 // ── Notifications ────────────────────────────────────────────────────────────
 
