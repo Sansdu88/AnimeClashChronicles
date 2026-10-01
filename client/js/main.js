@@ -4,7 +4,7 @@ import { loadCatalog, logout, renamePlayer, restoreSession, state, subscribe } f
 import { enableCardEffects } from './components/card.js';
 import { repaintDrops, startDrops, stopDrops } from './components/drops.js';
 import { formDialog } from './components/modal.js';
-import { closeAllLayers } from './ui/layers.js';
+import { closeAllLayers, pushLayer } from './ui/layers.js';
 import { sfx } from './ui/sfx.js';
 import { toast } from './ui/toast.js';
 import { renderAuth } from './views/auth.js';
@@ -55,10 +55,15 @@ let badgesVersion = 0; // changes when a page shows fresher numbers than a check
 let notifyTimer = 0;
 
 function paintBadge(name, count) {
-  const badge = $(`#${name}-badge`);
-  badge.textContent = count;
-  badge.hidden = !count;
+  // The link of the menu, the one of the "More" sheet (phones), and the "More" tab: friends + trades.
+  for (const badge of [$(`#${name}-badge`), $(`#sheet-${name}-badge`)]) {
+    badge.textContent = count;
+    badge.hidden = !count;
+  }
   badges[name] = count;
+  const more = (badges.friends ?? 0) + (badges.trades ?? 0);
+  $('#more-badge').textContent = more;
+  $('#more-badge').hidden = !more;
 }
 
 /** Numbers given by the Friends / Trades pages, which just read them. */
@@ -170,6 +175,7 @@ function paintColorblind() {
   const button = $('#colorblind-toggle');
   button.setAttribute('aria-pressed', String(colorblind));
   button.title = colorblind ? t('header.colorblindOn') : t('header.colorblindOff');
+  $('[data-proxy="colorblind-toggle"]').setAttribute('aria-pressed', String(colorblind));
 }
 
 function paintSound() {
@@ -177,6 +183,8 @@ function paintSound() {
   button.textContent = sfx.enabled ? '🔊' : '🔇';
   button.setAttribute('aria-pressed', String(sfx.enabled));
   button.title = sfx.enabled ? t('header.soundOn') : t('header.soundOff');
+  $('[data-proxy="sound-toggle"]').setAttribute('aria-pressed', String(sfx.enabled));
+  $('[data-sound-icon]').textContent = sfx.enabled ? '🔊' : '🔇';
 }
 
 /** Texts of index.html, marked with data-i18n attributes. */
@@ -195,8 +203,52 @@ function updateHeader() {
   if (!player) return;
   $('#player-name').textContent = player.name;
   $('#player-progress').textContent = `${player.stats.uniqueCards}/${player.stats.totalCards}`;
+  $('#sheet-player-name').textContent = player.name;
+  $('#sheet-player-progress').textContent = `${player.stats.uniqueCards}/${player.stats.totalCards}`;
   rollNumber($('#kira-balance'), player.kira);
   $('#admin-link').hidden = !player.isAdmin;
+  $('#sheet-admin-link').hidden = !player.isAdmin;
+}
+
+// ── Phones: the "More" sheet ─────────────────────────────────────────────────
+// The tab bar at the bottom shows the main pages; "More" opens a sheet with the
+// other ones and the settings of the header (its buttons click the header's).
+
+const sheet = $('#more-sheet');
+const MORE_ROUTES = ['friends', 'trades', 'stats', 'rules', 'admin'];
+let removeSheetLayer = null;
+
+function openSheet() {
+  sheet.hidden = false;
+  requestAnimationFrame(() => sheet.classList.add('is-open'));
+  document.body.classList.add('has-sheet');
+  $('#nav-more').setAttribute('aria-expanded', 'true');
+  removeSheetLayer = pushLayer(closeSheet);
+  $('.sheet__panel', sheet).focus({ preventScroll: true });
+}
+
+function closeSheet() {
+  if (!sheet.classList.contains('is-open')) return;
+  removeSheetLayer?.();
+  removeSheetLayer = null;
+  sheet.classList.remove('is-open');
+  document.body.classList.remove('has-sheet');
+  $('#nav-more').setAttribute('aria-expanded', 'false');
+  setTimeout(() => {
+    if (!sheet.classList.contains('is-open')) sheet.hidden = true;
+  }, 250);
+}
+
+function setupSheet() {
+  $('#nav-more').addEventListener('click', () => (sheet.classList.contains('is-open') ? closeSheet() : openSheet()));
+  sheet.addEventListener('click', (event) => {
+    if (event.target.closest('[data-close-sheet], .sheet__links a')) closeSheet();
+    const proxy = event.target.closest('[data-proxy]');
+    if (!proxy) return;
+    // Renaming and logging out leave the sheet; sound and colorblind mode keep it open.
+    if (['player-chip', 'logout'].includes(proxy.dataset.proxy)) closeSheet();
+    $(`#${proxy.dataset.proxy}`).click();
+  });
 }
 
 function setupHeader() {
@@ -236,10 +288,11 @@ function setupHeader() {
 function render({ scroll = true } = {}) {
   if (screen !== 'app') return;
   const [name, param] = currentRoute();
-  for (const link of $$('.nav a')) {
+  for (const link of $$('.nav a, .sheet__links a')) {
     if (link.dataset.route === name) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
+  $('#nav-more').classList.toggle('is-current', MORE_ROUTES.includes(name));
   document.title = `${t(`titles.${name}`)} · Anime Clash Chronicles`;
   main.dataset.view = name;
   ROUTES[name](main, param ?? undefined);
@@ -318,6 +371,7 @@ async function start() {
 
   enableCardEffects();
   setupHeader();
+  setupSheet();
   subscribe(updateHeader);
 
   window.addEventListener('hashchange', () => {
