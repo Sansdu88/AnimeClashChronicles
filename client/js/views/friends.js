@@ -122,7 +122,7 @@ function paint(main, data) {
 
         <section class="panel">
           <h2 class="panel__title">${t('friends.ranking')}</h2>
-          ${rankingHTML(data.ranking, data.scoring)}
+          ${data.ranking.length ? rankingHTML(data.ranking, data.scoring) : html`<p class="muted">${t('friends.noRanking')}</p>`}
         </section>
 
         <section class="panel panel--wide">
