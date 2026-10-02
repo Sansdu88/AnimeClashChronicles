@@ -134,8 +134,9 @@ export async function restoreSession() {
   return player ? signedIn(player) : null;
 }
 
-export async function login(email, password) {
-  const { player } = await api('/auth/login', { method: 'POST', body: { email, password } });
+/** `id`: the e-mail or the player name. */
+export async function login(id, password) {
+  const { player } = await api('/auth/login', { method: 'POST', body: { login: id, password } });
   return signedIn(player);
 }
 

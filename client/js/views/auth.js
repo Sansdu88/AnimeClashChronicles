@@ -6,7 +6,8 @@ import { cardHTML } from '../components/card.js';
 
 let mode = 'login';
 // Kept when switching tabs or languages, so the player does not type them again.
-const draft = { email: '', name: '' };
+// `login`: the e-mail or the player name typed to log in.
+const draft = { login: '', email: '', name: '' };
 
 /** `onSuccess(player, mode)` is called once logged in. */
 export function renderAuth(main, { onSuccess }) {
@@ -37,10 +38,16 @@ export function renderAuth(main, { onSuccess }) {
               <input class="input" name="name" maxlength="24" autocomplete="nickname" value="${draft.name}">
               <span class="field__hint">${t('auth.nameHint')}</span>
             </label>`}
-            <label class="field">
-              <span class="field__label">${t('auth.email')}</span>
-              <input class="input" name="email" type="email" autocomplete="email" required value="${draft.email}">
-            </label>
+            ${isLogin
+              ? html`<label class="field">
+                  <span class="field__label">${t('auth.loginId')}</span>
+                  <input class="input" name="login" autocomplete="username" autocapitalize="none" spellcheck="false" required
+                    value="${draft.login}">
+                </label>`
+              : html`<label class="field">
+                  <span class="field__label">${t('auth.email')}</span>
+                  <input class="input" name="email" type="email" autocomplete="email" required value="${draft.email}">
+                </label>`}
             <label class="field">
               <span class="field__label">${t('auth.password')}</span>
               <span class="password">
@@ -69,8 +76,9 @@ export function renderAuth(main, { onSuccess }) {
   const form = $('.auth__form', main);
   const errorBox = $('.form-error', form);
   const submit = $('.auth__submit', form);
-  const { email, password } = form.elements;
-  (email.value ? password : (form.elements.name ?? email)).focus({ preventScroll: true });
+  const { password } = form.elements;
+  const id = form.elements.login ?? form.elements.email; // e-mail or name to log in, e-mail to sign up
+  (id.value ? password : (form.elements.name ?? id)).focus({ preventScroll: true });
 
   main.querySelectorAll('[data-mode]').forEach((button) =>
     button.addEventListener('click', () => {
@@ -81,7 +89,11 @@ export function renderAuth(main, { onSuccess }) {
   );
 
   form.addEventListener('input', (event) => {
-    if (event.target.name in draft) draft[event.target.name] = event.target.value;
+    const { name, value } = event.target;
+    if (name in draft) draft[name] = value;
+    // An e-mail is kept from one tab to the other (not a player name typed to log in).
+    if (name === 'email') draft.login = value;
+    if (name === 'login') draft.email = value.includes('@') ? value : '';
   });
 
   $('.password__toggle', form).addEventListener('click', (event) => {
@@ -95,17 +107,17 @@ export function renderAuth(main, { onSuccess }) {
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     errorBox.textContent = '';
-    if (!email.value.trim() || !password.value) {
-      errorBox.textContent = t('auth.required');
-      (email.value.trim() ? password : email).focus();
+    if (!id.value.trim() || !password.value) {
+      errorBox.textContent = t(mode === 'login' ? 'auth.requiredLogin' : 'auth.required');
+      (id.value.trim() ? password : id).focus();
       return;
     }
     submit.disabled = true;
     try {
       const player =
         mode === 'login'
-          ? await login(email.value.trim(), password.value)
-          : await register({ email: email.value.trim(), password: password.value, name: form.elements.name?.value.trim() });
+          ? await login(id.value.trim(), password.value)
+          : await register({ email: id.value.trim(), password: password.value, name: form.elements.name?.value.trim() });
       const how = mode;
       draft.name = '';
       mode = 'login';

@@ -48,7 +48,7 @@ can take a minute.
 | **Friends** | Every player has a friend code (e.g. `#K7Q2XM`). Send friend requests by code or e-mail, accept or decline them, look at your friends' collections, and compete in the friends ranking. |
 | **Trades** | Offer one copy of a card to a friend: they choose one of their cards to give back (or decline), then you accept the swap (or cancel it). Each player gives one copy: with ×5 you keep ×4, and trading your only copy removes the card from your collection. The picker shows which cards your friend is missing. |
 | **Stats** | Luck meter (your pulls compared with the official odds), booster history, global leaderboard. |
-| **Accounts** | Sign up with an e-mail and a password, log in from any browser, rename yourself, change your password, log out. Several people on the same network can play on one server (see `HOST` below). |
+| **Accounts** | Sign up with an e-mail and a password, log in from any browser with your e-mail or your player name (names are unique), rename yourself, change your password, log out. Several people on the same network can play on one server (see `HOST` below). |
 | **Colorblind mode** | The 👁 button (off by default) switches rarities to colors that stay distinct with every kind of color blindness and adds card-game symbols: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR · ☆☆☆ REV. |
 | **Live drops** | A banner under the menu shows the latest drops of the players of the whole world in an endless carousel: the best card of each of the latest boosters, your friends' first, then the rarest, then the newest (at most 2 per player; yours and the admins' are left out). It stops when hovered, and a click shows the card. |
 | **Admin panel** | For the admins only (set from the database console, see [Admins](#admins)): the Kira price of each booster and the Kira of a recycled duplicate, the daily reward (a Super Booster every N daily rewards, the boosters the players can choose, Super Booster event days for everyone), the rarity odds of the boosters and of the Super Booster. Every change applies at once. A list of all the players with a search bar, to give a player their daily reward back, give them a Super Booster for their next one, clear their data (cards, boosters, Kira, friends, trades, daily rewards; the account stays) or delete them. |
@@ -182,7 +182,7 @@ Render's free plan) and saved in `game_settings`, read at startup.
   API clients can use the returned token instead: `Authorization: Bearer <token>`. Only a
   SHA-256 hash of each token is stored in the database.
 - Player routes only give access to **your own** player (401 when logged out, 403 for someone else).
-- **10 failed logins** in 15 minutes for the same e-mail block further attempts for a while (429).
+- **10 failed logins** in 15 minutes for the same e-mail or player name block further attempts for a while (429).
 - Requests that change data must be sent as JSON, which stops other websites from submitting
   forms with your session cookie (CSRF).
 - Players created by the first version of the game (before accounts) are not lost: signing up
@@ -200,13 +200,13 @@ with the token returned by register/login.
 | GET | `/api/cards` | All cards. Filters: `rarity`, `type`, `era`, `set`, `q` (search), `sort` (`number`, `rarity`, `name`, `year`, `power`) |
 | GET | `/api/cards/:cardId` | One card |
 | GET | `/api/sets` · `/api/sets/:setId` | Booster sets (with their cards) |
-| POST | `/api/auth/register` | Create an account. Body: `{ "email", "password", "name"? }` → `{ player, token }` + session cookie |
-| POST | `/api/auth/login` | Log in. Body: `{ "email", "password" }` → `{ player, token }` + session cookie |
+| POST | `/api/auth/register` | Create an account. Body: `{ "email", "password", "name"? }` → `{ player, token }` + session cookie. The name is unique whatever the case (taken → 409 `name_taken`) and cannot contain `@` |
+| POST | `/api/auth/login` | Log in with the e-mail or the player name. Body: `{ "login", "password" }` (`"email"` instead of `"login"` works too) → `{ player, token }` + session cookie |
 | POST | `/api/auth/logout` | Log out (ends the session) |
 | GET | `/api/auth/me` | The logged-in player (`{ "player": null }` when logged out) |
 | POST | `/api/auth/password` | Change password. Body: `{ "currentPassword", "newPassword" }` |
 | GET | `/api/players/:playerId` | Profile and stats |
-| PATCH | `/api/players/:playerId` | Rename. Body: `{ "name": "…" }` (1–24 characters) |
+| PATCH | `/api/players/:playerId` | Rename. Body: `{ "name": "…" }` (1–24 characters, no `@`; taken → 409 `name_taken`) |
 | POST | `/api/players/:playerId/boosters` | Open boosters from their stock. Body: `{ "setId": "all-stars", "count": 1 }` (`count` 1–10). The era boosters share a stock (+1 every 2 minutes), All-Stars has its own (+1 every 10 minutes), 10 at most each: not enough → 429 `booster_cooldown` with `details.retryIn` (seconds) and `details.stock`. Profiles include `stocks` (`{ "era": { "stock", "nextIn" }, "all-stars": { … } }`, `nextIn` = seconds before the next one, 0 when full) and `kira` |
 | GET | `/api/players/:playerId/boosters?limit=20` | Booster history, newest first (`kira`: the price of a booster bought at the market) |
 | GET | `/api/players/:playerId/market` | `{ kira, spare }`: your Kira, and for each card the duplicates you can recycle |

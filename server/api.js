@@ -33,14 +33,23 @@ function randomPlayerName(rng = Math.random) {
   return `${pick(ADJECTIVES)} ${pick(NOUNS)} ${100 + Math.floor(rng() * 900)}`;
 }
 
+/** A name as it is saved and looked up: no control characters, single spaces, trimmed. */
+const tidyName = (value) => value.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim();
+
 function cleanPlayerName(value) {
   if (typeof value !== 'string') throw new HttpError(400, 'The name must be a string', null, 'invalid_name');
-  const name = value.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim();
+  const name = tidyName(value);
   if (name.length === 0 || [...name].length > NAME_MAX_LENGTH) {
     throw new HttpError(400, `The name must be 1 to ${NAME_MAX_LENGTH} characters long`, null, 'invalid_name');
   }
+  // Players log in with their e-mail or their name: "@" tells them apart.
+  if (name.includes('@')) throw new HttpError(400, 'The name cannot contain "@"', null, 'name_at_sign');
   return name;
 }
+
+/** Two players cannot have the same name, whatever the case (unique index players_name_key). */
+const nameTaken = () => new HttpError(409, 'Another player already has this name', null, 'name_taken');
+const isNameConflict = (err) => err.code === '23505' && /players_name_key/.test(err.message);
 
 function intParam(value, { name, min, max, fallback }) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -385,42 +394,56 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   // ── Accounts ───────────────────────────────────────────────────────────────
 
   /**
-   * Body: { email, password, name?, claimPlayerId? }. `claimPlayerId` turns a
-   * player created before accounts existed into this account (its cards are kept).
+   * Body: { email, password, name?, claimPlayerId? }. The name is unique (409 name_taken);
+   * without one, a random one is drawn. `claimPlayerId` turns a player created before
+   * accounts existed into this account (its cards are kept).
    */
   router.post('/api/auth/register', async ({ body }) => {
     const email = cleanEmail(body.email);
     const password = checkPassword(body.password);
-    const name = body.name === undefined || body.name === '' ? randomPlayerName(rng) : cleanPlayerName(body.name);
-    if (await store.findLogin(email)) throw new HttpError(409, 'An account already exists with this e-mail', null, 'email_taken');
+    const chosenName = body.name === undefined || body.name === '' ? null : cleanPlayerName(body.name);
+    const emailTaken = () => new HttpError(409, 'An account already exists with this e-mail', null, 'email_taken');
+    if (await store.findLogin(email)) throw emailTaken();
+    if (chosenName && (await store.findLoginByName(chosenName))) throw nameTaken();
     const passwordHash = await hashPassword(password);
 
     let player = null;
-    if (typeof body.claimPlayerId === 'string' && (await store.claimPlayer(body.claimPlayerId, { name, email, passwordHash }))) {
-      player = await store.getPlayer(body.claimPlayerId);
-    }
-    try {
-      player ??= await store.createPlayer(name, { email, passwordHash });
-    } catch (err) {
-      // Two sign-ups with the same e-mail at the same time: the unique index decides.
-      if (/UNIQUE/i.test(err.message)) throw new HttpError(409, 'An account already exists with this e-mail', null, 'email_taken');
-      throw err;
+    for (let attempt = 1; !player; attempt++) {
+      const name = chosenName ?? randomPlayerName(rng);
+      try {
+        if (typeof body.claimPlayerId === 'string' && (await store.claimPlayer(body.claimPlayerId, { name, email, passwordHash }))) {
+          player = await store.getPlayer(body.claimPlayerId);
+        }
+        player ??= await store.createPlayer(name, { email, passwordHash });
+      } catch (err) {
+        // Two sign-ups at the same time: the unique indexes decide. A random name
+        // another player already has is simply drawn again.
+        if (isNameConflict(err)) {
+          if (chosenName || attempt >= 5) throw nameTaken();
+          continue;
+        }
+        if (/UNIQUE/i.test(err.message)) throw emailTaken();
+        throw err;
+      }
     }
     return startSession(player, 201);
   });
 
+  /** Body: { login, password }: `login` is the e-mail or the player name (`email` is accepted too). */
   router.post('/api/auth/login', async ({ req, body }) => {
-    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    const raw = body.login ?? body.email;
+    const id = typeof raw === 'string' ? tidyName(raw) : '';
     const password = typeof body.password === 'string' ? body.password : '';
-    const limiterKey = `${req.socket.remoteAddress}|${email}`;
+    const limiterKey = `${req.socket.remoteAddress}|${id.toLowerCase()}`;
     if (loginLimiter.blocked(limiterKey)) {
       throw new HttpError(429, 'Too many failed attempts, try again in a few minutes', null, 'too_many_attempts');
     }
-    const login = email ? await store.findLogin(email) : null;
+    // Names never contain "@", e-mails always do.
+    const login = !id ? null : id.includes('@') ? await store.findLogin(id.toLowerCase()) : await store.findLoginByName(id);
     const valid = login ? await verifyPassword(password, login.passwordHash) : (await burnPasswordCheck(password), false);
     if (!valid) {
       loginLimiter.fail(limiterKey);
-      throw new HttpError(401, 'Wrong e-mail or password', null, 'invalid_credentials');
+      throw new HttpError(401, 'Wrong e-mail, player name or password', null, 'invalid_credentials');
     }
     loginLimiter.reset(limiterKey);
     return startSession(await store.getPlayer(login.id), 200);
@@ -452,9 +475,16 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
 
   router.get('/api/players/:playerId', async ({ req, params }) => profile(await requireSelf(req, params.playerId)));
 
+  /** Body: { name } — unique, whatever the case (409 name_taken). */
   router.patch('/api/players/:playerId', async ({ req, params, body }) => {
     await requireSelf(req, params.playerId);
-    return profile(await store.renamePlayer(params.playerId, cleanPlayerName(body.name)));
+    const name = cleanPlayerName(body.name);
+    try {
+      return profile(await store.renamePlayer(params.playerId, name));
+    } catch (err) {
+      if (isNameConflict(err)) throw nameTaken();
+      throw err;
+    }
   });
 
   router.post('/api/players/:playerId/boosters', async ({ req, params, body }) => {
