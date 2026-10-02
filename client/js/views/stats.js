@@ -1,10 +1,14 @@
-/** "Stats" page: numbers, luck compared with the official odds, history, leaderboard and account. */
-import { $, fmt, html, mount, raw } from '../dom.js';
+/**
+ * "Stats" page: numbers, the weekly ranking (rewards every Sunday at midnight), luck
+ * compared with the official odds, history, leaderboard and account.
+ */
+import { $, everySecond, fmt, html, mount, raw } from '../dom.js';
 import { cardText, errorText, rarityName, setName, t, tHtml } from '../i18n.js';
 import {
   changePassword,
   fetchHistory,
   fetchLeaderboard,
+  fetchWeekly,
   reloadPlayer,
   renamePlayer,
   resetCollection,
@@ -63,6 +67,74 @@ function historyHTML(boosters) {
   </ol>`;
 }
 
+const medal = (rank) => ({ 1: '🥇', 2: '🥈', 3: '🥉' })[rank] ?? rank;
+
+/** "5 Super Boosters + 100 Kira": a reward of the weekly ranking, in words (for toasts and labels). */
+export function rewardText({ superBoosters = 0, kira = 0 }) {
+  const parts = [superBoosters && t('weekly.superBoosters', { count: superBoosters }), kira && t('weekly.kira', { count: fmt.number(kira) })];
+  return parts.filter(Boolean).join(' + ') || '—';
+}
+
+/** A reward of the weekly ranking as chips: ⭐ ×5 (Super Boosters), 300 ✦. */
+const rewardHTML = (reward) =>
+  html`<span class="reward" title="${rewardText(reward)}">
+    ${reward.superBoosters > 0 && html`<span class="reward__super">⭐ ×${reward.superBoosters}</span>`}
+    ${reward.kira > 0 && kiraHTML(reward.kira)}
+    ${!reward.superBoosters && !reward.kira && '—'}
+  </span>`;
+
+/**
+ * The weekly ranking: one row per rank that gets a reward (empty while nobody holds it),
+ * your row below when you are further down, and the winners of last week.
+ */
+function weeklyHTML(weekly) {
+  const row = (rank, player, reward) => html`<tr class="${player?.you ? 'is-you' : ''}">
+    <td>${medal(rank)}</td>
+    <td>${player ? html`${player.name}${player.you ? html` <span class="you-pill">${t('stats.you')}</span>` : ''}` : html`<span class="muted">—</span>`}</td>
+    <td>${player ? html`<b class="score">${fmt.number(player.points)}</b>` : ''}</td>
+    <td>${player ? html`${player.cards} <span class="muted">(${t('weekly.new', { count: player.newCards })})</span>` : ''}</td>
+    <td>${reward ? rewardHTML(reward) : ''}</td>
+  </tr>`;
+  const { you, last } = weekly;
+  const winners = last?.results.slice(0, 3) ?? [];
+  const yours = last?.results.find((result) => result.you);
+  return html`<div class="weekly__body">
+    <div class="table-wrap">
+      <table class="leaderboard weekly__table">
+        <thead><tr>
+          <th scope="col">${t('stats.rank')}</th><th scope="col">${t('stats.player')}</th>
+          <th scope="col">${t('weekly.points')}</th><th scope="col">${t('stats.cards')}</th><th scope="col">${t('weekly.reward')}</th>
+        </tr></thead>
+        <tbody>
+          ${weekly.rewards.map((reward, i) => row(i + 1, weekly.players[i], reward))}
+          ${you && you.rank > weekly.rewards.length && html`<tr class="weekly__gap" aria-hidden="true"><td colspan="5">⋯</td></tr>${row(you.rank, you, null)}`}
+        </tbody>
+      </table>
+    </div>
+    <aside class="weekly__side">
+      <div class="weekly__you">
+        <h3 class="panel__subtitle">${t('weekly.yourWeek')}</h3>
+        ${you
+          ? html`<p class="weekly__rank"><span class="weekly__medal">${medal(you.rank)}</span> ${t('weekly.yourRank', { rank: you.rank, points: fmt.number(you.points), count: you.rank })}</p>`
+          : html`<p class="muted">${t('weekly.notRanked')}</p>`}
+      </div>
+      <div class="weekly__last">
+        <h3 class="panel__subtitle">${t('weekly.last')}</h3>
+        ${winners.length
+          ? html`<ol class="weekly__winners">
+              ${winners.map((winner) => html`<li class="${winner.you ? 'is-you' : ''}">
+                <span class="weekly__medal">${medal(winner.rank)}</span>
+                <b>${winner.name}</b> <span class="muted">${fmt.number(winner.points)} ${t('weekly.pts')}</span>
+                ${rewardHTML(winner)}
+              </li>`)}
+            </ol>
+            ${yours && html`<p class="weekly__won">🎉 ${t('weekly.youWon', { rank: yours.rank, prize: rewardText(yours), count: yours.rank })}</p>`}`
+          : html`<p class="muted">${t('weekly.lastEmpty')}</p>`}
+      </div>
+    </aside>
+  </div>`;
+}
+
 function leaderboardHTML(players) {
   if (!players.length) return html`<p class="muted">${t('stats.nobody')}</p>`;
   return html`<table class="leaderboard">
@@ -87,8 +159,9 @@ export async function renderStats(main) {
 
   let history;
   let leaderboard;
+  let weekly;
   try {
-    [{ boosters: history }, { players: leaderboard }] = await Promise.all([fetchHistory(12), fetchLeaderboard(), reloadPlayer()]);
+    [{ boosters: history }, { players: leaderboard }, weekly] = await Promise.all([fetchHistory(12), fetchLeaderboard(), fetchWeekly(), reloadPlayer()]);
   } catch (err) {
     if (id === renderId) mount(main, html`<div class="empty panel"><p class="empty__title">${t('common.oops')}</p><p>${errorText(err)}</p></div>`);
     return;
@@ -121,6 +194,14 @@ export async function renderStats(main) {
       </div>
 
       <div class="stats-grid">
+        <section class="panel panel--wide weekly">
+          <div class="weekly__head">
+            <h2 class="panel__title">🏆 ${t('weekly.title')}</h2>
+            <p class="weekly__timer"></p>
+          </div>
+          <p class="muted">${t('weekly.hint')}</p>
+          ${weeklyHTML(weekly)}
+        </section>
         <section class="panel">
           <h2 class="panel__title">${t('stats.luck')}</h2>
           ${luckHTML(stats)}
@@ -150,6 +231,21 @@ export async function renderStats(main) {
       </div>
     </section>`,
   );
+
+  // The week ends on Sunday at midnight: the page asks for the new one (and the rewards are given).
+  const timer = $('.weekly__timer', main);
+  const weekEndsAt = Date.now() + weekly.nextIn * 1000;
+  everySecond(() => {
+    if (!timer.isConnected) return false;
+    const left = Math.ceil((weekEndsAt - Date.now()) / 1000);
+    if (left <= 0) {
+      renderStats(main);
+      return false;
+    }
+    const time = left >= 86_400 ? t('weekly.days', { days: Math.floor(left / 86_400), hours: Math.floor((left % 86_400) / 3600) }) : fmt.duration(left);
+    timer.textContent = `⏳ ${t('weekly.endsIn', { time })}`;
+    return true;
+  });
 
   $('.view-stats', main).addEventListener('click', async (event) => {
     const action = event.target.closest('[data-action]')?.dataset.action;

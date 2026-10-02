@@ -234,6 +234,27 @@ export function createSupabaseStore({ url, secretKey }) {
       }));
     },
 
+    /**
+     * Opens Super Boosters the player won (function open_super_boosters): same result as
+     * openBoosters, or { error: 'no_booster', stock } when they have fewer than that.
+     */
+    async openSuperBoosters(playerId, setId, boosters) {
+      const result = await request('POST', 'rpc/open_super_boosters', {
+        body: {
+          p_player_id: playerId,
+          p_set_id: setId,
+          p_boosters: boosters.map((cards) => cards.map((card) => ({ id: card.id, rarity: card.rarity }))),
+        },
+      });
+      if (result.error) return result;
+      return result.boosters.map((booster, i) => ({
+        id: booster.id,
+        setId,
+        openedAt: booster.openedAt,
+        pulls: boosters[i].map((card, j) => ({ card, isNew: booster.pulls[j].isNew })),
+      }));
+    },
+
     /** Saves boosters without taking them from a stock (admins, function record_boosters). Same result as openBoosters. */
     async recordBoosters(playerId, setId, boosters) {
       const saved = await request('POST', 'rpc/record_boosters', {
@@ -290,12 +311,18 @@ export function createSupabaseStore({ url, secretKey }) {
     },
 
     /**
-     * { boostersFrom, starsFrom, kira }: the dates (ISO) the era and the All-Stars stocks count
-     * from (null = full, see boosterStock() in booster.js), and the player's Kira.
+     * { boostersFrom, starsFrom, kira, superBoosters }: the dates (ISO) the era and the All-Stars
+     * stocks count from (null = full, see boosterStock() in booster.js), the player's Kira, and
+     * the Super Boosters they won in the weekly ranking and have not opened yet.
      */
     async wallet(playerId) {
-      const [row] = await get(`players?select=boosters_from,stars_from,kira&id=${eq(playerId)}`);
-      return { boostersFrom: row?.boosters_from ?? null, starsFrom: row?.stars_from ?? null, kira: row?.kira ?? 0 };
+      const [row] = await get(`players?select=boosters_from,stars_from,kira,super_boosters&id=${eq(playerId)}`);
+      return {
+        boostersFrom: row?.boosters_from ?? null,
+        starsFrom: row?.stars_from ?? null,
+        kira: row?.kira ?? 0,
+        superBoosters: row?.super_boosters ?? 0,
+      };
     },
 
     /**
@@ -330,6 +357,52 @@ export function createSupabaseStore({ url, secretKey }) {
         openedAt: booster.openedAt,
         pulls: boosters[i].map((card, j) => ({ card, isNew: booster.pulls[j].isNew })),
       }));
+    },
+
+    // ── Daily shop ───────────────────────────────────────────────────────────
+
+    /** Set of the cards the player bought at the daily shop of `day` ('YYYY-MM-DD'). */
+    async shopPurchases(playerId, day) {
+      const rows = await get(`card_moves?select=card_id&player_id=${eq(playerId)}&shop_day=${eq(day)}`);
+      return new Set(rows.map((row) => row.card_id));
+    },
+
+    /**
+     * Buys a card of the shop of `day` for `price` Kira (function buy_shop_card): { kira: new balance,
+     * isNew }, or { error: 'bought' } (already bought that day) or { error: 'no_kira', kira }.
+     */
+    async buyShopCard(playerId, day, cardId, price) {
+      return request('POST', 'rpc/buy_shop_card', { body: { p_player_id: playerId, p_day: day, p_card_id: cardId, p_price: price } });
+    },
+
+    // ── Weekly ranking ───────────────────────────────────────────────────────
+
+    /**
+     * The cards pulled from `from` to `to` (ISO), by player, rarity and new or not (function weekly_pulls):
+     * [{ playerId, name, isAdmin, rarity, isNew, pulls, lastAt }].
+     */
+    async weeklyPulls(from, to) {
+      const rows = await request('POST', 'rpc/weekly_pulls', { body: { p_from: from, p_to: to } });
+      return rows.map((row) => ({
+        playerId: row.player_id,
+        name: row.name,
+        isAdmin: row.is_admin === true,
+        rarity: row.rarity,
+        isNew: row.is_new,
+        pulls: row.pulls,
+        lastAt: row.last_at,
+      }));
+    },
+
+    /** The weeks already ranked, latest first: [{ week: its Monday, settledAt, results: [{ playerId, name, rank, points, superBoosters, kira }] }]. */
+    async weeklyRankings(limit) {
+      const rows = await get(`weekly_rankings?select=week,settled_at,results&order=week.desc&limit=${Number(limit)}`);
+      return rows.map((row) => ({ week: row.week, settledAt: row.settled_at, results: row.results }));
+    },
+
+    /** Ends the week `week` (its Monday) and gives the rewards (function settle_week). False if it was already ended. */
+    async settleWeek(week, results) {
+      return request('POST', 'rpc/settle_week', { body: { p_week: week, p_results: results } });
     },
 
     /**
@@ -580,10 +653,10 @@ export function createSupabaseStore({ url, secretKey }) {
       return new Set(rows.map((row) => row.id));
     },
 
-    /** Every player, for the admin panel: [{ id, name, email, friendCode, createdAt, isAdmin, kira, dailyGift }] */
+    /** Every player, for the admin panel: [{ id, name, email, friendCode, createdAt, isAdmin, kira, superBoosters, dailyGift }] */
     async allPlayers() {
-      const rows = await getAll('players?select=id,name,email,friend_code,created_at,is_admin,kira,daily_super&order=created_at');
-      return rows.map((row) => ({ ...toPlayer(row), kira: row.kira, dailyGift: row.daily_super }));
+      const rows = await getAll('players?select=id,name,email,friend_code,created_at,is_admin,kira,super_boosters,daily_super&order=created_at');
+      return rows.map((row) => ({ ...toPlayer(row), kira: row.kira, superBoosters: row.super_boosters, dailyGift: row.daily_super }));
     },
 
     /** Map(playerId → { claims, lastDay }) of every player who claimed a daily reward. */

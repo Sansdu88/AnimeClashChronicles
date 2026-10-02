@@ -14,7 +14,7 @@ import { renderMarket } from './views/market.js';
 import { renderAdmin } from './views/admin.js';
 import { rollNumber } from './ui/kira.js';
 import { renderCollection } from './views/collection.js';
-import { renderStats } from './views/stats.js';
+import { renderStats, rewardText } from './views/stats.js';
 import { renderRules } from './views/rules.js';
 import { renderFriendCollection, renderFriends } from './views/friends.js';
 import { renderTrades } from './views/trades.js';
@@ -129,6 +129,7 @@ function paintStockBadge() {
 // browser), then the badge of the "Daily" link. At midnight the server is asked again.
 
 const DAILY_POPUP_KEY = 'animeClashChronicles.dailyPopup';
+const WEEKLY_TOAST_KEY = 'animeClashChronicles.weeklyToast';
 let dailyCheckAt = 0; // no new-day check before this time (ms): checks are spaced out when they fail
 
 function maybeDailyPopup() {
@@ -139,6 +140,17 @@ function maybeDailyPopup() {
   if (currentRoute()[0] === 'daily') return; // the page shows it already
   if (isBusy() || document.body.classList.contains('has-stage')) toast(t('daily.ready'), 'info', 5000);
   else openDailyPopup();
+}
+
+/** Once per week ended: what the player won in the weekly ranking (their Super Boosters wait on the shelf). */
+function maybeWeeklyToast() {
+  const won = state.player.lastWeekly;
+  if (!won || (!won.superBoosters && !won.kira)) return;
+  const key = `${state.player.id} ${won.week}`;
+  if (storage.get(WEEKLY_TOAST_KEY) === key) return;
+  storage.set(WEEKLY_TOAST_KEY, key);
+  sfx.play('fanfare');
+  toast(t('weekly.wonToast', { rank: won.rank, prize: rewardText(won), count: won.rank }), 'success', 8000);
 }
 
 async function paintDaily() {
@@ -334,6 +346,7 @@ function enterApp() {
   paintStockBadge();
   paintDaily();
   maybeDailyPopup();
+  maybeWeeklyToast();
 }
 
 async function doLogout() {

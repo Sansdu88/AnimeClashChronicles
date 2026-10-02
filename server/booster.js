@@ -1,7 +1,7 @@
 /**
  * Booster opening rules (pure functions, no I/O, so they are easy to test).
  */
-import { BOOSTER, DAILY, RARITY_IDS, RARITY_RANK, SCORE, STOCKS } from './config.js';
+import { BOOSTER, DAILY, RARITY_IDS, RARITY_RANK, SCORE, SHOP, STOCKS } from './config.js';
 
 /** Picks a key of `weights` ({ key: relativeWeight }) at random. */
 function weightedPick(weights, rng = Math.random) {
@@ -92,6 +92,93 @@ export function rewardDay(now = Date.now(), timeZone = DAILY.timeZone) {
   // The clock may change before midnight (daylight saving time): use the offset of that night.
   const next = midnight - zoneOffset(new Date(midnight - offset), timeZone);
   return { today: wall.toISOString().slice(0, 10), nextIn: Math.max(1, Math.ceil((next - now) / 1000)) };
+}
+
+/** 'YYYY-MM-DD' `days` days after `day` (before it when negative). */
+export const addDays = (day, days) => new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+/** Day of the week of 'YYYY-MM-DD': 0 = Sunday, 1 = Monday … 6 = Saturday. */
+const weekday = (day) => new Date(`${day}T12:00:00Z`).getUTCDay();
+
+/** The instant (ms) `day` ('YYYY-MM-DD') starts in `timeZone`. */
+function zoneMidnight(day, timeZone) {
+  const utc = Date.parse(`${day}T00:00:00Z`);
+  return utc - zoneOffset(new Date(utc - zoneOffset(new Date(utc), timeZone)), timeZone);
+}
+
+/** When the week starting on Monday `week` ('YYYY-MM-DD') starts and ends in `timeZone`: { from, to } (ISO). */
+export function weekRange(week, timeZone = DAILY.timeZone) {
+  return {
+    from: new Date(zoneMidnight(week, timeZone)).toISOString(),
+    to: new Date(zoneMidnight(addDays(week, 7), timeZone)).toISOString(),
+  };
+}
+
+/**
+ * The week of the weekly ranking: { week: its Monday ('YYYY-MM-DD'), from, to (ISO),
+ * nextIn: seconds before it ends }. A week ends on Sunday at midnight in `timeZone`.
+ */
+export function rewardWeek(now = Date.now(), timeZone = DAILY.timeZone) {
+  const { today } = rewardDay(now, timeZone);
+  const week = addDays(today, -((weekday(today) + 6) % 7));
+  const { from, to } = weekRange(week, timeZone);
+  return { week, from, to, nextIn: Math.max(1, Math.ceil((Date.parse(to) - now) / 1000)) };
+}
+
+/** Random numbers from 0 to 1 that only depend on `seed` (a string): the same seed gives the same numbers. */
+export function seededRng(seed) {
+  let a = 2166136261;
+  for (const ch of seed) a = Math.imul(a ^ ch.codePointAt(0), 16777619);
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let x = Math.imul(a ^ (a >>> 15), 1 | a);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * The daily shop of `day` ('YYYY-MM-DD'): its cards, one per rarity of `rules.slots`
+ * (`rules.sundaySlots` on Sundays), drawn from `cards` (the catalog, in number order)
+ * with random numbers seeded by the day, so everyone gets the same shop. A card is
+ * never offered twice the same day; a rarity with no card left is skipped.
+ */
+export function dailyShop(day, cards, rules = SHOP) {
+  const rng = seededRng(`shop:${day}`);
+  const taken = new Set();
+  const offer = [];
+  for (const rarity of weekday(day) === 0 ? rules.sundaySlots : rules.slots) {
+    const pool = cards.filter((card) => card.rarity === rarity && !taken.has(card.id));
+    if (!pool.length) continue;
+    const card = pool[Math.floor(rng() * pool.length)];
+    taken.add(card.id);
+    offer.push(card);
+  }
+  return offer;
+}
+
+/**
+ * The weekly ranking, from the cards pulled during the week: `rows` = [{ playerId, name,
+ * rarity, isNew, pulls, lastAt }] (cards of one rarity, new or not, and the last booster).
+ * A new card is worth the points of its rarity, a duplicate `duplicateShare` of them (like
+ * the collection score). Best first; on a tie, the player who got there first.
+ * Returns [{ rank, playerId, name, points, cards, newCards }].
+ */
+export function weeklyRanking(rows, rules = SCORE) {
+  const players = new Map();
+  for (const row of rows) {
+    if (!players.has(row.playerId)) players.set(row.playerId, { playerId: row.playerId, name: row.name, points: 0, cards: 0, newCards: 0, lastAt: '' });
+    const player = players.get(row.playerId);
+    const points = rules.points[row.rarity] ?? 0;
+    player.points += row.pulls * (row.isNew ? points : points * rules.duplicateShare);
+    player.cards += row.pulls;
+    if (row.isNew) player.newCards += row.pulls;
+    if (row.lastAt > player.lastAt) player.lastAt = row.lastAt;
+  }
+  return [...players.values()]
+    .map((player) => ({ ...player, points: Math.round(player.points) }))
+    .sort((a, b) => b.points - a.points || a.lastAt.localeCompare(b.lastAt) || a.name.localeCompare(b.name))
+    .map(({ lastAt, ...player }, index) => ({ rank: index + 1, ...player }));
 }
 
 /**

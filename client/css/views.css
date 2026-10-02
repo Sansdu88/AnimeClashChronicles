@@ -2386,3 +2386,256 @@
     width: 88px;
   }
 }
+
+/* ── Daily shop (market) ────────────────────────────────────────────────── */
+
+.daily-shop {
+  margin-bottom: 26px;
+}
+
+.daily-shop__head,
+.weekly__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+.daily-shop__timer,
+.weekly__timer {
+  margin: 0;
+  font-weight: 900;
+  color: var(--ink-soft);
+}
+
+.daily-shop__cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 26px 18px;
+  margin-top: 18px;
+}
+
+.shop-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 8px;
+  text-align: center;
+}
+
+.shop-card__art {
+  position: relative;
+  width: 100%;
+}
+
+.shop-card__art .card {
+  width: 100%;
+}
+
+.shop-card.is-bought .card {
+  filter: grayscale(0.55) brightness(0.92);
+}
+
+/* A red stamp across a card already bought today. */
+.shop-card__stamp {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  padding: 4px 14px 2px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: 2px;
+  color: var(--red);
+  background: rgba(255, 255, 255, 0.88);
+  border: 4px solid var(--red);
+  border-radius: 10px;
+  transform: translate(-50%, -50%) rotate(-14deg);
+  pointer-events: none;
+  animation: stamp-in 0.35s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-14deg) scale(2.2);
+  }
+}
+
+/* Sunday's UR card. */
+.shop-card__ribbon {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  z-index: 2;
+  padding: 2px 12px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  color: #fff;
+  background: linear-gradient(90deg, #ff2e88, #8338ec);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  transform: translateX(-50%);
+}
+
+.shop-card__owned {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.shop-card__new {
+  color: var(--red-dark);
+}
+
+.shop-card .btn {
+  max-width: 100%;
+}
+
+/* ── Weekly ranking (stats) ─────────────────────────────────────────────── */
+
+.weekly__body {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 22px;
+  margin-top: 14px;
+  align-items: start;
+}
+
+.weekly__table td:last-child {
+  white-space: nowrap;
+}
+
+.weekly__gap td {
+  padding: 0;
+  text-align: center;
+  color: var(--muted);
+  border-bottom: 0;
+}
+
+.weekly__side .panel__subtitle {
+  margin-top: 0;
+}
+
+.weekly__you {
+  margin-bottom: 20px;
+}
+
+.weekly__rank {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-weight: 800;
+}
+
+.weekly__medal {
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.weekly__winners {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weekly__winners li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+}
+
+.weekly__winners li.is-you {
+  background: color-mix(in srgb, var(--yellow) 40%, transparent);
+}
+
+.weekly__winners .reward {
+  margin-left: auto;
+}
+
+.weekly__won {
+  margin: 12px 0 0;
+  font-weight: 900;
+}
+
+.reward {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-weight: 900;
+}
+
+.reward__super {
+  padding: 0 8px;
+  font-size: 13px;
+  color: #fff;
+  background: linear-gradient(90deg, #7b2cbf, #ff2e88);
+  border-radius: 999px;
+}
+
+.rules-rewards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── Admin: weekly ranking rewards ──────────────────────────────────────── */
+
+.admin-weekly .input {
+  width: 96px;
+  min-height: 36px;
+  padding: 4px 8px;
+}
+
+.admin-weekly th[scope='row'] {
+  font-size: 18px;
+}
+
+@media (max-width: 1100px) {
+  .daily-shop__cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .weekly__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .daily-shop__cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px 12px;
+  }
+
+  .shop-card__stamp {
+    font-size: 20px;
+  }
+
+  .shop-card .btn {
+    min-height: 38px;
+    padding-inline: 10px;
+    font-size: 16px;
+  }
+
+  /* The cards column leaves room for the rewards. */
+  .weekly__table th:nth-child(4),
+  .weekly__table td:nth-child(4) {
+    display: none;
+  }
+}

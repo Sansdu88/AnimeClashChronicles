@@ -1,8 +1,12 @@
-/** "Rules" page: how boosters and rarities work, the daily reward, the Kira market, types and credits. */
+/**
+ * "Rules" page: how boosters and rarities work, the daily reward, the Kira market and its
+ * daily shop, the weekly ranking, types and credits.
+ */
 import { fmt, html, mount, raw } from '../dom.js';
 import { rarityName, setName, setTagline, t, tHtml, typeName } from '../i18n.js';
 import { state } from '../state.js';
 import { kiraHTML } from '../ui/kira.js';
+import { rewardText } from './stats.js';
 
 function atLeastOneLabel(rarityId, chance) {
   if (rarityId === 'N') return '—';
@@ -118,6 +122,21 @@ export function renderRules(main) {
         <ul class="rates__list">
           ${meta.sets.map((set) => html`<li>${setName(set.id)} ${kiraHTML(market.prices[set.id])}</li>`)}
         </ul>
+        <p>${t('rules.shop')}</p>
+        <h3 class="panel__subtitle">${t('rules.shopPrices')}</h3>
+        <ul class="rates__list">
+          ${rarities.filter((r) => r.id in market.cardPrices).map((r) => html`<li class="r-${r.id}" title="${rarityName(r.id)}">
+            <span class="rarity-badge">${r.id}</span> ${kiraHTML(market.cardPrices[r.id])}
+          </li>`)}
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel__title">🏆 ${t('rules.weeklyTitle')}</h2>
+        <p>${t('rules.weekly', { share: fmt.percent(meta.scoring.duplicateShare) })}</p>
+        <ol class="rules-rewards">
+          ${meta.weekly.rewards.map((reward, i) => html`<li><b>${{ 1: '🥇', 2: '🥈', 3: '🥉' }[i + 1] ?? `${i + 1}.`}</b> ${rewardText(reward)}</li>`)}
+        </ol>
       </section>
 
       <div class="rules-grid">

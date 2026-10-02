@@ -5,7 +5,19 @@
  * Admin routes (/api/admin/…) need a player whose is_admin is set in the database.
  */
 import { BOOSTER, DAILY, ERAS, RARITIES, RARITY_IDS, RARITY_RANK, SCORE, STOCKS, SUPER_BOOSTER, TYPES, stockOf } from './config.js';
-import { boosterOdds, boosterStock, collectionScore, dailyStatus, openBooster, rewardDay } from './booster.js';
+import {
+  addDays,
+  boosterOdds,
+  boosterStock,
+  collectionScore,
+  dailyShop,
+  dailyStatus,
+  openBooster,
+  rewardDay,
+  rewardWeek,
+  weekRange,
+  weeklyRanking,
+} from './booster.js';
 import { ODDS_TOTAL, defaultSettings, loadSettings, mergeSettings } from './settings.js';
 import { compareByRarity } from './catalog.js';
 import { HttpError, createRouter, reply } from './http.js';
@@ -163,14 +175,16 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   const rarityOfCard = (cardId) => catalog.getCard(cardId)?.rarity;
 
   /**
-   * { kira, stocks: { era: { stock, nextIn }, 'all-stars': { … } } }: the player's Kira, and for
-   * each booster stock the boosters they can open now and the seconds before the next one (0 when full).
+   * { kira, superBoosters, stocks: { era: { stock, nextIn }, 'all-stars': { … } } }: the player's Kira,
+   * the Super Boosters they won in the weekly ranking, and for each booster stock the boosters
+   * they can open now and the seconds before the next one (0 when full).
    */
   async function walletOf(playerId) {
-    const { boostersFrom, starsFrom, kira } = await store.wallet(playerId);
+    const { boostersFrom, starsFrom, kira, superBoosters } = await store.wallet(playerId);
     const since = { era: boostersFrom, 'all-stars': starsFrom };
     const now = Date.now();
-    return { kira, stocks: Object.fromEntries(Object.entries(STOCKS).map(([id, rules]) => [id, boosterStock(since[id], now, rules)])) };
+    const stocks = Object.fromEntries(Object.entries(STOCKS).map(([id, rules]) => [id, boosterStock(since[id], now, rules)]));
+    return { kira, superBoosters, stocks };
   }
 
   /** The stocks of an admin: always full, they never wait for a booster. */
@@ -193,7 +207,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     stock >= count ? 0 : nextIn + (count - stock - 1) * rules.cooldownSeconds;
 
   async function profile(player) {
-    const [stats, { entries, summary }, { kira, stocks }, daily] = await Promise.all([
+    const [stats, { entries, summary }, { kira, superBoosters, stocks }, daily] = await Promise.all([
       store.stats(player.id),
       collectionOf(player.id),
       walletOf(player.id),
@@ -212,14 +226,18 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       // (an admin's are unlimited: { stock: max, nextIn: 0, unlimited: true }).
       kira,
       stocks: player.isAdmin ? unlimitedStocks() : stocks,
+      // Super Boosters won in the weekly ranking, not opened yet (an admin's are unlimited anyway).
+      superBoosters,
       // Today's daily reward: claimed or not, day of the cycle, Super Booster or not.
       daily,
+      // What the player won when the last week ended: { week, rank, points, superBoosters, kira }, or null.
+      lastWeekly: lastWeeklyOf(player.id),
     };
   }
 
-  /** What friends can see of a player (no e-mail, admin status, daily reward nor Kira). */
+  /** What friends can see of a player (no e-mail, admin status, daily reward, Kira nor rewards). */
   async function publicProfile(player) {
-    const { email, isAdmin, daily, kira, ...rest } = await profile(player);
+    const { email, isAdmin, daily, kira, superBoosters, lastWeekly, ...rest } = await profile(player);
     return rest;
   }
 
@@ -347,8 +365,12 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     sets: shopSets.map(publicSet),
     booster: { ...boosterRules(), odds: boosterOdds(boosterRules()) },
     stocks: STOCKS,
-    // { prices: { setId: Kira }, recycle: { rarity: Kira } }
+    // { prices: { setId: Kira }, recycle: { rarity: Kira }, cardPrices: { rarity: Kira at the daily shop } }
     market: settings.market,
+    // { rewards: [{ superBoosters, kira }, …] }: what the 1st, the 2nd… of the weekly ranking get.
+    weekly: settings.weekly,
+    // Points of a card by rarity (collection score and weekly ranking), and the share a duplicate is worth.
+    scoring: SCORE,
     daily: {
       superEvery: settings.daily.superEvery,
       superSet: superSet ? publicSet(superSet) : null,
@@ -489,8 +511,8 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
 
   router.post('/api/players/:playerId/boosters', async ({ req, params, body }) => {
     const player = await requireSelf(req, params.playerId);
-    // Admins can open the Super Booster too (the others only get it from the daily reward).
-    const allowed = player.isAdmin && superSet ? [...setIds, superSet.id] : setIds;
+    // The Super Booster: admins open as many as they want, the others the ones they won in the weekly ranking.
+    const allowed = superSet ? [...setIds, superSet.id] : setIds;
     const setId = oneOf(body.setId, allowed, 'setId') ?? 'all-stars';
     const count = intParam(body.count, { name: 'count', min: 1, max: BOOSTER.maxPerRequest, fallback: 1 });
     const set = catalog.getSet(setId);
@@ -505,10 +527,16 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
         { retryIn: secondsUntil(stock, count, rules), stock: stock.stock },
         'booster_cooldown',
       );
+    const noSuper = (left) =>
+      new HttpError(409, `Not enough Super Boosters: you have ${left} (win some in the weekly ranking)`, { stock: left }, 'no_super_booster');
     if (opening.has(player.id)) throw new HttpError(429, 'A booster is already being opened', { retryIn: 1 }, 'booster_cooldown');
     // Admins have unlimited boosters: no stock to check nor to spend.
     const unlimited = player.isAdmin;
-    if (!unlimited) {
+    const won = set === superSet && !unlimited;
+    if (won) {
+      const { superBoosters } = await store.wallet(player.id);
+      if (superBoosters < count) throw noSuper(superBoosters);
+    } else if (!unlimited) {
       const stock = (await walletOf(player.id)).stocks[stockId];
       if (stock.stock < count) throw notEnough(stock);
     }
@@ -518,13 +546,13 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     try {
       const opened = Array.from({ length: count }, () => openBooster(set, { rng, rules: rarityRules }));
       // The database checks the stock again (not an admin's), in the same transaction as the save.
-      saved = unlimited
-        ? await store.recordBoosters(player.id, setId, opened)
-        : await store.openBoosters(player.id, setId, opened, { every: rules.cooldownSeconds, max: rules.stackMax });
+      if (unlimited) saved = await store.recordBoosters(player.id, setId, opened);
+      else if (won) saved = await store.openSuperBoosters(player.id, setId, opened);
+      else saved = await store.openBoosters(player.id, setId, opened, { every: rules.cooldownSeconds, max: rules.stackMax });
     } finally {
       opening.delete(player.id);
     }
-    if (saved.error === 'no_booster') throw notEnough(saved);
+    if (saved.error === 'no_booster') throw won ? noSuper(saved.stock) : notEnough(saved);
     if (saved.error) throw new HttpError(404, 'Player not found');
     return reply(201, { boosters: saved.map(openedBooster), player: await profile(player) });
   });
@@ -585,11 +613,60 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     );
   }
 
-  /** { kira, spare: { cardId: duplicates you can recycle } } */
+  // The daily shop: the same cards for everyone, drawn from the day (see dailyShop in
+  // booster.js); it changes with the daily reward. A player buys each card once.
+  let shopCache = { day: null, cards: [] };
+  function shopCards(day) {
+    if (shopCache.day !== day) shopCache = { day, cards: dailyShop(day, catalog.cards) };
+    return shopCache.cards;
+  }
+
+  /** Today's daily shop for a player: { day, nextIn, items: [{ cardId, rarity, price, bought }] }. */
+  async function shopOf(playerId) {
+    const { today, nextIn } = rewardDay();
+    const bought = await store.shopPurchases(playerId, today);
+    return {
+      day: today,
+      nextIn,
+      items: shopCards(today).map((card) => ({
+        cardId: card.id,
+        rarity: card.rarity,
+        price: settings.market.cardPrices[card.rarity],
+        bought: bought.has(card.id),
+      })),
+    };
+  }
+
+  /** { kira, spare: { cardId: duplicates you can recycle }, shop: today's daily shop (see shopOf) } */
   router.get('/api/players/:playerId/market', async ({ req, params }) => {
     const player = await requireSelf(req, params.playerId);
-    const [{ kira }, spare] = await Promise.all([store.wallet(player.id), spareCopies(player.id)]);
-    return { kira, spare };
+    const [{ kira }, spare, shop] = await Promise.all([store.wallet(player.id), spareCopies(player.id), shopOf(player.id)]);
+    return { kira, spare, shop };
+  });
+
+  /**
+   * Body: { cardId, price? } — buys a card of today's daily shop (once per day and card).
+   * `price`: the price the player saw; if an admin changed it since → 409 price_changed.
+   * Returns { cardId, isNew, kira, shop, player }.
+   */
+  router.post('/api/players/:playerId/market/shop', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
+    const { today } = rewardDay();
+    const card = shopCards(today).find((item) => item.id === body.cardId);
+    if (!card) throw new HttpError(409, "This card is not in today's shop", null, 'shop_changed');
+    const price = settings.market.cardPrices[card.rarity];
+    if (body.price !== undefined && body.price !== price) {
+      throw new HttpError(409, `The price of this card changed: it is now ${price} Kira`, { price }, 'price_changed');
+    }
+    // The database checks the Kira and the purchases of the day, in the same transaction as the purchase.
+    const result = await store.buyShopCard(player.id, today, card.id, price);
+    if (result.error === 'bought') throw new HttpError(409, 'You already bought this card today', null, 'already_bought');
+    if (result.error === 'no_kira') {
+      throw new HttpError(409, `Not enough Kira: this card costs ${price}, you have ${result.kira}`, { price, kira: result.kira }, 'not_enough_kira');
+    }
+    if (result.error) throw new HttpError(404, 'Player not found');
+    const [me, shop] = await Promise.all([profile(player), shopOf(player.id)]);
+    return reply(201, { cardId: card.id, isNew: result.isNew, kira: result.kira, shop, player: me });
   });
 
   /** Body: { cards: [{ cardId, count }] } — the duplicates to recycle (all of them or none). */
@@ -822,6 +899,78 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     const [collectors, collections, you] = await Promise.all([store.collectors(), store.allCollections(), currentPlayer(req)]);
     const ranked = await withoutAdmins(await rank(collectors, collections, you?.id));
     return { scoring: SCORE, players: ranked.slice(0, limit).map(({ id, ...row }) => row) };
+  });
+
+  // ── Weekly ranking ─────────────────────────────────────────────────────────
+  // The points of the cards pulled from Monday to Sunday (see weeklyRanking in booster.js),
+  // admins left out. When a week is over, its best players get the rewards of
+  // settings.weekly: the server ends the weeks that are over when it starts, every minute,
+  // and before showing the ranking (the database makes sure a week is ended only once).
+
+  /** The ranking of the week starting on Monday `week`, admins left out: [{ rank, playerId, name, points, cards, newCards }]. */
+  async function rankWeek(week) {
+    const { from, to } = weekRange(week);
+    return weeklyRanking((await store.weeklyPulls(from, to)).filter((row) => !row.isAdmin));
+  }
+
+  let lastRanking = null; // the last week ended: { week, settledAt, results: [{ playerId, name, rank, points, superBoosters, kira }] }
+  let settling = null;
+
+  /** Ends the weeks that are over (the oldest first) and gives their rewards. */
+  function settleWeeks() {
+    const { week: current } = rewardWeek();
+    if (lastRanking && addDays(lastRanking.week, 7) >= current) return Promise.resolve();
+    settling ??= (async () => {
+      [lastRanking = null] = await store.weeklyRankings(1);
+      // Before any week was ended, only the last one is.
+      for (let week = lastRanking ? addDays(lastRanking.week, 7) : addDays(current, -7); week < current; week = addDays(week, 7)) {
+        const { rewards } = settings.weekly;
+        const results = (await rankWeek(week)).slice(0, rewards.length).map((row, i) => ({
+          playerId: row.playerId,
+          name: row.name,
+          rank: row.rank,
+          points: row.points,
+          ...rewards[i],
+        }));
+        await store.settleWeek(week, results);
+        [lastRanking] = await store.weeklyRankings(1);
+      }
+    })().finally(() => {
+      settling = null;
+    });
+    return settling;
+  }
+
+  /** What a player won when the last week ended: { week, rank, points, superBoosters, kira }, or null. */
+  function lastWeeklyOf(playerId) {
+    const row = lastRanking?.results.find((result) => result.playerId === playerId);
+    return row ? { week: lastRanking.week, rank: row.rank, points: row.points, superBoosters: row.superBoosters, kira: row.kira } : null;
+  }
+
+  const settleLater = () => settleWeeks().catch((err) => console.error(`  Weekly ranking not ended: ${err.message}`));
+  settleLater();
+  setInterval(settleLater, 60_000).unref();
+
+  /**
+   * This week's ranking: { week (its Monday), from, to, nextIn: seconds before it ends, rewards,
+   * players: the ones who get a reward, you: your row (or null), last: the last week ended
+   * { week, results: [{ name, rank, points, superBoosters, kira, you }] } (or null) }.
+   */
+  router.get('/api/weekly', async ({ req }) => {
+    await settleWeeks();
+    const you = await currentPlayer(req);
+    const current = rewardWeek();
+    const ranking = await rankWeek(current.week);
+    const { rewards } = settings.weekly;
+    const shown = ({ playerId, ...row }) => ({ ...row, you: playerId === you?.id });
+    const yours = ranking.find((row) => row.playerId === you?.id);
+    return {
+      ...current,
+      rewards,
+      players: ranking.slice(0, rewards.length).map(shown),
+      you: yours ? shown(yours) : null,
+      last: lastRanking && { week: lastRanking.week, results: lastRanking.results.map(shown) },
+    };
   });
 
   // ── Friends (your own list only) ───────────────────────────────────────────

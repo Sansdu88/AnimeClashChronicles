@@ -59,6 +59,40 @@ export const MARKET = {
 };
 
 /**
+ * The daily shop: 5 cards a day, the same for everyone (drawn from the day), that a
+ * player can buy once each with Kira. `slots` give their rarities (`sundaySlots` on
+ * Sundays: the last one is a UR), `prices` the Kira of a card by rarity (changed from
+ * the admin panel). The shop changes at midnight, with the daily reward (DAILY.timeZone).
+ */
+export const SHOP = {
+  slots: ['R', 'R', 'R', 'SR', 'SSR'],
+  sundaySlots: ['R', 'R', 'R', 'SR', 'UR'],
+  prices: { R: 100, SR: 250, SSR: 600, UR: 1500 },
+};
+
+/**
+ * The weekly ranking: the points of the cards pulled from Monday to Sunday (in
+ * DAILY.timeZone), counted like the collection score (SCORE): a new card is worth the
+ * points of its rarity, a duplicate `duplicateShare` of them. When the week ends
+ * (Sunday midnight), `rewards[i]` goes to the player ranked i + 1: Super Boosters
+ * (opened from the shelf) and Kira (changed from the admin panel).
+ */
+export const WEEKLY = {
+  rewards: [
+    { superBoosters: 5, kira: 0 },
+    { superBoosters: 3, kira: 0 },
+    { superBoosters: 1, kira: 0 },
+    { superBoosters: 0, kira: 300 },
+    { superBoosters: 0, kira: 250 },
+    { superBoosters: 0, kira: 200 },
+    { superBoosters: 0, kira: 150 },
+    { superBoosters: 0, kira: 120 },
+    { superBoosters: 0, kira: 100 },
+    { superBoosters: 0, kira: 80 },
+  ],
+};
+
+/**
  * Daily reward: once a day, a free booster of the player's choice, opened at
  * once (it does not use the stock). Every `superEvery`-th daily reward is a
  * Super Booster instead (the set `superSetId`, opened with SUPER_BOOSTER).
