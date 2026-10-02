@@ -1,27 +1,25 @@
 /**
  * Sound effects synthesized with the Web Audio API (no audio files needed).
  *
- * Safari (iPhone, iPad, Mac) only starts the sound of a page during a tap, a click or a key,
- * and stops it when something interrupts the page (phone locked, another app, the Mac
- * asleep…): every tap wakes it up again (see wake). On an iPhone or an iPad, Web Audio is
- * also muted in silent mode (the switch on the side): while the game's sound is on (🔊),
- * it plays as "playback" audio, like a video, which silent mode does not mute.
+ * Safari (iPhone, iPad, Mac) only starts the sound of a page during a tap, a click or a key:
+ * the audio engine (AudioContext) is only made during one (see wake), and the sounds asked
+ * before the first tap are skipped. Safari also stops the engine when something interrupts
+ * the page (phone locked, another app, the Mac asleep…), or leaves it 'running' with its clock
+ * stuck: at every tap, an engine that does not play is replaced. On an iPhone or an iPad, Web
+ * Audio is also muted in silent mode (the switch on the side): while the game's sound is on
+ * (🔊), it plays as "playback" audio, like a video, which silent mode does not mute.
  */
 import { storage } from '../dom.js';
 
 const SOUND_KEY = 'mangaBooster.sound';
-let context = null;
+let context = null; // the audio engine, made during a tap
+let madeAt = 0; // when it was made (performance.now())
+let clock = null; // when its clock last moved: { context, time, at }
+let playedAt = 0; // when the last sound started
 let enabled = storage.get(SOUND_KEY) !== 'off';
 
 // iPhone, iPod and iPad (an iPad says it is a Mac, but a Mac has no touch screen).
 const isIOS = /iPhone|iPod|iPad/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-
-function audio() {
-  if (!context || context.state === 'closed') context = new (window.AudioContext || window.webkitAudioContext)();
-  // 'suspended' before the first tap, or 'interrupted' in Safari (see wake).
-  if (context.state !== 'running') context.resume()?.catch(() => {});
-  return context;
-}
 
 // ── Silent mode (iPhone, iPad) ──────────────────────────────────────────────
 
@@ -95,23 +93,36 @@ function followSilentMode() {
 }
 
 /**
- * Every tap, click or key wakes the sound up: silent mode, then the audio itself, with a silent
- * sound that unlocks it on iOS. An interrupted sound does not always come back on iOS: a new
- * one replaces it (only during a tap, where a new one starts at once).
+ * True when the engine says 'running' but its clock did not move since a sound started a
+ * moment ago: Safari sometimes does that, and nothing plays.
+ */
+function clockStuck() {
+  const time = context.currentTime;
+  if (clock?.context !== context || clock.time !== time) clock = { context, time, at: performance.now() };
+  return playedAt > clock.at && performance.now() - playedAt > 300;
+}
+
+/**
+ * Every tap, click or key wakes the sound up: silent mode, then the engine. One that does not
+ * play (none yet, interrupted, clock stuck, still suspended) is replaced by a new one made during
+ * the tap, which Safari starts at once; a suspended one made a moment ago (by the same tap: a
+ * pointerup, then its click) may still be starting. A silent sound unlocks it on iOS.
  */
 function wake() {
   if (!enabled) return;
   try {
     playInSilentMode();
-    if (context?.state === 'running') return;
-    if (context?.state === 'interrupted') {
-      context.close().catch(() => {});
-      context = null;
+    if (context?.state === 'running' && !clockStuck()) return;
+    const starting = context?.state === 'suspended' && performance.now() - madeAt < 500;
+    if (!starting) {
+      context?.close().catch(() => {});
+      context = new (window.AudioContext || window.webkitAudioContext)();
+      madeAt = performance.now();
     }
-    const ctx = audio();
-    const silence = ctx.createBufferSource();
-    silence.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
-    silence.connect(ctx.destination);
+    if (context.state !== 'running') context.resume()?.catch(() => {});
+    const silence = context.createBufferSource();
+    silence.buffer = context.createBuffer(1, 1, context.sampleRate);
+    silence.connect(context.destination);
     silence.start(0);
   } catch {
     /* audio not available: stay silent */
@@ -127,7 +138,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function tone(frequency, { start = 0, duration = 0.15, type = 'sine', gain = 0.1, slideTo } = {}) {
-  const ctx = audio();
+  const ctx = context;
   const t = ctx.currentTime + start;
   const osc = ctx.createOscillator();
   const volume = ctx.createGain();
@@ -146,7 +157,7 @@ function tone(frequency, { start = 0, duration = 0.15, type = 'sine', gain = 0.1
 
 /** Filtered white noise. `swell`: the volume rises instead of falling (a reversed cymbal). */
 function noise({ start = 0, duration = 0.3, gain = 0.2, from = 3000, to = 600, swell = false } = {}) {
-  const ctx = audio();
+  const ctx = context;
   const t = ctx.currentTime + start;
   const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * duration), ctx.sampleRate);
   const data = buffer.getChannelData(0);
@@ -248,8 +259,10 @@ export const sfx = {
     if (enabled) wake();
     else followSilentMode();
   },
+  /** Plays a sound; before the first tap there is no audio engine yet, and nothing plays. */
   play(name) {
-    if (!enabled) return;
+    if (!enabled || !context) return;
+    playedAt = performance.now();
     try {
       SOUNDS[name]?.();
     } catch {
