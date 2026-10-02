@@ -7,13 +7,13 @@
  * and a full stock of 10 gets the ×10 show: a giant booster whose seal breaks
  * in 3 taps, with anime cut-ins themed after the set (components/booster-show.js).
  * The daily reward (views/daily.js) and the boosters bought with Kira
- * (views/market.js) open here too.
+ * (views/market.js: one, several or the ×10 show too) open here too.
  */
 import { $, $$, escapeHtml, everySecond, fmt, html, mount, raw, wait } from '../dom.js';
 import { cardText, errorText, rarityName, setName, setTagline, t, tHtml } from '../i18n.js';
 import {
   boosterStock,
-  buyBooster,
+  buyBoosters,
   byRarity,
   claimDaily,
   dailyStatus,
@@ -88,7 +88,7 @@ function packTileHTML(set) {
       <button class="btn btn--primary" type="button" data-open="${set.id}" data-count="1">${t('open.open')}</button>
       <button class="btn btn--secondary" type="button" data-open="${set.id}" data-count="many" hidden></button>
       ${buyable && html`<button class="btn btn--kira" type="button" data-buy="${set.id}" hidden
-        aria-label="${t('market.buyLabel', { set: setName(set.id), price: priceOf(set.id) })}">${t('market.buy')} · ${kiraHTML(priceOf(set.id))}</button>`}
+        aria-label="${t('market.buyLabel', { set: setName(set.id), price: priceOf(set.id), count: 1 })}">${t('market.buy')} · ${kiraHTML(priceOf(set.id))}</button>`}
     </div>
     ${isSuper(set) && html`<span class="admin-badge">${t('open.adminOnly')}</span>`}
   </div>`;
@@ -107,12 +107,18 @@ function stockHTML(id) {
   </div>`;
 }
 
-/** Opens `count` boosters of a set from its stock: one, several in a row, or the ×10 show for a full stock. */
-function startOpening(setId, count, stage) {
-  if (count >= state.meta.stocks[stockIdOf(setOf(setId))].stackMax) openTen(setId, stage);
-  else if (count > 1) openMany(setId, count, stage);
-  else openSingle(setId, stage);
+/**
+ * Opens `count` boosters of a set from its stock, or bought with Kira (`source`: { price }):
+ * one, several in a row, or the ×10 show for a full stock.
+ */
+function startOpening(setId, count, stage, source = null) {
+  if (count >= state.meta.stocks[stockIdOf(setOf(setId))].stackMax) openTen(setId, count, stage, source);
+  else if (count > 1) openMany(setId, count, stage, source);
+  else openSingle(setId, stage, source);
 }
+
+/** Asks for `count` boosters: from the stock, or bought with Kira (`source`: { price }). */
+const askBoosters = (setId, count, source) => (source?.price ? () => buyBoosters(setId, count) : () => openBoosters(setId, count));
 
 /** Text and look of an "Open ×N" button (the full stock gets the ×10 show). */
 function paintManyButton(button, count, setId) {
@@ -297,7 +303,7 @@ function preloadImages(cards, timeout = 3500) {
 const nextClick = (element) => new Promise((resolve) => element.addEventListener('click', resolve, { once: true }));
 
 /**
- * Asks the server for boosters (`ask()`: openBoosters, claimDaily or buyBooster); a failed request
+ * Asks the server for boosters (`ask()`: openBoosters, claimDaily or buyBoosters); a failed request
  * closes the stage (the stock, the Kira or the daily reward is reloaded if it was wrong).
  */
 async function requestBoosters(stage, ask, minWait) {
@@ -314,10 +320,12 @@ async function requestBoosters(stage, ask, minWait) {
   }
 }
 
-/** A "Buy · 50 ✦" button for the stage (disabled without enough Kira). */
-const buyButtonHTML = (set, label = t('market.buy')) =>
-  html`<button class="btn btn--kira btn--big" type="button" data-buy="${set.id}" ${state.player.kira < priceOf(set.id) ? 'disabled' : ''}
-    aria-label="${t('market.buyLabel', { set: setName(set.id), price: priceOf(set.id) })}">${label} · ${kiraHTML(priceOf(set.id))}</button>`;
+/** A "Buy · 50 ✦" button for the stage, for `count` boosters (disabled without enough Kira). */
+function buyButtonHTML(set, label = t('market.buy'), count = 1) {
+  const price = priceOf(set.id) * count;
+  return html`<button class="btn btn--kira btn--big" type="button" data-buy="${set.id}" data-count="${count}" ${state.player.kira < price ? 'disabled' : ''}
+    aria-label="${t('market.buyLabel', { set: setName(set.id), price, count })}">${label} · ${kiraHTML(price)}</button>`;
+}
 
 /**
  * "Open another" / "Open ×N" buttons at the end of an opening, or a countdown (and
@@ -407,7 +415,7 @@ async function openSingle(setId, stage = createStage(), source = null) {
   $('.stage__hint', stage.content).textContent = t('stage.opening');
   sfx.play('shake');
 
-  const ask = source?.daily ? () => claimDaily(setId) : source?.price ? () => buyBooster(setId) : () => openBoosters(setId, 1);
+  const ask = source?.daily ? () => claimDaily(setId) : askBoosters(setId, 1, source);
   const boosters = await requestBoosters(stage, ask, 650);
   if (!boosters) return;
   const [booster] = boosters;
@@ -550,9 +558,9 @@ export function openDaily(setId) {
   else openSingle(setId, stage, { daily: { day, cycle } });
 }
 
-/** Buys a booster of `setId` with Kira and opens it at once (paid when the pack is torn open). */
-export function openBought(setId) {
-  openSingle(setId, createStage(), { price: priceOf(setId) });
+/** Buys `count` boosters of `setId` with Kira and opens them at once (paid when the packs are torn open). */
+export function openBought(setId, count = 1) {
+  startOpening(setId, count, createStage(), { price: priceOf(setId) });
 }
 
 /** The Super Booster drops from the sky in a rainbow halo; one tap charges it up until it blows. */
@@ -614,7 +622,8 @@ async function openSuper(stage, daily) {
 
 // ── Several boosters in a row ───────────────────────────────────────────────
 
-async function openMany(setId, count, stage = createStage()) {
+/** `source`: { price } for boosters bought with Kira (see openSingle). */
+async function openMany(setId, count, stage = createStage(), source = null) {
   const set = setOf(setId);
   const run = ++stage.run;
   const stale = () => stage.closed || stage.run !== run;
@@ -627,6 +636,7 @@ async function openMany(setId, count, stage = createStage()) {
     stage.content,
     html`<div class="mega">
       <p class="mega__title">${t('mega.title', { count })}</p>
+      ${source?.price && html`<p class="giant__sub">✦ ${t('market.stageSub', { price: source.price * count })}</p>`}
       <button class="mega__packs" type="button" style="--n:${count}" aria-label="${t('mega.tearLabel', { count, set: setName(set.id) })}">
         ${Array.from({ length: count }, (_, i) => html`<span class="mega-pack" style="--i:${i}">${tearablePackHTML(set)}</span>`)}
       </button>
@@ -634,6 +644,7 @@ async function openMany(setId, count, stage = createStage()) {
     </div>`,
   );
   const packs = $('.mega__packs', stage.content);
+  if (source) sfx.play('coin');
   packs.focus({ preventScroll: true });
   await nextClick(packs);
   if (stale()) return;
@@ -644,7 +655,7 @@ async function openMany(setId, count, stage = createStage()) {
   sfx.play('shake');
   setTimeout(() => !stale() && sfx.play('charge'), 350);
 
-  const boosters = await requestBoosters(stage, () => openBoosters(setId, count), 1100);
+  const boosters = await requestBoosters(stage, askBoosters(setId, count, source), 1100);
   if (!boosters) return;
   await preloadImages(boosters.flatMap((booster) => booster.cards), 5000);
   if (stale()) return;
@@ -667,7 +678,7 @@ async function openMany(setId, count, stage = createStage()) {
   onomatopoeia(t('fx.tear'), { x: box.left + box.width / 2, y: box.top + box.height * 0.3, color: '#fff', size: 'xl' });
   await wait(750);
   if (stale()) return;
-  showManyReveal(stage, set, boosters, run);
+  showManyReveal(stage, set, boosters, run, null, source);
 }
 
 // ── ×10 show ────────────────────────────────────────────────────────────────
@@ -707,9 +718,9 @@ function displayHTML(set, count) {
   </span>`;
 }
 
-async function openTen(setId, stage = createStage()) {
+/** `source`: { price } for boosters bought with Kira (see openSingle). */
+async function openTen(setId, count, stage = createStage(), source = null) {
   const set = setOf(setId);
-  const count = state.meta.stocks[stockIdOf(set)].stackMax;
   const show = showFor(set);
   const run = ++stage.run;
   const stale = () => stage.closed || stage.run !== run;
@@ -721,7 +732,7 @@ async function openTen(setId, stage = createStage()) {
     stage.content,
     html`<div class="giant" data-hit="0">
       <p class="mega__title giant__title">${t('show.title', { count })}</p>
-      <p class="giant__sub">${t(`show.sub.${show.theme}`)}</p>
+      <p class="giant__sub">${t(`show.sub.${show.theme}`)}${source?.price ? ` · ✦ ${t('market.stageSub', { price: source.price * count })}` : ''}</p>
       <div class="giant__scene">
         <div class="giant__rays" aria-hidden="true"></div>
         <button class="display" type="button" aria-label="${t('show.tearLabel', { set: setName(set.id) })}">${displayHTML(set, count)}</button>
@@ -767,7 +778,7 @@ async function openTen(setId, stage = createStage()) {
   for (let hit = 1; hit <= SEALS && !skipped; hit++) {
     await Promise.race([nextClick(display), skip]);
     if (stale()) return;
-    request ??= requestBoosters(stage, () => openBoosters(setId, count), 0); // asked at the first tap, ready at the last
+    request ??= requestBoosters(stage, askBoosters(setId, count, source), 0); // asked at the first tap, ready at the last
     if (skipped) break;
     display.disabled = true;
     scene.dataset.hit = hit;
@@ -819,11 +830,14 @@ async function openTen(setId, stage = createStage()) {
   await Promise.race([wait(1500), skip.then(() => wait(400))]);
   skipButton.remove();
   if (stale()) return;
-  showManyReveal(stage, set, boosters, run, show);
+  showManyReveal(stage, set, boosters, run, show, source);
 }
 
-/** `show` (×10 only): the finale gets a confetti storm and a cut-in of the best card. */
-function showManyReveal(stage, set, boosters, run, show = null) {
+/**
+ * `show` (×10 only): the finale gets a confetti storm and a cut-in of the best card.
+ * `source`: { price } for boosters bought with Kira, which end with "Buy ×N again" instead of "Open another".
+ */
+function showManyReveal(stage, set, boosters, run, show = null, source = null) {
   const cards = boosters.flatMap((booster) => booster.cards);
   const stale = () => stage.closed || stage.run !== run;
   const rarities = [...state.meta.rarities].reverse(); // rarest first
@@ -968,11 +982,14 @@ function showManyReveal(stage, set, boosters, run, show = null) {
         </p>
         <p class="stage__hint">${t('stage.clickDetail')}</p>
         <div class="btn-row">
-          <span class="btn-row" data-slot="next"></span>
+          ${source?.price
+            ? html`${buyButtonHTML(set, t('market.buyAgain', { count: boosters.length }), boosters.length)}<a class="btn btn--ghost-light" href="#/market">${t('nav.market')}</a>`
+            : html`<span class="btn-row" data-slot="next"></span>`}
           <a class="btn btn--ghost-light" href="#/collection">${t('stage.myCollection')}</a>
         </div>`,
     );
-    nextButtons($('[data-slot="next"]', stage.content), set, stage);
+    if (!source) nextButtons($('[data-slot="next"]', stage.content), set, stage);
+    else $('.mega-reveal__actions .btn:not(:disabled)', stage.content).focus({ preventScroll: true });
     stage.element.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -980,6 +997,8 @@ function showManyReveal(stage, set, boosters, run, show = null) {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'reveal-all') cascade();
     else if (action === 'skip') skip();
+    const buy = event.target.closest('.mega-reveal__actions [data-buy]');
+    if (buy) startOpening(set.id, Number(buy.dataset.count), stage, { price: priceOf(set.id) });
     const flip = event.target.closest('.flip');
     if (!flip) return;
     if (flip.dataset.state === 'revealed') openCardModal(cards[Number(flip.dataset.index)], { list: cards });

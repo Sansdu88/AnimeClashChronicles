@@ -1,12 +1,13 @@
 /**
  * "Market" page, the Kira market: duplicates are recycled into Kira (✦), the game's
- * money, by rarity, and Kira buys boosters, opened at once (views/open.js).
+ * money, by rarity, and Kira buys boosters, opened at once (views/open.js): one, a
+ * chosen number, or as many as the wallet pays for (Max).
  * You keep one copy of each card, and the copies promised in your open trades.
  * A recycled copy turns into sparkles that fly to the wallet.
  */
 import { $, $$, fmt, html, mount, raw } from '../dom.js';
 import { errorText, rarityName, setName, t, tHtml } from '../i18n.js';
-import { byRarity, fetchMarket, priceOf, recycleCards, state } from '../state.js';
+import { affordable, byRarity, fetchMarket, priceOf, recycleCards, state } from '../state.js';
 import { cardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
 import { confirmDialog } from '../components/modal.js';
@@ -32,15 +33,30 @@ const spareList = (spare) =>
     .filter(({ card }) => card)
     .sort((a, b) => byRarity(a.card, b.card) || b.spare - a.spare);
 
+/** The boosters to buy at once, read from a shop item's field (1 to the most per request). */
+function quantityOf(item) {
+  const value = Math.round(Number($('.qty__input', item).value)) || 1;
+  return Math.min(Math.max(value, 1), state.meta.booster.maxPerRequest);
+}
+
+/** Each booster with how many to buy (1, a number, or Max); the price and the button follow (paintShop). */
 function shopHTML() {
+  const most = state.meta.booster.maxPerRequest;
   return html`<div class="shop">
     ${state.meta.sets.map(
-      (set) => html`<div class="shop-item">
+      (set) => html`<div class="shop-item" data-set="${set.id}">
         <span class="pack shop-item__pack" aria-hidden="true">${packHTML(set)}</span>
         <span class="shop-item__name">${setName(set.id)}</span>
-        <span class="shop-item__price">${kiraHTML(priceOf(set.id))}</span>
-        <button class="btn btn--kira" type="button" data-buy="${set.id}"
-          aria-label="${t('market.buyLabel', { set: setName(set.id), price: priceOf(set.id) })}">${t('market.buyOpen')}</button>
+        <span class="shop-item__price"></span>
+        <span class="shop-item__each"></span>
+        <div class="qty" role="group" aria-label="${t('market.quantity')}">
+          <button class="btn btn--small qty__step" type="button" data-step="-1" aria-label="${t('market.less')}">−</button>
+          <input class="input qty__input" type="number" value="1" min="1" max="${most}" step="1" inputmode="numeric"
+            aria-label="${t('market.quantity')}">
+          <button class="btn btn--small qty__step" type="button" data-step="1" aria-label="${t('market.more')}">+</button>
+          <button class="btn btn--small btn--secondary" type="button" data-max>${t('market.max')}</button>
+        </div>
+        <button class="btn btn--kira shop-item__buy" type="button" data-buy="${set.id}"></button>
         <span class="shop-item__need" aria-live="polite"></span>
       </div>`,
     )}
@@ -118,7 +134,7 @@ export async function renderMarket(main) {
 
       <section class="panel market-shop">
         <h2 class="panel__title">${t('market.shop')}</h2>
-        <p class="muted">${t('market.shopHint')}</p>
+        <p class="muted">${t('market.shopHint', { max: state.meta.booster.maxPerRequest })}</p>
         ${shopHTML()}
       </section>
 
@@ -144,13 +160,38 @@ export async function renderMarket(main) {
   const grid = $('.recycle-grid', main);
   const pagers = $$('.market-recycle .pager-slot', main);
 
-  /** Buy buttons: disabled, with what is missing, when the wallet is too light. */
+  /**
+   * Each shop item: the price of the boosters chosen, the quantity buttons, and the buy
+   * button, disabled with what is missing when the wallet is too light.
+   */
   function paintShop() {
-    for (const button of $$('[data-buy]', main)) {
-      const missing = priceOf(button.dataset.buy) - state.player.kira;
-      button.disabled = missing > 0;
-      button.nextElementSibling.textContent = missing > 0 ? t('market.missing', { count: missing }) : '';
+    for (const item of $$('.shop-item', main)) {
+      const setId = item.dataset.set;
+      const count = quantityOf(item);
+      const price = priceOf(setId) * count;
+      const missing = price - state.player.kira;
+      const max = affordable(setId);
+      mount($('.shop-item__price', item), kiraHTML(price));
+      mount($('.shop-item__each', item), count > 1 ? html`×${count} · ${kiraHTML(priceOf(setId))} ${t('market.each')}` : '');
+      $('[data-step="-1"]', item).disabled = count <= 1;
+      $('[data-step="1"]', item).disabled = count >= state.meta.booster.maxPerRequest;
+      const maxButton = $('[data-max]', item);
+      maxButton.disabled = max < 1;
+      maxButton.title = t('market.maxLabel', { count: max });
+      maxButton.setAttribute('aria-label', maxButton.title);
+      const buy = $('[data-buy]', item);
+      buy.dataset.count = count;
+      buy.textContent = t('market.buyOpen', { count });
+      buy.setAttribute('aria-label', t('market.buyLabel', { set: setName(setId), price, count }));
+      buy.disabled = missing > 0;
+      $('.shop-item__need', item).textContent = missing > 0 ? t('market.missing', { count: missing }) : '';
     }
+  }
+
+  /** Puts `count` boosters (kept between 1 and the most per request) in a shop item's field. */
+  function setQuantity(item, count) {
+    $('.qty__input', item).value = Math.min(Math.max(count, 1), state.meta.booster.maxPerRequest);
+    paintShop();
   }
 
   /** The rarity picks, the "recycle all" button and the page of duplicates. */
@@ -251,11 +292,27 @@ export async function renderMarket(main) {
     paintRecycle();
   });
 
+  const shop = $('.shop', main);
+  // Typing a number updates the price at once; the field is put back in range when left.
+  shop.addEventListener('input', paintShop);
+  shop.addEventListener('change', (event) => {
+    const item = event.target.closest('.shop-item');
+    if (item) setQuantity(item, quantityOf(item));
+  });
+
   main.querySelector('.view-market').addEventListener('click', async (event) => {
     const buy = event.target.closest('[data-buy]');
     if (buy) {
       sfx.play('click');
-      openBought(buy.dataset.buy);
+      openBought(buy.dataset.buy, Number(buy.dataset.count));
+      return;
+    }
+    const step = event.target.closest('[data-step]');
+    const max = event.target.closest('[data-max]');
+    if (step || max) {
+      const item = event.target.closest('.shop-item');
+      sfx.play('click');
+      setQuantity(item, max ? affordable(item.dataset.set) : quantityOf(item) + Number(step.dataset.step));
       return;
     }
     const one = event.target.closest('[data-recycle]');
