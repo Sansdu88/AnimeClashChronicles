@@ -8,9 +8,36 @@ let context = null;
 let enabled = storage.get(SOUND_KEY) !== 'off';
 
 function audio() {
-  if (!context) context = new (window.AudioContext || window.webkitAudioContext)();
-  if (context.state === 'suspended') context.resume();
+  // Safari stops the sound when something interrupts the page (phone locked, another app, the
+  // Mac asleep…): 'interrupted'. It does not always come back on iOS: a new one replaces it.
+  if (context?.state === 'interrupted') {
+    context.close().catch(() => {});
+    context = null;
+  }
+  if (!context || context.state === 'closed') context = new (window.AudioContext || window.webkitAudioContext)();
+  if (context.state === 'suspended') context.resume().catch(() => {});
   return context;
+}
+
+/**
+ * Safari (iPhone, iPad, Mac) only starts the sound of a page during a tap, a click or a key:
+ * every one of them wakes it up while it is off, with a silent sound that unlocks it on iOS.
+ */
+function wake() {
+  if (!enabled || context?.state === 'running') return;
+  try {
+    const ctx = audio();
+    const silence = ctx.createBufferSource();
+    silence.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    silence.connect(ctx.destination);
+    silence.start(0);
+  } catch {
+    /* audio not available: stay silent */
+  }
+}
+
+for (const type of ['touchend', 'pointerup', 'click', 'keydown']) {
+  document.addEventListener(type, wake, { capture: true, passive: true });
 }
 
 function tone(frequency, { start = 0, duration = 0.15, type = 'sine', gain = 0.1, slideTo } = {}) {
