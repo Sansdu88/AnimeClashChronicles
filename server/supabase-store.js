@@ -274,7 +274,9 @@ export function createSupabaseStore({ url, secretKey }) {
 
     /** [{ cardId, count, firstPulledAt, lastPulledAt }] */
     async collection(playerId) {
-      const rows = await get(`player_collection?select=card_id,count,first_pulled_at,last_pulled_at&player_id=${eq(playerId)}`);
+      const rows = await getAll(
+        `player_collection?select=card_id,count,first_pulled_at,last_pulled_at&player_id=${eq(playerId)}&order=card_id`,
+      );
       return rows.map((row) => ({
         cardId: row.card_id,
         count: row.count,
