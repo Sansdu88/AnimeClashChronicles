@@ -1,5 +1,11 @@
 /**
  * Sound effects synthesized with the Web Audio API (no audio files needed).
+ *
+ * Safari (iPhone, iPad, Mac) only starts the sound of a page during a tap, a click or a key,
+ * and stops it when something interrupts the page (phone locked, another app, the Mac
+ * asleep…): every tap wakes it up again (see wake). On an iPhone or an iPad, Web Audio is
+ * also muted in silent mode (the switch on the side): while the game's sound is on (🔊),
+ * it plays as "playback" audio, like a video, which silent mode does not mute.
  */
 import { storage } from '../dom.js';
 
@@ -7,25 +13,101 @@ const SOUND_KEY = 'mangaBooster.sound';
 let context = null;
 let enabled = storage.get(SOUND_KEY) !== 'off';
 
+// iPhone, iPod and iPad (an iPad says it is a Mac, but a Mac has no touch screen).
+const isIOS = /iPhone|iPod|iPad/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
 function audio() {
-  // Safari stops the sound when something interrupts the page (phone locked, another app, the
-  // Mac asleep…): 'interrupted'. It does not always come back on iOS: a new one replaces it.
-  if (context?.state === 'interrupted') {
-    context.close().catch(() => {});
-    context = null;
-  }
   if (!context || context.state === 'closed') context = new (window.AudioContext || window.webkitAudioContext)();
-  if (context.state === 'suspended') context.resume().catch(() => {});
+  // 'suspended' before the first tap, or 'interrupted' in Safari (see wake).
+  if (context.state !== 'running') context.resume()?.catch(() => {});
   return context;
 }
 
+// ── Silent mode (iPhone, iPad) ──────────────────────────────────────────────
+
+let track = null; // a silent <audio> track, for the iPhones without navigator.audioSession
+let trackUrl = null;
+
+/** 0.25 s of silence, as a WAV file (16-bit samples at 0). */
+function silentWav() {
+  const rate = 22050;
+  const size = (rate / 4) * 2;
+  const view = new DataView(new ArrayBuffer(44 + size));
+  const text = (offset, value) => [...value].forEach((char, i) => view.setUint8(offset + i, char.charCodeAt(0)));
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + size, true);
+  text(8, 'WAVEfmt ');
+  view.setUint32(16, 16, true); // size of the format
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * 2, true); // bytes per second
+  view.setUint16(32, 2, true); // bytes per sample
+  view.setUint16(34, 16, true); // bits per sample
+  text(36, 'data');
+  view.setUint32(40, size, true);
+  return new Blob([view.buffer], { type: 'audio/wav' });
+}
+
+/** navigator.audioSession (iOS 16.4+): 'playback' plays in silent mode, 'auto' is muted by it. */
+function sessionType(type) {
+  try {
+    navigator.audioSession.type = type;
+  } catch {
+    /* a Safari that refuses it: the silent mode stays */
+  }
+}
+
 /**
- * Safari (iPhone, iPad, Mac) only starts the sound of a page during a tap, a click or a key:
- * every one of them wakes it up while it is off, with a silent sound that unlocks it on iOS.
+ * Makes the game's sound "playback" audio, which plays in silent mode (during a tap): through
+ * navigator.audioSession (iOS 16.4+), else by playing a silent <audio> track in a loop (the
+ * whole page's sound is then playback audio).
+ */
+function playInSilentMode() {
+  if (!isIOS) return;
+  if (navigator.audioSession) {
+    sessionType('playback');
+    return;
+  }
+  if (!track) {
+    trackUrl ??= URL.createObjectURL(silentWav());
+    track = document.createElement('audio');
+    track.setAttribute('x-webkit-airplay', 'deny');
+    track.loop = true;
+    track.src = trackUrl;
+  }
+  if (track.paused) track.play()?.catch(() => {});
+}
+
+/** The silent track stops (the page is hidden, or the game's sound turned off): no "Now Playing" on the lock screen. */
+function stopSilentTrack() {
+  if (!track) return;
+  track.pause();
+  track.removeAttribute('src');
+  track.load();
+  track = null;
+}
+
+/** The game's sound is off: silent mode mutes the page again, like any other. */
+function followSilentMode() {
+  if (isIOS && navigator.audioSession) sessionType('auto');
+  stopSilentTrack();
+}
+
+/**
+ * Every tap, click or key wakes the sound up: silent mode, then the audio itself, with a silent
+ * sound that unlocks it on iOS. An interrupted sound does not always come back on iOS: a new
+ * one replaces it (only during a tap, where a new one starts at once).
  */
 function wake() {
-  if (!enabled || context?.state === 'running') return;
+  if (!enabled) return;
   try {
+    playInSilentMode();
+    if (context?.state === 'running') return;
+    if (context?.state === 'interrupted') {
+      context.close().catch(() => {});
+      context = null;
+    }
     const ctx = audio();
     const silence = ctx.createBufferSource();
     silence.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
@@ -36,9 +118,13 @@ function wake() {
   }
 }
 
+if (enabled && isIOS && navigator.audioSession) sessionType('playback');
 for (const type of ['touchend', 'pointerup', 'click', 'keydown']) {
   document.addEventListener(type, wake, { capture: true, passive: true });
 }
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopSilentTrack();
+});
 
 function tone(frequency, { start = 0, duration = 0.15, type = 'sine', gain = 0.1, slideTo } = {}) {
   const ctx = audio();
@@ -51,7 +137,9 @@ function tone(frequency, { start = 0, duration = 0.15, type = 'sine', gain = 0.1
   volume.gain.setValueAtTime(0.0001, t);
   volume.gain.exponentialRampToValueAtTime(gain, t + 0.012);
   volume.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-  osc.connect(volume).connect(ctx.destination);
+  // One connect() at a time: in old Safaris, connect() returns nothing.
+  osc.connect(volume);
+  volume.connect(ctx.destination);
   osc.start(t);
   osc.stop(t + duration + 0.05);
 }
@@ -73,7 +161,9 @@ function noise({ start = 0, duration = 0.3, gain = 0.2, from = 3000, to = 600, s
   const volume = ctx.createGain();
   volume.gain.setValueAtTime(swell ? 0.0001 : gain, t);
   volume.gain.exponentialRampToValueAtTime(swell ? gain : 0.0001, t + duration);
-  source.connect(filter).connect(volume).connect(ctx.destination);
+  source.connect(filter);
+  filter.connect(volume);
+  volume.connect(ctx.destination);
   source.start(t);
 }
 
@@ -151,9 +241,12 @@ export const sfx = {
   get enabled() {
     return enabled;
   },
+  /** Turned on or off by a tap (the 🔊 button): the sound wakes up, or silent mode applies again. */
   set enabled(value) {
     enabled = Boolean(value);
     storage.set(SOUND_KEY, enabled ? 'on' : 'off');
+    if (enabled) wake();
+    else followSilentMode();
   },
   play(name) {
     if (!enabled) return;

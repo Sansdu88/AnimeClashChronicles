@@ -122,10 +122,12 @@ const MIME_TYPES = {
   '.webmanifest': 'application/manifest+json',
 };
 
-// Pictures come from Wikimedia, fonts from Google Fonts; everything else is local.
+// Pictures come from Wikimedia, fonts from Google Fonts; everything else is local (the
+// silent sound that lets old iPhones play the game's sound in silent mode is a blob the page makes).
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "img-src 'self' data: https://*.wikimedia.org",
+  "media-src 'self' blob:",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "script-src 'self'",
