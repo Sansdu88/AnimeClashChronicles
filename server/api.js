@@ -588,25 +588,29 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   });
 
   /**
-   * Body: { setId, price? } — buys a booster with Kira (settings.market.prices), opened at once.
-   * `price`: the price the player saw; if an admin changed it since → 409 price_changed.
+   * Body: { setId, count?, price? } — buys `count` boosters (1 by default, up to BOOSTER.maxPerRequest)
+   * with Kira (settings.market.prices), opened at once.
+   * `price`: the price of one booster the player saw; if an admin changed it since → 409 price_changed.
    */
   router.post('/api/players/:playerId/market/buy', async ({ req, params, body }) => {
     const player = await requireSelf(req, params.playerId);
     const set = catalog.getSet(oneOf(body.setId, setIds, 'setId') ?? 'all-stars');
+    const count = intParam(body.count, { name: 'count', min: 1, max: BOOSTER.maxPerRequest, fallback: 1 });
     const price = settings.market.prices[set.id];
     if (body.price !== undefined && body.price !== price) {
       throw new HttpError(409, `The price of this booster changed: it is now ${price} Kira`, { price }, 'price_changed');
     }
+    const total = price * count;
     const noKira = (kira) =>
-      new HttpError(409, `Not enough Kira: this booster costs ${price}, you have ${kira}`, { price, kira }, 'not_enough_kira');
+      new HttpError(409, `Not enough Kira: ${count} booster(s) cost ${total}, you have ${kira}`, { price, total, kira }, 'not_enough_kira');
     const { kira } = await store.wallet(player.id);
-    if (kira < price) throw noKira(kira);
+    if (kira < total) throw noKira(kira);
     // The database checks the Kira again, in the same transaction as the purchase.
-    const saved = await store.buyBooster(player.id, set.id, openBooster(set, { rng, rules: boosterRules() }), price);
+    const opened = Array.from({ length: count }, () => openBooster(set, { rng, rules: boosterRules() }));
+    const saved = await store.buyBoosters(player.id, set.id, opened, price);
     if (saved.error === 'no_kira') throw noKira(saved.kira);
     if (saved.error) throw new HttpError(404, 'Player not found');
-    return reply(201, { booster: openedBooster(saved), player: await profile(player) });
+    return reply(201, { boosters: saved.map(openedBooster), player: await profile(player) });
   });
 
   // ── Admin panel ────────────────────────────────────────────────────────────

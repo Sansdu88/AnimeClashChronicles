@@ -304,26 +304,26 @@ export function createSupabaseStore({ url, secretKey }) {
     },
 
     /**
-     * Buys a booster of `setId` (its `cards`) for `price` Kira, in one transaction (function
-     * buy_booster). Returns the saved booster, or { error: 'no_kira', kira } when the player cannot pay.
+     * Buys `boosters` of `setId` (a list of their cards) for `price` Kira each, in one transaction
+     * (function buy_boosters). Same result as openBoosters, or { error: 'no_kira', kira } when the
+     * player cannot pay for all of them.
      */
-    async buyBooster(playerId, setId, cards, price) {
-      const result = await request('POST', 'rpc/buy_booster', {
+    async buyBoosters(playerId, setId, boosters, price) {
+      const result = await request('POST', 'rpc/buy_boosters', {
         body: {
           p_player_id: playerId,
           p_set_id: setId,
-          p_booster: cards.map((card) => ({ id: card.id, rarity: card.rarity })),
+          p_boosters: boosters.map((cards) => cards.map((card) => ({ id: card.id, rarity: card.rarity }))),
           p_price: price,
         },
       });
       if (result.error) return result;
-      const [booster] = result.boosters;
-      return {
+      return result.boosters.map((booster, i) => ({
         id: booster.id,
         setId,
         openedAt: booster.openedAt,
-        pulls: cards.map((card, j) => ({ card, isNew: booster.pulls[j].isNew })),
-      };
+        pulls: boosters[i].map((card, j) => ({ card, isNew: booster.pulls[j].isNew })),
+      }));
     },
 
     /**

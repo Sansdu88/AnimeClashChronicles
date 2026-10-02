@@ -251,15 +251,18 @@ export async function recycleCards(cards) {
 }
 
 /**
- * Buys a booster of `setId` with Kira, opened at once. Returns [booster], like openBoosters.
+ * Buys `count` boosters of `setId` with Kira, opened at once. Returns the boosters, like openBoosters.
  * The price shown is sent: if an admin changed it since, the server refuses (price_changed).
  */
-export async function buyBooster(setId) {
-  const result = await api(playerPath('/market/buy'), { method: 'POST', body: { setId, price: priceOf(setId) } });
+export async function buyBoosters(setId, count = 1) {
+  const result = await api(playerPath('/market/buy'), { method: 'POST', body: { setId, count, price: priceOf(setId) } });
   setPlayer(result.player);
-  addPulls([result.booster]);
-  return [result.booster];
+  addPulls(result.boosters);
+  return result.boosters;
 }
+
+/** How many boosters of `setId` the player's Kira buys at once (up to the most boosters per request). */
+export const affordable = (setId) => Math.min(Math.floor(state.player.kira / priceOf(setId)), state.meta.booster.maxPerRequest);
 
 export async function renamePlayer(name) {
   setPlayer(await api(playerPath(), { method: 'PATCH', body: { name } }));
