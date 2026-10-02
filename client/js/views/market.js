@@ -1,18 +1,20 @@
 /**
  * "Market" page, the Kira market: duplicates are recycled into Kira (✦), the game's
  * money, by rarity, and Kira buys boosters, opened at once (views/open.js): one, a
- * chosen number, or as many as the wallet pays for (Max).
+ * chosen number, or as many as the wallet pays for (Max). The daily shop sells 5 cards,
+ * new ones every day (a UR on Sundays), one copy of each per player.
  * You keep one copy of each card, and the copies promised in your open trades.
- * A recycled copy turns into sparkles that fly to the wallet.
+ * A recycled copy turns into sparkles that fly to the wallet; Kira spent at the daily
+ * shop flies from the wallet to the card.
  */
-import { $, $$, fmt, html, mount, raw } from '../dom.js';
-import { errorText, rarityName, setName, t, tHtml } from '../i18n.js';
-import { affordable, byRarity, fetchMarket, priceOf, recycleCards, state } from '../state.js';
+import { $, $$, everySecond, fmt, html, mount, raw } from '../dom.js';
+import { cardText, errorText, rarityName, setName, t, tHtml } from '../i18n.js';
+import { affordable, buyShopCard, byRarity, fetchMarket, priceOf, recycleCards, state } from '../state.js';
 import { cardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
 import { confirmDialog } from '../components/modal.js';
 import { onPageClick, pageCount, pageSize, paginationHTML } from '../components/pagination.js';
-import { onomatopoeia } from '../ui/effects.js';
+import { RARITY_COLORS, burst, onomatopoeia } from '../ui/effects.js';
 import { bump, coinHTML, flySparkles, kiraHTML, rollNumber } from '../ui/kira.js';
 import { sfx } from '../ui/sfx.js';
 import { toast } from '../ui/toast.js';
@@ -63,6 +65,26 @@ function shopHTML() {
   </div>`;
 }
 
+/** A card of the daily shop: the card, how many copies you have, and its buy button (or "Bought"). */
+function shopCardHTML(item) {
+  const card = state.cardsById.get(item.cardId);
+  const owned = state.owned.get(item.cardId)?.count ?? 0;
+  const missing = item.price - state.player.kira;
+  return html`<div class="shop-card${item.bought ? ' is-bought' : ''}" data-card-id="${item.cardId}">
+    ${item.rarity === 'UR' && html`<span class="shop-card__ribbon">☀️ ${t('shop.sunday')}</span>`}
+    <div class="shop-card__art">
+      ${cardHTML(card, { count: owned, tilt: true })}
+      ${item.bought && html`<span class="shop-card__stamp" aria-hidden="true">${t('shop.sold')}</span>`}
+    </div>
+    <p class="shop-card__owned">${owned ? t('shop.owned', { count: owned }) : html`<b class="shop-card__new">✨ ${t('shop.notOwned')}</b>`}</p>
+    ${item.bought
+      ? html`<button class="btn btn--ghost" type="button" disabled>✓ ${t('shop.bought')}</button>`
+      : html`<button class="btn btn--kira" type="button" data-shop-buy="${item.cardId}" ${missing > 0 ? 'disabled' : ''}
+          aria-label="${t('shop.buyLabel', { name: cardText(card).name, price: item.price })}">${t('market.buy')} · ${kiraHTML(item.price)}</button>`}
+    <span class="shop-item__need">${!item.bought && missing > 0 ? t('market.missing', { count: missing }) : ''}</span>
+  </div>`;
+}
+
 /** The rarities to recycle: how many duplicates of each, and their Kira. */
 function picksHTML(list) {
   return rarestFirst().map((id) => {
@@ -101,7 +123,7 @@ export async function renderMarket(main) {
     return;
   }
   if (id !== renderId || !main.isConnected) return;
-  let { spare } = market;
+  let { spare, shop } = market;
   const rates = state.meta.market.recycle;
 
   mount(
@@ -132,6 +154,15 @@ export async function renderMarket(main) {
         </section>
       </div>
 
+      <section class="panel daily-shop">
+        <div class="daily-shop__head">
+          <h2 class="panel__title">🛒 ${t('shop.title')}</h2>
+          <p class="daily-shop__timer"></p>
+        </div>
+        <p class="muted">${t('shop.hint')}</p>
+        <div class="daily-shop__cards"></div>
+      </section>
+
       <section class="panel market-shop">
         <h2 class="panel__title">${t('market.shop')}</h2>
         <p class="muted">${t('market.shopHint', { max: state.meta.booster.maxPerRequest })}</p>
@@ -159,6 +190,24 @@ export async function renderMarket(main) {
   const count = $('.result-count', main);
   const grid = $('.recycle-grid', main);
   const pagers = $$('.market-recycle .pager-slot', main);
+  const shopCards = $('.daily-shop__cards', main);
+  const shopTimer = $('.daily-shop__timer', main);
+
+  /** The daily shop's cards (the ones of the catalog this page knows). */
+  const paintDailyShop = () => mount(shopCards, shop.items.filter((item) => state.cardsById.has(item.cardId)).map(shopCardHTML));
+
+  // The shop changes at midnight: the page asks for the new one.
+  const shopEndsAt = Date.now() + shop.nextIn * 1000;
+  everySecond(() => {
+    if (!shopTimer.isConnected) return false;
+    const left = Math.ceil((shopEndsAt - Date.now()) / 1000);
+    if (left <= 0) {
+      renderMarket(main);
+      return false;
+    }
+    shopTimer.textContent = `⏳ ${t('shop.nextIn', { time: fmt.duration(left) })}`;
+    return true;
+  });
 
   /**
    * Each shop item: the price of the boosters chosen, the quantity buttons, and the buy
@@ -277,6 +326,36 @@ export async function renderMarket(main) {
     spare = result.spare;
     paintRecycle();
     paintShop();
+    paintDailyShop();
+  }
+
+  /** Buys a card of the daily shop: the Kira flies from the wallet to the card, which joins your collection. */
+  async function buyFromShop(button) {
+    const item = shop.items.find((row) => row.cardId === button.dataset.shopBuy);
+    button.disabled = true;
+    let result;
+    try {
+      result = await buyShopCard(item.cardId, item.price);
+    } catch (err) {
+      toast(errorText(err), 'error');
+      renderMarket(main); // a new day, a new price, or bought from another page: show the shop again
+      return;
+    }
+    if (!main.isConnected) return;
+    shop = result.shop;
+    const coin = walletCoin();
+    const target = $(`.shop-card[data-card-id="${item.cardId}"] .card`, main);
+    sfx.play('coin');
+    rollNumber(amount, result.kira, 700);
+    await flySparkles(coin.getBoundingClientRect(), target, { count: 16 });
+    if (!main.isConnected) return;
+    const box = target.getBoundingClientRect();
+    sfx.play(item.rarity);
+    burst(box.left + box.width / 2, box.top + box.height / 2, { colors: RARITY_COLORS[item.rarity], count: 60, power: 1.3 });
+    onomatopoeia(result.isNew ? t('shop.newCard') : '+1', { x: box.left + box.width / 2, y: box.top + 10, color: '#ffd23f', size: 'l', tilt: -6 });
+    toast(t('shop.boughtToast', { name: cardText(state.cardsById.get(item.cardId)).name }), 'success');
+    paintDailyShop();
+    paintShop();
   }
 
   picks.addEventListener('change', (event) => {
@@ -292,10 +371,10 @@ export async function renderMarket(main) {
     paintRecycle();
   });
 
-  const shop = $('.shop', main);
+  const boosterShop = $('.shop', main);
   // Typing a number updates the price at once; the field is put back in range when left.
-  shop.addEventListener('input', paintShop);
-  shop.addEventListener('change', (event) => {
+  boosterShop.addEventListener('input', paintShop);
+  boosterShop.addEventListener('change', (event) => {
     const item = event.target.closest('.shop-item');
     if (item) setQuantity(item, quantityOf(item));
   });
@@ -305,6 +384,18 @@ export async function renderMarket(main) {
     if (buy) {
       sfx.play('click');
       openBought(buy.dataset.buy, Number(buy.dataset.count));
+      return;
+    }
+    const shopBuy = event.target.closest('[data-shop-buy]');
+    if (shopBuy) {
+      sfx.play('click');
+      buyFromShop(shopBuy);
+      return;
+    }
+    const shopCard = event.target.closest('.shop-card .card');
+    if (shopCard) {
+      const cards = shop.items.map((item) => state.cardsById.get(item.cardId)).filter(Boolean);
+      openCardModal(state.cardsById.get(shopCard.dataset.card), { list: cards });
       return;
     }
     const step = event.target.closest('[data-step]');
@@ -343,6 +434,7 @@ export async function renderMarket(main) {
     }
   });
 
+  paintDailyShop();
   paintShop();
   paintRecycle();
 }

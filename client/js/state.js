@@ -54,8 +54,13 @@ function setPlayer(player) {
  * A booster stock ('era' or 'all-stars', see setOf(id).stock): { stock, max, every, nextIn, unlimited }:
  * boosters you can open now, the most you can keep, seconds between two of them, and
  * seconds before the next one (0 when full). An admin's stocks are `unlimited` (always full).
+ * 'super': the Super Boosters won in the weekly ranking (they do not come back).
  */
 export function boosterStock(id) {
+  if (id === 'super') {
+    const stock = state.player?.superBoosters ?? 0;
+    return { stock, max: stock, every: 0, nextIn: 0 };
+  }
   const { cooldownSeconds: every, stackMax: max } = state.meta.stocks[id];
   if (state.player?.stocks?.[id]?.unlimited) return { stock: max, max, every, nextIn: 0, unlimited: true };
   const elapsed = Date.now() - stockFrom[id];
@@ -177,23 +182,21 @@ export async function reloadPlayer() {
   return state.player;
 }
 
+/** Adds a copy of a card, got at `at` (ISO), to your collection. */
+function addCopy(cardId, at) {
+  const entry = state.owned.get(cardId);
+  if (entry) {
+    entry.count += 1;
+    entry.lastPulledAt = at;
+  } else {
+    state.owned.set(cardId, { cardId, count: 1, firstPulledAt: at, lastPulledAt: at });
+  }
+}
+
 /** Adds the cards of boosters just opened to your collection. */
 function addPulls(boosters) {
   for (const booster of boosters) {
-    for (const card of booster.cards) {
-      const entry = state.owned.get(card.id);
-      if (entry) {
-        entry.count += 1;
-        entry.lastPulledAt = booster.openedAt;
-      } else {
-        state.owned.set(card.id, {
-          cardId: card.id,
-          count: 1,
-          firstPulledAt: booster.openedAt,
-          lastPulledAt: booster.openedAt,
-        });
-      }
-    }
+    for (const card of booster.cards) addCopy(card.id, booster.openedAt);
   }
   emit();
 }
@@ -228,7 +231,7 @@ export async function claimDaily(setId) {
 
 // ── Kira market ──────────────────────────────────────────────────────────────
 
-/** { kira, spare: { cardId: duplicates you can recycle } } */
+/** { kira, spare: { cardId: duplicates you can recycle }, shop: { day, nextIn, items: [{ cardId, rarity, price, bought }] } } */
 export async function fetchMarket() {
   const market = await api(playerPath('/market'));
   state.player.kira = market.kira;
@@ -262,6 +265,18 @@ export async function buyBoosters(setId, count = 1) {
   return result.boosters;
 }
 
+/**
+ * Buys a card of today's daily shop; `price`: the one shown (if an admin changed it, the server
+ * refuses: price_changed). Returns { cardId, isNew, kira, shop: the shop now }.
+ */
+export async function buyShopCard(cardId, price) {
+  const result = await api(playerPath('/market/shop'), { method: 'POST', body: { cardId, price } });
+  setPlayer(result.player);
+  addCopy(cardId, new Date().toISOString());
+  emit();
+  return result;
+}
+
 /** How many boosters of `setId` the player's Kira buys at once (up to the most boosters per request). */
 export const affordable = (setId) => Math.min(Math.floor(state.player.kira / priceOf(setId)), state.meta.booster.maxPerRequest);
 
@@ -279,6 +294,8 @@ export async function resetCollection() {
 
 export const fetchHistory = (limit = 12) => api(playerPath(`/boosters?limit=${limit}`));
 export const fetchLeaderboard = () => api('/leaderboard?limit=10');
+/** This week's ranking: { week, nextIn, rewards, players, you, last: the last week ended } (see /api/weekly). */
+export const fetchWeekly = () => api('/weekly');
 
 // ── Friends ──────────────────────────────────────────────────────────────────
 

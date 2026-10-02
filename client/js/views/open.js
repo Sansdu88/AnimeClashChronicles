@@ -7,7 +7,8 @@
  * and a full stock of 10 gets the ×10 show: a giant booster whose seal breaks
  * in 3 taps, with anime cut-ins themed after the set (components/booster-show.js).
  * The daily reward (views/daily.js) and the boosters bought with Kira
- * (views/market.js: one, several or the ×10 show too) open here too.
+ * (views/market.js: one, several or the ×10 show too) open here too, and so do
+ * the Super Boosters won in the weekly ranking (views/stats.js), from the shelf.
  */
 import { $, $$, escapeHtml, everySecond, fmt, html, mount, raw, wait } from '../dom.js';
 import { cardText, errorText, rarityName, setName, setTagline, t, tHtml } from '../i18n.js';
@@ -69,10 +70,13 @@ const tearablePackHTML = (set) => html`<span class="stage-pack__half stage-pack_
   <span class="stage-pack__half stage-pack__half--bottom">${packHTML(set)}</span>`;
 
 /**
- * The stock a set is opened from. The Super Booster has none (only the daily reward gives it,
- * and the admins, whose stocks are unlimited): it counts as All-Stars.
+ * The stock a set is opened from. The Super Booster has none: the daily reward gives it,
+ * and the weekly ranking ('super': the ones won); the admins open it as All-Stars (unlimited).
  */
-const stockIdOf = (set) => set.stock ?? 'all-stars';
+const stockIdOf = (set) => set.stock ?? (state.player.isAdmin ? 'all-stars' : 'super');
+
+/** Boosters of a set opened at once that get the ×10 show: a full stock (10 for the Super Boosters won). */
+const showCount = (set) => state.meta.stocks[stockIdOf(set)]?.stackMax ?? state.meta.booster.maxPerRequest;
 
 function packTileHTML(set) {
   const cards = setCards(set);
@@ -90,7 +94,7 @@ function packTileHTML(set) {
       ${buyable && html`<button class="btn btn--kira" type="button" data-buy="${set.id}" hidden
         aria-label="${t('market.buyLabel', { set: setName(set.id), price: priceOf(set.id), count: 1 })}">${t('market.buy')} · ${kiraHTML(priceOf(set.id))}</button>`}
     </div>
-    ${isSuper(set) && html`<span class="admin-badge">${t('open.adminOnly')}</span>`}
+    ${isSuper(set) && html`<span class="admin-badge">${state.player.isAdmin ? t('open.adminOnly') : `🏆 ${t('open.superWon', { count: state.player.superBoosters })}`}</span>`}
   </div>`;
 }
 
@@ -109,11 +113,13 @@ function stockHTML(id) {
 
 /**
  * Opens `count` boosters of a set from its stock, or bought with Kira (`source`: { price }):
- * one, several in a row, or the ×10 show for a full stock.
+ * one (a Super Booster blows up on its own), several in a row, or the ×10 show for a full stock.
  */
 function startOpening(setId, count, stage, source = null) {
-  if (count >= state.meta.stocks[stockIdOf(setOf(setId))].stackMax) openTen(setId, count, stage, source);
+  const set = setOf(setId);
+  if (count >= showCount(set)) openTen(setId, count, stage, source);
   else if (count > 1) openMany(setId, count, stage, source);
+  else if (isSuper(set)) openSuper(stage);
   else openSingle(setId, stage, source);
 }
 
@@ -122,7 +128,7 @@ const askBoosters = (setId, count, source) => (source?.price ? () => buyBoosters
 
 /** Text and look of an "Open ×N" button (the full stock gets the ×10 show). */
 function paintManyButton(button, count, setId) {
-  const special = count >= state.meta.stocks[stockIdOf(setOf(setId))].stackMax;
+  const special = count >= showCount(setOf(setId));
   button.textContent = special ? t('open.openTen', { count }) : t('open.openMany', { count });
   button.classList.toggle('btn--special', special);
   button.setAttribute('aria-label', t(special ? 'open.openTenLabel' : 'open.openManyLabel', { count, set: setName(setId) }));
@@ -130,8 +136,9 @@ function paintManyButton(button, count, setId) {
 
 export function renderOpen(main) {
   const { player, meta } = state;
-  // Admins also get the Super Booster, unlimited like their other boosters.
-  const shelf = player.isAdmin && meta.daily.superSet ? [...meta.sets, meta.daily.superSet] : meta.sets;
+  // The Super Booster: the admins' (unlimited like their other boosters), or the ones won in the weekly ranking.
+  const withSuper = meta.daily.superSet && (player.isAdmin || player.superBoosters > 0);
+  const shelf = withSuper ? [...meta.sets, meta.daily.superSet] : meta.sets;
   mount(
     main,
     html`<section class="view view-open">
@@ -312,7 +319,7 @@ async function requestBoosters(stage, ask, minWait) {
     return boosters;
   } catch (err) {
     toast(errorText(err), 'error');
-    if (err.code === 'booster_cooldown' || err.code === 'not_enough_kira') reloadPlayer().catch(() => {});
+    if (['booster_cooldown', 'not_enough_kira', 'no_super_booster'].includes(err.code)) reloadPlayer().catch(() => {});
     if (['daily_claimed', 'not_super_day', 'daily_changed'].includes(err.code)) refreshDaily().catch(() => {});
     if (err.code === 'price_changed') refreshMeta().catch(() => {});
     stage.close();
@@ -337,6 +344,12 @@ function nextButtons(slot, set, stage) {
   everySecond(() => {
     if (!slot.isConnected || stage.closed) return false;
     const { stock, nextIn } = boosterStock(stockIdOf(set));
+    // The Super Boosters won do not come back: nothing more to open.
+    if (stock === 0 && !set.stock) {
+      mount(slot, '');
+      if (shown === null) slot.parentElement.querySelector('a')?.focus({ preventScroll: true });
+      return false;
+    }
     const many = Math.min(stock, state.meta.booster.maxPerRequest);
     const key = stock > 0 ? `stock ${stock}` : `wait ${nextIn}`;
     if (key === shown) return true;
@@ -563,8 +576,11 @@ export function openBought(setId, count = 1) {
   startOpening(setId, count, createStage(), { price: priceOf(setId) });
 }
 
-/** The Super Booster drops from the sky in a rainbow halo; one tap charges it up until it blows. */
-async function openSuper(stage, daily) {
+/**
+ * The Super Booster drops from the sky in a rainbow halo; one tap charges it up until it blows.
+ * `daily`: { day, cycle, reason } for the daily reward's, else one won in the weekly ranking.
+ */
+async function openSuper(stage = createStage(), daily = null) {
   const set = setOf(state.meta.daily.superSet.id);
   const run = ++stage.run;
   const stale = () => stage.closed || stage.run !== run;
@@ -576,7 +592,7 @@ async function openSuper(stage, daily) {
     stage.content,
     html`<div class="super">
       <p class="mega__title super__title">${t('daily.stageSuper')}</p>
-      <p class="giant__sub">${{ event: t('daily.stageEvent'), gift: t('daily.stageGift') }[daily.reason] ?? t('daily.stageDay', daily)} · ${t('daily.stageSuperSub')}</p>
+      <p class="giant__sub">${daily ? ({ event: t('daily.stageEvent'), gift: t('daily.stageGift') }[daily.reason] ?? t('daily.stageDay', daily)) : `🏆 ${t('weekly.stageWon')}`} · ${t('daily.stageSuperSub')}</p>
       <div class="super__scene">
         <div class="giant__rays" aria-hidden="true"></div>
         <span class="super__aura" aria-hidden="true"></span>
@@ -599,7 +615,7 @@ async function openSuper(stage, daily) {
   $('.stage__hint', stage.content).textContent = t('stage.opening');
   sfx.play('charge');
   setTimeout(() => !stale() && sfx.play('charge'), 700);
-  const boosters = await requestBoosters(stage, () => claimDaily(set.id), 1500);
+  const boosters = await requestBoosters(stage, daily ? () => claimDaily(set.id) : () => openBoosters(set.id, 1), 1500);
   if (!boosters) return;
   const [booster] = boosters;
   await preloadImages(booster.cards);
@@ -617,7 +633,7 @@ async function openSuper(stage, daily) {
   onomatopoeia(t('daily.superBoom'), { x: box.left + box.width / 2, y: box.top + box.height * 0.25, color: '#ffd23f', size: 'xl', tilt: -8 });
   await wait(1100);
   if (stale()) return;
-  showReveal(stage, set, booster, run, { daily });
+  showReveal(stage, set, booster, run, daily && { daily });
 }
 
 // ── Several boosters in a row ───────────────────────────────────────────────

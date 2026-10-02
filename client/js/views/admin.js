@@ -1,8 +1,9 @@
 /**
  * "Admin" page, for the players whose is_admin is set in the database (the server
  * checks it on every call): the game settings, which apply at once (Kira prices and
- * values, daily reward, Super Booster events, rarity odds), and the list of players
- * with their tools (give the daily back, Super Booster gift, clear their data, delete them).
+ * values, daily shop prices, rewards of the weekly ranking, daily reward, Super Booster
+ * events, rarity odds), and the list of players with their tools (give the daily back,
+ * Super Booster gift, clear their data, delete them).
  */
 import { $, $$, fmt, html, mount } from '../dom.js';
 import { errorText, rarityName, setName, t } from '../i18n.js';
@@ -56,7 +57,26 @@ function marketFieldsHTML(market) {
         <span class="field__label"><span class="rarity-badge">${id}</span></span>
         <span class="input-kira">${numberField(`recycle:${id}`, market.recycle[id])}${coinHTML()}</span>
       </label>`)}
+    </div>
+    <h3 class="admin-form__subtitle">${t('admin.cardPrices')}</h3>
+    <div class="admin-fields admin-fields--rarities">
+      ${shopRarities(market).map((id) => html`<label class="field r-${id}" title="${rarityName(id)}">
+        <span class="field__label"><span class="rarity-badge">${id}</span></span>
+        <span class="input-kira">${numberField(`card:${id}`, market.cardPrices[id])}${coinHTML()}</span>
+      </label>`)}
     </div>`;
+}
+
+/** The rarities sold at the daily shop, rarest first. */
+const shopRarities = (market) => rarestFirst().filter((id) => id in market.cardPrices);
+
+/** The rewards of the weekly ranking: Super Boosters and Kira for the 1st, the 2nd… */
+function weeklyRowsHTML(weekly) {
+  return weekly.rewards.map((reward, i) => html`<tr>
+    <th scope="row">${{ 1: '🥇', 2: '🥈', 3: '🥉' }[i + 1] ?? t('admin.rank', { rank: i + 1 })}</th>
+    <td>${numberField(`super:${i}`, reward.superBoosters, { max: 50 })}</td>
+    <td><span class="input-kira">${numberField(`kira:${i}`, reward.kira)}${coinHTML()}</span></td>
+  </tr>`);
 }
 
 function dailyFieldsHTML(daily) {
@@ -115,6 +135,7 @@ function playerHTML(player) {
       <span>🃏 ${t('admin.cards', { count: player.cards, total: state.meta.totalCards })}</span>
       <span>📦 ${t('admin.boosters', { count: player.boosters })}</span>
       ${kiraHTML(player.kira)}
+      ${player.superBoosters > 0 && html`<span class="admin-gift">🏆 ${t('weekly.superBoosters', { count: player.superBoosters })}</span>`}
       <span>🎁 ${t(daily.claimedToday ? 'admin.claimedToday' : 'admin.notClaimed')} · ${t('admin.claims', { count: daily.claims })}</span>
       ${daily.gift && html`<span class="admin-gift">${t('admin.giftWaiting')}</span>`}
     </div>
@@ -167,6 +188,24 @@ export async function renderAdmin(main) {
           </div>
         </form>
         <div class="admin-stack">
+          <form class="panel admin-form" data-form="weekly" novalidate>
+            <h2 class="panel__title">🏆 ${t('admin.weekly')}</h2>
+            <p class="muted">${t('admin.weeklyText')}</p>
+            <div class="table-wrap">
+              <table class="odds admin-weekly">
+                <thead><tr>
+                  <th scope="col">${t('stats.rank')}</th>
+                  <th scope="col">⭐ ${t('admin.superBoosters')}</th>
+                  <th scope="col">✦ Kira</th>
+                </tr></thead>
+                <tbody data-fields></tbody>
+              </table>
+            </div>
+            <div class="btn-row btn-row--end">
+              <button class="btn btn--ghost" type="button" data-defaults>${t('admin.defaults')}</button>
+              <button class="btn btn--primary" type="submit">${t('admin.save')}</button>
+            </div>
+          </form>
           <form class="panel admin-form" data-form="daily" novalidate>
             <h2 class="panel__title">🎁 ${t('admin.daily')}</h2>
             <div data-fields></div>
@@ -223,6 +262,7 @@ export async function renderAdmin(main) {
 
   const paint = {
     market: (values) => mount(fieldsOf('market'), marketFieldsHTML(values.market)),
+    weekly: (values) => mount(fieldsOf('weekly'), weeklyRowsHTML(values.weekly)),
     daily: (values) => mount(fieldsOf('daily'), dailyFieldsHTML(values.daily)),
     odds: (values) => {
       mount(fieldsOf('odds'), oddsRowsHTML(values));
@@ -251,8 +291,13 @@ export async function renderAdmin(main) {
         market: {
           prices: Object.fromEntries(state.meta.sets.map((set) => [set.id, value(`price:${set.id}`)])),
           recycle: Object.fromEntries(rarestFirst().map((id) => [id, value(`recycle:${id}`)])),
+          cardPrices: Object.fromEntries(shopRarities(settings.market).map((id) => [id, value(`card:${id}`)])),
         },
       };
+    },
+    weekly(form) {
+      const value = (name) => Number(form.elements[name].value);
+      return { weekly: { rewards: settings.weekly.rewards.map((_, i) => ({ superBoosters: value(`super:${i}`), kira: value(`kira:${i}`) })) } };
     },
     daily(form) {
       const sets = $$('[name="sets"]:checked', form).map((box) => box.value);

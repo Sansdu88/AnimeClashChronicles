@@ -1,9 +1,10 @@
 /**
  * Game settings the admins change from the admin panel, saved in the database
  * (table game_settings, see supabase/migrations/): the booster odds, the Kira
- * prices and values, and the daily reward. Their defaults come from config.js.
+ * prices and values (boosters and cards of the daily shop), the daily reward and
+ * the rewards of the weekly ranking. Their defaults come from config.js.
  */
-import { BOOSTER, DAILY, MARKET, RARITY_IDS, SUPER_BOOSTER, stockOf } from './config.js';
+import { BOOSTER, DAILY, MARKET, RARITY_IDS, SHOP, SUPER_BOOSTER, WEEKLY, stockOf } from './config.js';
 import { HttpError } from './http.js';
 
 /**
@@ -13,12 +14,17 @@ import { HttpError } from './http.js';
 export const ODDS_TOTAL = 100_000;
 const MAX_KIRA = 100_000;
 const MAX_SUPER_EVERY = 60;
+const MAX_SUPER_BOOSTERS = 50;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+/** The rarities sold at the daily shop. */
+const SHOP_RARITIES = Object.keys(SHOP.prices);
 
 /**
  * The defaults, for the booster sets of the shop:
- * { booster, superBooster: { slotWeights, rareSlotWeights }, market: { prices: { setId }, recycle: { rarity } },
- *   daily: { superEvery, sets: [setId offered], superDays: ['YYYY-MM-DD' everyone gets a Super Booster] } }
+ * { booster, superBooster: { slotWeights, rareSlotWeights },
+ *   market: { prices: { setId }, recycle: { rarity }, cardPrices: { rarity sold at the daily shop } },
+ *   daily: { superEvery, sets: [setId offered], superDays: ['YYYY-MM-DD' everyone gets a Super Booster] },
+ *   weekly: { rewards: [{ superBoosters, kira }, …] (the 1st, the 2nd… of the weekly ranking) } }
  */
 export function defaultSettings(shopSets) {
   const weights = (rules) => ({ slotWeights: toOddsTotal(rules.slotWeights), rareSlotWeights: toOddsTotal(rules.rareSlotWeights) });
@@ -28,8 +34,10 @@ export function defaultSettings(shopSets) {
     market: {
       prices: Object.fromEntries(shopSets.map((set) => [set.id, MARKET.prices[stockOf(set)]])),
       recycle: { ...MARKET.recycle },
+      cardPrices: { ...SHOP.prices },
     },
     daily: { superEvery: DAILY.superEvery, sets: shopSets.map((set) => set.id), superDays: [] },
+    weekly: { rewards: WEEKLY.rewards.map((reward) => ({ ...reward })) },
   };
 }
 
@@ -70,8 +78,21 @@ function cleanAmounts(value, keys, name) {
   );
 }
 
+/** The rewards of the weekly ranking: one { superBoosters, kira } per rank, from the 1st. */
+function cleanRewards(value) {
+  const count = WEEKLY.rewards.length;
+  if (!Array.isArray(value) || value.length !== count) throw invalid(`weekly.rewards must list ${count} rewards, from the 1st to the ${count}th`);
+  return value.map((reward, i) => {
+    if (!isInt(reward?.superBoosters, 0, MAX_SUPER_BOOSTERS)) {
+      throw invalid(`weekly.rewards[${i}].superBoosters must be an integer from 0 to ${MAX_SUPER_BOOSTERS}`);
+    }
+    if (!isInt(reward?.kira, 0, MAX_KIRA)) throw invalid(`weekly.rewards[${i}].kira must be an integer from 0 to ${MAX_KIRA}`);
+    return { superBoosters: reward.superBoosters, kira: reward.kira };
+  });
+}
+
 /**
- * `current` with the sections of `patch` ({ booster, superBooster, market, daily }, each
+ * `current` with the sections of `patch` ({ booster, superBooster, market, daily, weekly }, each
  * given whole) checked and changed. `setIds`: the shop sets; `today`: past event days are dropped.
  * Throws a 400 (invalid_settings) on a wrong value.
  */
@@ -89,8 +110,10 @@ export function mergeSettings(current, patch, { setIds, today }) {
     next.market = {
       prices: cleanAmounts(patch.market?.prices, setIds, 'market.prices'),
       recycle: cleanAmounts(patch.market?.recycle, RARITY_IDS, 'market.recycle'),
+      cardPrices: cleanAmounts(patch.market?.cardPrices, SHOP_RARITIES, 'market.cardPrices'),
     };
   }
+  if (patch.weekly !== undefined) next.weekly = { rewards: cleanRewards(patch.weekly?.rewards) };
   if (patch.daily !== undefined) {
     const { superEvery, sets, superDays } = patch.daily ?? {};
     if (!isInt(superEvery, 1, MAX_SUPER_EVERY)) throw invalid(`daily.superEvery must be an integer from 1 to ${MAX_SUPER_EVERY}`);
@@ -122,6 +145,7 @@ export function loadSettings(saved, defaults, context, log = console) {
       section = {
         prices: { ...defaults.market.prices, ...value.prices },
         recycle: { ...defaults.market.recycle, ...value.recycle },
+        cardPrices: { ...defaults.market.cardPrices, ...value.cardPrices },
       };
     } else if (key === 'booster' || key === 'superBooster') {
       // Odds saved before (in tenths of a percent) are brought to the current precision.
