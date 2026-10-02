@@ -143,6 +143,12 @@ export function createSupabaseStore({ url, secretKey }) {
       return row ? { id: row.id, passwordHash: row.password_hash } : null;
     },
 
+    /** { id, passwordHash } for a player name, whatever its case (function find_login_by_name), or null. */
+    async findLoginByName(name) {
+      const [row] = await request('POST', 'rpc/find_login_by_name', { body: { p_name: name } });
+      return row ? { id: row.id, passwordHash: row.password_hash } : null;
+    },
+
     async getPasswordHash(playerId) {
       const [row] = await get(`players?select=password_hash&id=${eq(playerId)}`);
       return row?.password_hash ?? null;
