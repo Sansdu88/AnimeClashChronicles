@@ -4,6 +4,7 @@ import { loadCatalog, logout, renamePlayer, restoreSession, state, subscribe } f
 import { enableCardEffects } from './components/card.js';
 import { repaintDrops, startDrops, stopDrops } from './components/drops.js';
 import { formDialog } from './components/modal.js';
+import { shouldShowTutorial, startTutorial } from './components/tutorial.js';
 import { closeAllLayers, pushLayer } from './ui/layers.js';
 import { sfx } from './ui/sfx.js';
 import { toast } from './ui/toast.js';
@@ -72,9 +73,11 @@ function pageBadge(name, count) {
   paintBadge(name, count);
 }
 
-/** True while the player types or has a dialog open: the page is not redrawn under them. */
+/** True while the player types or has a dialog (or the tutorial) open: the page is not redrawn under them. */
 const isBusy = () =>
-  document.body.classList.contains('has-modal') || Boolean(document.activeElement?.matches?.('input, select, textarea'));
+  document.body.classList.contains('has-modal') ||
+  document.body.classList.contains('has-tour') ||
+  Boolean(document.activeElement?.matches?.('input, select, textarea'));
 
 function showNotifications({ friendRequests, trades }) {
   const before = { ...badges };
@@ -168,6 +171,20 @@ async function paintDaily() {
   if (screen !== 'app') return;
   $('#daily-badge').hidden = !dailyStatus().available;
   maybeDailyPopup();
+}
+
+// ── Tutorial ─────────────────────────────────────────────────────────────────
+// New players get it once (components/tutorial.js); the Stats page replays it.
+
+/** The tutorial runs on the "Open" page: goes there first. */
+function showTutorial(onClose) {
+  if (currentRoute()[0] === 'open') {
+    startTutorial({ onClose });
+    return;
+  }
+  // The page is drawn by the hashchange listener of start(), registered before this one.
+  window.addEventListener('hashchange', () => screen === 'app' && startTutorial({ onClose }), { once: true });
+  location.hash = '#/';
 }
 
 // ── Header & static texts ────────────────────────────────────────────────────
@@ -345,7 +362,9 @@ function enterApp() {
   startDrops();
   paintStockBadge();
   paintDaily();
-  maybeDailyPopup();
+  // A new player first gets the tutorial, then the daily reward popup.
+  if (shouldShowTutorial(state.player)) showTutorial(maybeDailyPopup);
+  else maybeDailyPopup();
   maybeWeeklyToast();
 }
 
@@ -404,6 +423,7 @@ async function start() {
     }
   });
   window.addEventListener('mb:logout', doLogout);
+  window.addEventListener('mb:tutorial', () => screen === 'app' && showTutorial());
   window.addEventListener('mb:friend-requests', (event) => pageBadge('friends', event.detail));
   window.addEventListener('mb:trades-waiting', (event) => pageBadge('trades', event.detail));
   // Boosters in stock (both stocks), on the "Open" link, and the daily reward.

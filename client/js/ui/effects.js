@@ -8,7 +8,13 @@ let canvas = null;
 let ctx = null;
 let particles = [];
 let running = false;
+let fitted = null; // the viewport size and pixel ratio the canvas was sized for
 
+/**
+ * The canvas only exists while particles fly: it is added by the first burst and removed with
+ * the last particle. A browser that misses a repaint (e.g. the page zoomed out during the
+ * fireworks) then cannot keep confetti trails on screen.
+ */
 function ensureCanvas() {
   if (canvas) return;
   canvas = document.createElement('canvas');
@@ -16,14 +22,25 @@ function ensureCanvas() {
   canvas.setAttribute('aria-hidden', 'true');
   document.body.append(canvas);
   ctx = canvas.getContext('2d');
-  const resize = () => {
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = window.innerWidth * ratio;
-    canvas.height = window.innerHeight * ratio;
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  };
-  resize();
-  window.addEventListener('resize', resize);
+  fitted = null;
+  fitCanvas();
+}
+
+/** Sizes the canvas like the viewport, again when it changed (window resized, zoom, other screen). */
+function fitCanvas() {
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  const key = `${window.innerWidth}x${window.innerHeight}@${ratio}`;
+  if (fitted?.key === key) return;
+  const { width, height } = canvas.getBoundingClientRect();
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  fitted = { key, ratio };
+}
+
+function removeCanvas() {
+  canvas.remove();
+  canvas = null;
+  ctx = null;
 }
 
 function drawStar(size) {
@@ -38,8 +55,16 @@ function drawStar(size) {
 }
 
 function step() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
   particles = particles.filter((p) => p.life > 0);
+  if (!particles.length) {
+    running = false;
+    removeCanvas();
+    return;
+  }
+  fitCanvas();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(fitted.ratio, 0, 0, fitted.ratio, 0, 0);
   for (const p of particles) {
     p.vy += 0.16;
     p.vx *= 0.985;
@@ -56,11 +81,7 @@ function step() {
     else ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
     ctx.restore();
   }
-  if (particles.length) requestAnimationFrame(step);
-  else {
-    running = false;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
+  requestAnimationFrame(step);
 }
 
 /** Confetti/star explosion centered on (x, y), in viewport coordinates. */

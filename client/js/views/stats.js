@@ -181,6 +181,7 @@ export async function renderStats(main) {
           <h1 class="view-title">${t('stats.title')}</h1>
           <p class="view-sub">${raw(tHtml('stats.playing', { name: player.name, date: fmt.date(player.createdAt) }))}</p>
         </div>
+        <button class="btn btn--secondary" type="button" data-action="tutorial">${t('stats.tutorial')}</button>
       </header>
 
       <div class="stat-tiles">
@@ -269,6 +270,8 @@ export async function renderStats(main) {
         onSubmit: ({ current, next }) => changePassword(current, next),
       });
       if (saved) toast(t('stats.passwordSaved'), 'success');
+    } else if (action === 'tutorial') {
+      window.dispatchEvent(new CustomEvent('mb:tutorial'));
     } else if (action === 'logout') {
       window.dispatchEvent(new CustomEvent('mb:logout'));
     } else if (action === 'reset') {

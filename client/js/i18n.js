@@ -480,6 +480,74 @@ const DICT = {
       bought: 'Bought at the Kira market',
       resetConfirm: 'Reset',
       resetDone: 'Collection reset. Fresh start!',
+      tutorial: '🎓 Replay the tutorial',
+    },
+    // The tutorial (components/tutorial.js): a guided tour for new players.
+    tour: {
+      label: 'Tutorial',
+      start: 'Show me around!',
+      next: 'Next',
+      back: 'Back',
+      done: "Let's go!",
+      skip: 'Skip the tutorial',
+      steps: {
+        welcome: {
+          title: 'Welcome, {name}!',
+          text: 'Your goal: collect all <strong>{total} anime cards</strong>, one per anime, made from its Wikipedia page. The more popular the anime, the rarer its card:',
+          after: 'Ready for a quick tour? It takes one minute.',
+        },
+        stocks: {
+          title: 'Free boosters',
+          text: 'You get an era booster every <strong>{era} minutes</strong> and an All-Stars every <strong>{stars} minutes</strong>, up to {max} of each. They pile up even while you are away: come back to open them!',
+        },
+        shelf: {
+          title: 'Pick a booster',
+          text: '<strong>All-Stars</strong> holds every card. <strong>Shōwa</strong>, <strong>Heisei</strong> and <strong>Reiwa</strong> only hold the anime of their era: handy to hunt the cards you miss. {size} cards per booster, the last one always <strong>Rare or better</strong>.',
+        },
+        daily: {
+          title: 'Daily reward',
+          text: {
+            one: 'Come back every day for a <strong>free booster</strong>, opened right away. For now, it is always a <strong>Super Booster</strong>!',
+            other: 'Come back every day for a <strong>free booster</strong> of your choice, opened right away. Every {count} days: a <strong>Super Booster</strong>, all its cards Rare or better!',
+          },
+        },
+        market: {
+          title: 'Kira market',
+          text: 'Recycle your duplicates into <strong>Kira ✦</strong>, the money of the game (you always keep one copy), and spend it on boosters. The <strong>daily shop</strong> sells 5 new cards every day at midnight.',
+        },
+        kira: {
+          title: 'Your Kira',
+          text: 'Your Kira balance is always shown here, and it takes you to the market.',
+        },
+        collection: {
+          title: 'Your collection',
+          text: 'All your cards, with filters by rarity, era or type. Missing cards show up as <strong>???</strong> and duplicates stack up (×2, ×3…).',
+        },
+        social: {
+          title: 'Friends & trades',
+          text: 'Add friends with your <strong>friend code</strong>, look at their collections and climb the friends ranking. Then <strong>trade</strong> cards with them: you each give one copy. A red badge means something is waiting for you.',
+        },
+        statsRules: {
+          title: 'Stats & rules',
+          text: '<strong>Stats</strong>: your numbers and the <strong>weekly ranking</strong>. Every card pulled from Monday to Sunday earns points, and the best players win Super Boosters and Kira. You can replay this tutorial from there. <strong>Rules</strong>: the drop rates and every detail.',
+        },
+        profile: {
+          title: 'Your profile',
+          text: 'Your player name: click it to change it. When there is room, it also shows how many of the {total} cards you have collected.',
+        },
+        more: {
+          title: 'More',
+          text: 'The other pages and your settings are behind <strong>More</strong>.',
+        },
+        sheet: {
+          title: 'Friends, stats & more',
+          text: '<strong>Friends</strong> and <strong>Trades</strong>: add friends with your friend code, compare collections and swap cards. <strong>Stats</strong>: the weekly ranking and its prizes, and this tutorial to replay. <strong>Rules</strong>: every detail. Your settings are here too.',
+        },
+        end: {
+          title: 'Your turn!',
+          text: 'Your free boosters are waiting: open your first one and start your collection. May you pull a Reversed card!',
+        },
+      },
     },
     rules: {
       title: 'How it works',
@@ -1168,6 +1236,73 @@ const DICT = {
       bought: 'Acheté au marché Kira',
       resetConfirm: 'Réinitialiser',
       resetDone: 'Collection réinitialisée. Nouveau départ !',
+      tutorial: '🎓 Revoir le tutoriel',
+    },
+    tour: {
+      label: 'Tutoriel',
+      start: 'Fais-moi visiter !',
+      next: 'Suivant',
+      back: 'Retour',
+      done: 'C’est parti !',
+      skip: 'Passer le tutoriel',
+      steps: {
+        welcome: {
+          title: 'Bienvenue, {name} !',
+          text: 'Ton objectif : collectionner les <strong>{total} cartes d’anime</strong>, une par anime, créée à partir de sa page Wikipédia. Plus l’anime est populaire, plus sa carte est rare :',
+          after: 'On fait une visite rapide ? Ça prend une minute.',
+        },
+        stocks: {
+          title: 'Des boosters gratuits',
+          text: 'Tu reçois un booster d’époque toutes les <strong>{era} minutes</strong> et un All-Stars toutes les <strong>{stars} minutes</strong>, jusqu’à {max} de chaque. Ils s’accumulent même quand tu n’es pas là : reviens les ouvrir !',
+        },
+        shelf: {
+          title: 'Choisis ton booster',
+          text: '<strong>All-Stars</strong> contient toutes les cartes. <strong>Shōwa</strong>, <strong>Heisei</strong> et <strong>Reiwa</strong> seulement les anime de leur époque : pratique pour chasser les cartes qui te manquent. {size} cartes par booster, la dernière toujours <strong>Rare ou mieux</strong>.',
+        },
+        daily: {
+          title: 'Le bonus du jour',
+          text: {
+            one: 'Reviens chaque jour pour un <strong>booster gratuit</strong>, ouvert tout de suite. En ce moment, c’est toujours un <strong>Super Booster</strong> !',
+            other: 'Reviens chaque jour pour un <strong>booster gratuit</strong> de ton choix, ouvert tout de suite. Tous les {count} jours : un <strong>Super Booster</strong>, toutes ses cartes Rares ou mieux !',
+          },
+        },
+        market: {
+          title: 'Le marché Kira',
+          text: 'Recycle tes doublons en <strong>Kira ✦</strong>, la monnaie du jeu (tu gardes toujours un exemplaire), et dépense-les en boosters. La <strong>boutique du jour</strong> propose 5 nouvelles cartes chaque jour à minuit.',
+        },
+        kira: {
+          title: 'Tes Kira',
+          text: 'Ton solde de Kira est toujours affiché ici, et il mène au marché.',
+        },
+        collection: {
+          title: 'Ta collection',
+          text: 'Toutes tes cartes, avec des filtres par rareté, époque ou type. Les cartes manquantes s’affichent en <strong>???</strong> et les doublons s’empilent (×2, ×3…).',
+        },
+        social: {
+          title: 'Amis et échanges',
+          text: 'Ajoute des amis avec ton <strong>code ami</strong>, regarde leurs collections et grimpe dans le classement entre amis. Puis <strong>échange</strong> des cartes avec eux : chacun donne un exemplaire. Une pastille rouge veut dire que quelque chose t’attend.',
+        },
+        statsRules: {
+          title: 'Stats et règles',
+          text: '<strong>Stats</strong> : tes chiffres et le <strong>classement de la semaine</strong>. Chaque carte tirée du lundi au dimanche rapporte des points, et les meilleurs joueurs gagnent des Super Boosters et des Kira. Tu peux revoir ce tutoriel depuis cette page. <strong>Règles</strong> : les taux et tous les détails.',
+        },
+        profile: {
+          title: 'Ton profil',
+          text: 'Ton nom de joueur : clique dessus pour le changer. Quand il y a la place, il montre aussi combien de cartes tu as obtenues sur {total}.',
+        },
+        more: {
+          title: 'Plus',
+          text: 'Les autres pages et tes réglages sont derrière <strong>Plus</strong>.',
+        },
+        sheet: {
+          title: 'Amis, stats et plus',
+          text: '<strong>Amis</strong> et <strong>Échanges</strong> : ajoute des amis avec ton code ami, comparez vos collections et échangez des cartes. <strong>Stats</strong> : le classement de la semaine et ses récompenses, et ce tutoriel à revoir. <strong>Règles</strong> : tous les détails. Tes réglages sont ici aussi.',
+        },
+        end: {
+          title: 'À toi de jouer !',
+          text: 'Tes boosters gratuits t’attendent : ouvre le premier et commence ta collection. Puisses-tu tirer une carte Inversée !',
+        },
+      },
     },
     rules: {
       title: 'Comment ça marche',
