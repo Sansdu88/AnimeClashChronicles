@@ -1,12 +1,28 @@
 /**
- * "Rules" page: how boosters and rarities work, the daily reward, the Kira market and its
- * daily shop, the weekly ranking, types and credits.
+ * "Rules" page: how boosters and rarities work, the events on now, the daily reward, the
+ * Kira market and its daily shop, the weekly ranking, types and credits.
  */
 import { fmt, html, mount, raw } from '../dom.js';
 import { rarityName, setName, setTagline, t, tHtml, typeName } from '../i18n.js';
 import { state } from '../state.js';
+import { EVENT_ICONS, activeEvents, eventCards } from '../events.js';
 import { kiraHTML } from '../ui/kira.js';
 import { rewardText } from './stats.js';
+
+/** An event on now: its booster, its stock and the rarities of its cards. */
+function eventRulesHTML(event) {
+  const cards = eventCards(event.id);
+  return html`<section class="panel rules-event ev-${event.id}">
+    <h2 class="panel__title">${EVENT_ICONS[event.id]} ${t('rules.eventTitle', { name: t(`events.${event.id}.title`) })}</h2>
+    <p>${raw(tHtml(`events.${event.id}.pitch`, { count: cards.length, rev: cards.filter((card) => card.rarity === 'REV').length, ur: cards.filter((card) => card.rarity === 'UR').length }))}</p>
+    <p>${t('rules.event', { set: setName(event.set.id), count: event.hours, max: event.max })}</p>
+    <ul class="rates__list">
+      ${[...state.meta.rarities].reverse().map((rarity) => html`<li class="r-${rarity.id}" title="${rarityName(rarity.id)}">
+        <span class="rarity-badge">${rarity.id}</span> ${t('rules.eventCards', { count: cards.filter((card) => card.rarity === rarity.id).length })}
+      </li>`)}
+    </ul>
+  </section>`;
+}
 
 function atLeastOneLabel(rarityId, chance) {
   if (rarityId === 'N') return '—';
@@ -48,6 +64,8 @@ export function renderRules(main) {
         <li class="panel step"><span class="step__num">3</span><h2>${t('rules.step3Title')}</h2>
           <p>${t('rules.step3', { rev: meta.rarities.find((r) => r.id === 'REV').cardCount })}</p></li>
       </ol>
+
+      ${activeEvents().map(eventRulesHTML)}
 
       <section class="panel">
         <h2 class="panel__title">${raw(tHtml('rules.odds'))}</h2>

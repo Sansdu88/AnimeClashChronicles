@@ -164,9 +164,10 @@ function openCatalog() {
   };
 }
 
+/** The cards already saved, by title of the list. The cards of the events (card.event) are left alone. */
 async function loadPrevious(store) {
   const { cards } = await store.loadCatalog();
-  return new Map(cards.map((card) => [card.source, card]));
+  return new Map(cards.filter((card) => !card.event).map((card) => [card.source, card]));
 }
 
 // ① ───────────────────────────────────────────────────────────────────────────

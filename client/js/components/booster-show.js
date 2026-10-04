@@ -31,6 +31,19 @@ const SHOWS = {
     colors: ['#ff006e', '#8338ec', '#3a86ff', '#00f5d4', '#ffffff'],
     anime: ['demon-slayer-kimetsu-no-yaiba', 'jujutsu-kaisen', 'chainsaw-man', 'spy-family', 'frieren', 'solo-leveling'],
   },
+  // The Halloween event: its monsters, in the Halloween editions of their cards.
+  halloween: {
+    theme: 'spooky',
+    colors: ['#ff6b00', '#ffb347', '#7b2cbf', '#39ff14', '#1a0b2e', '#ffffff'],
+    anime: [
+      'halloween:death-note',
+      'halloween:jujutsu-kaisen',
+      'halloween:phantom-blood',
+      'halloween:tokyo-ghoul',
+      'halloween:higurashi-when-they-cry',
+      'halloween:hellsing',
+    ],
+  },
 };
 
 /**
@@ -38,9 +51,10 @@ const SHOWS = {
  * its own show gets the "legends" theme with its 6 most popular cards.
  */
 export function showFor(set) {
+  const cards = set.event ? (state.eventCards[set.event] ?? []) : state.cards.filter((card) => !set.era || card.era === set.era);
   const show = SHOWS[set.id] ?? {
     ...SHOWS['all-stars'],
-    anime: state.cards.filter((card) => !set.era || card.era === set.era).sort((a, b) => b.power - a.power).slice(0, 6).map((card) => card.id),
+    anime: [...cards].sort((a, b) => b.power - a.power).slice(0, 6).map((card) => card.id),
   };
   const anime = show.anime
     .map((id) => state.cardsById.get(id))

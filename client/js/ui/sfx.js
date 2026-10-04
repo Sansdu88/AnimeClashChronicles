@@ -8,10 +8,14 @@
  * stuck: at every tap, an engine that does not play is replaced. On an iPhone or an iPad, Web
  * Audio is also muted in silent mode (the switch on the side): while the game's sound is on
  * (🔊), it plays as "playback" audio, like a video, which silent mode does not mute.
+ *
+ * An event gives the game its own sounds (`sfx.theme`, see THEMES): during Halloween, an
+ * organ, ghosts, thunder and a witch's cackle replace some of the usual ones.
  */
 import { storage } from '../dom.js';
 
 const SOUND_KEY = 'mangaBooster.sound';
+let theme = null; // the sounds of an event (a key of THEMES), or null
 let context = null; // the audio engine, made during a tap
 let madeAt = 0; // when it was made (performance.now())
 let clock = null; // when its clock last moved: { context, time, at }
@@ -137,7 +141,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) stopSilentTrack();
 });
 
-function tone(frequency, { start = 0, duration = 0.15, type = 'sine', gain = 0.1, slideTo } = {}) {
+/**
+ * One note. `envelope`: 'hit' (a strike that fades at once), 'hold' (held, then it fades at the
+ * end, like an organ) or 'swell' (it rises slowly, like a ghost's wail). `vibrato`: { rate (Hz),
+ * depth (Hz) }, the pitch wobbles.
+ */
+function tone(frequency, { start = 0, duration = 0.15, type = 'sine', gain = 0.1, slideTo, envelope = 'hit', vibrato } = {}) {
   const ctx = context;
   const t = ctx.currentTime + start;
   const osc = ctx.createOscillator();
@@ -146,17 +155,38 @@ function tone(frequency, { start = 0, duration = 0.15, type = 'sine', gain = 0.1
   osc.frequency.setValueAtTime(frequency, t);
   if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t + duration);
   volume.gain.setValueAtTime(0.0001, t);
-  volume.gain.exponentialRampToValueAtTime(gain, t + 0.012);
+  if (envelope === 'hold') {
+    volume.gain.exponentialRampToValueAtTime(gain, t + 0.015);
+    volume.gain.setValueAtTime(gain, t + duration * 0.75);
+  } else if (envelope === 'swell') {
+    volume.gain.exponentialRampToValueAtTime(gain, t + duration * 0.4);
+    volume.gain.setValueAtTime(gain, t + duration * 0.6);
+  } else {
+    volume.gain.exponentialRampToValueAtTime(gain, t + 0.012);
+  }
   volume.gain.exponentialRampToValueAtTime(0.0001, t + duration);
   // One connect() at a time: in old Safaris, connect() returns nothing.
   osc.connect(volume);
   volume.connect(ctx.destination);
+  if (vibrato) {
+    const lfo = ctx.createOscillator();
+    const depth = ctx.createGain();
+    lfo.frequency.setValueAtTime(vibrato.rate, t);
+    depth.gain.setValueAtTime(vibrato.depth, t);
+    lfo.connect(depth);
+    depth.connect(osc.frequency);
+    lfo.start(t);
+    lfo.stop(t + duration + 0.05);
+  }
   osc.start(t);
   osc.stop(t + duration + 0.05);
 }
 
-/** Filtered white noise. `swell`: the volume rises instead of falling (a reversed cymbal). */
-function noise({ start = 0, duration = 0.3, gain = 0.2, from = 3000, to = 600, swell = false } = {}) {
+/**
+ * Filtered white noise. `swell`: the volume rises instead of falling (a reversed cymbal).
+ * `filter`: 'bandpass' (a hiss that sweeps), or 'lowpass' (a rumble).
+ */
+function noise({ start = 0, duration = 0.3, gain = 0.2, from = 3000, to = 600, swell = false, filter: shape = 'bandpass' } = {}) {
   const ctx = context;
   const t = ctx.currentTime + start;
   const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * duration), ctx.sampleRate);
@@ -165,7 +195,7 @@ function noise({ start = 0, duration = 0.3, gain = 0.2, from = 3000, to = 600, s
   const source = ctx.createBufferSource();
   source.buffer = buffer;
   const filter = ctx.createBiquadFilter();
-  filter.type = 'bandpass';
+  filter.type = shape;
   filter.Q.value = 0.9;
   filter.frequency.setValueAtTime(from, t);
   filter.frequency.exponentialRampToValueAtTime(to, t + duration);
@@ -246,11 +276,106 @@ const SOUNDS = {
     arpeggio([392, 523, 659, 784], { duration: 0.22, type: 'square', gain: 0.045, step: 0.11 });
     [523, 659, 784, 1047].forEach((note) => tone(note, { start: 0.48, duration: 1, type: 'triangle', gain: 0.07 }));
   },
+
+  // ── Halloween (THEMES.halloween uses them too) ──
+  // A ghost's wail: up, then a long fall, over a breath of wind.
+  ghost: () => {
+    tone(330, { duration: 0.75, gain: 0.07, slideTo: 640, envelope: 'swell', vibrato: { rate: 5.5, depth: 14 } });
+    tone(640, { start: 0.65, duration: 1.2, gain: 0.07, slideTo: 260, envelope: 'hold', vibrato: { rate: 5, depth: 18 } });
+    noise({ duration: 1.8, gain: 0.04, from: 500, to: 1500, swell: true });
+  },
+  // A witch's cackle: six "ha!" falling lower and lower.
+  cackle: () => {
+    for (let i = 0; i < 6; i++) {
+      const pitch = 980 - i * 60;
+      tone(pitch, { start: i * 0.13, duration: 0.11, type: 'sawtooth', gain: 0.04, slideTo: pitch * 0.7, vibrato: { rate: 30, depth: 40 } });
+      tone(pitch * 2, { start: i * 0.13, duration: 0.09, type: 'triangle', gain: 0.025, slideTo: pitch * 1.3 });
+    }
+  },
+  // Thunder: the crack, then a long rumble.
+  thunder: () => {
+    noise({ duration: 0.25, gain: 0.3, from: 6000, to: 1500 });
+    noise({ start: 0.08, duration: 2.2, gain: 0.5, from: 700, to: 60, filter: 'lowpass' });
+    tone(55, { start: 0.05, duration: 1.6, gain: 0.3, slideTo: 32 });
+  },
+  // A church bell tolls (the partials of a bell are not in tune with each other).
+  bell: () => {
+    [
+      [146.8, 0.06],
+      [293.7, 0.08],
+      [352, 0.04],
+      [440, 0.03],
+      [587.3, 0.05],
+      [880, 0.02],
+    ].forEach(([frequency, gain]) => tone(frequency, { duration: 3, gain }));
+  },
+  // A door creaks open.
+  creak: () => tone(95, { duration: 0.9, type: 'sawtooth', gain: 0.03, slideTo: 150, envelope: 'swell', vibrato: { rate: 22, depth: 25 } }),
+};
+
+/** An organ note: a square wave over a sawtooth one octave lower, held. */
+const organ = (frequency, { start = 0, duration = 0.4, gain = 0.03 } = {}) => {
+  tone(frequency, { start, duration, type: 'square', gain, envelope: 'hold' });
+  tone(frequency / 2, { start, duration, type: 'sawtooth', gain: gain * 0.7, envelope: 'hold' });
+};
+
+/**
+ * The sounds an event changes (`sfx.theme`): the others stay as they are.
+ * Halloween: the opening of Bach's Toccata in D minor on the organ, ghosts, thunder, minor keys.
+ */
+const THEMES = {
+  halloween: {
+    fanfare: () => {
+      organ(440, { duration: 0.09 });
+      organ(392, { start: 0.08, duration: 0.09 });
+      organ(440, { start: 0.16, duration: 0.6 });
+      [392, 349.2, 329.6, 293.7].forEach((note, i) => organ(note, { start: 0.9 + i * 0.13, duration: 0.14 }));
+      organ(277.2, { start: 1.42, duration: 0.32 });
+      [293.7, 349.2, 440].forEach((note) => organ(note, { start: 1.78, duration: 1.3, gain: 0.025 }));
+      tone(73.4, { start: 1.78, duration: 1.4, type: 'sawtooth', gain: 0.05, envelope: 'hold' });
+    },
+    whoosh: () => {
+      tone(420, { duration: 0.6, gain: 0.06, slideTo: 760, envelope: 'swell', vibrato: { rate: 6, depth: 16 } });
+      noise({ duration: 0.5, gain: 0.08, from: 400, to: 3000 });
+    },
+    crack: () => {
+      noise({ duration: 0.3, gain: 0.35, from: 7000, to: 900 });
+      tone(80, { duration: 0.6, gain: 0.3, slideTo: 38 });
+    },
+    boom: () => {
+      SOUNDS.thunder();
+      [293.7, 349.2, 440, 587.3].forEach((note) => organ(note, { start: 0.4, duration: 1.8, gain: 0.022 }));
+    },
+    charge: () => tone(180, { duration: 0.9, gain: 0.06, slideTo: 900, envelope: 'swell', vibrato: { rate: 7, depth: 20 } }),
+    // Bones knock together.
+    N: () => {
+      tone(420, { duration: 0.07, type: 'triangle', gain: 0.09 });
+      tone(300, { start: 0.07, duration: 0.08, type: 'triangle', gain: 0.07 });
+    },
+    R: () => arpeggio([440, 523.3], { duration: 0.26, type: 'triangle', gain: 0.08, vibrato: { rate: 6, depth: 6 } }),
+    SR: () => arpeggio([440, 523.3, 659.3], { duration: 0.34, type: 'triangle', gain: 0.09, step: 0.08, vibrato: { rate: 6, depth: 6 } }),
+    SSR: () => {
+      [293.7, 349.2, 440, 587.3].forEach((note, i) => organ(note, { start: i * 0.09, duration: 0.9 }));
+      tone(1174.7, { start: 0.4, duration: 1.4, gain: 0.04 });
+    },
+    UR: () => {
+      tone(70, { duration: 0.6, gain: 0.35, slideTo: 35 });
+      arpeggio([440, 523.3, 622.3, 740, 880], { duration: 0.5, type: 'square', gain: 0.035, step: 0.09 });
+      SOUNDS.ghost();
+    },
+  },
 };
 
 export const sfx = {
   get enabled() {
     return enabled;
+  },
+  /** The sounds of an event ('halloween'), or null for the usual ones. */
+  get theme() {
+    return theme;
+  },
+  set theme(value) {
+    theme = THEMES[value] ? value : null;
   },
   /** Turned on or off by a tap (the 🔊 button): the sound wakes up, or silent mode applies again. */
   set enabled(value) {
@@ -259,12 +384,12 @@ export const sfx = {
     if (enabled) wake();
     else followSilentMode();
   },
-  /** Plays a sound; before the first tap there is no audio engine yet, and nothing plays. */
+  /** Plays a sound (the event's when it has its own); before the first tap there is no audio engine yet, and nothing plays. */
   play(name) {
     if (!enabled || !context) return;
     playedAt = performance.now();
     try {
-      SOUNDS[name]?.();
+      (THEMES[theme]?.[name] ?? SOUNDS[name])?.();
     } catch {
       /* audio not available: stay silent */
     }

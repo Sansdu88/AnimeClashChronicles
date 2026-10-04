@@ -26,6 +26,8 @@ const CARD_COLUMNS = {
   source: 'source',
   revision: 'revision',
   storyText: 'story_text',
+  // The event the card belongs to (e.g. 'halloween'), null for a card of the main collection.
+  event: 'event',
 };
 
 export const cardToRow = (card) =>
@@ -54,6 +56,8 @@ function toPublicCard(card) {
       ? { src: card.image.src, width: card.image.width, height: card.image.height, credit: card.image.credit }
       : null,
     wikipediaUrl: card.url,
+    // Only on the cards of an event (see EVENTS in config.js).
+    ...(card.event && { event: card.event }),
     // Same texts from French Wikipedia (null when the anime has no French page).
     fr: card.fr
       ? {
@@ -75,13 +79,18 @@ export function compareByRarity(a, b) {
 /**
  * rawCards: cards as stored (see CARD_COLUMNS); sets: rows of public.booster_sets;
  * meta: { generatedAt, popularity, license }.
+ * `cards` is the main collection; the cards of an event (card.event) are only in the
+ * booster set of that event (set.event), and getCard() finds them too.
  */
 export function createCatalog(rawCards, sets, meta = {}) {
-  const cards = rawCards.map(toPublicCard).sort((a, b) => a.number - b.number);
-  const byId = new Map(cards.map((card) => [card.id, card]));
+  const allCards = rawCards.map(toPublicCard).sort((a, b) => a.number - b.number);
+  const cards = allCards.filter((card) => !card.event);
+  const byId = new Map(allCards.map((card) => [card.id, card]));
 
   const catalogSets = [...sets].sort((a, b) => a.position - b.position).map(({ position, ...set }) => {
-    const setCards = cards.filter((card) => !set.era || card.era === set.era);
+    const setCards = set.event
+      ? allCards.filter((card) => card.event === set.event)
+      : cards.filter((card) => !set.era || card.era === set.era);
     const byRarity = Object.fromEntries(RARITY_IDS.map((id) => [id, setCards.filter((c) => c.rarity === id)]));
     const featured = [...setCards].sort(compareByRarity)[0] ?? null;
     return { ...set, cards: setCards, byRarity, featured };

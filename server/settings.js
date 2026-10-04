@@ -1,10 +1,10 @@
 /**
  * Game settings the admins change from the admin panel, saved in the database
  * (table game_settings, see supabase/migrations/): the booster odds, the Kira
- * prices and values (boosters and cards of the daily shop), the daily reward and
- * the rewards of the weekly ranking. Their defaults come from config.js.
+ * prices and values (boosters and cards of the daily shop), the daily reward, the
+ * rewards of the weekly ranking and the events. Their defaults come from config.js.
  */
-import { BOOSTER, DAILY, MARKET, RARITY_IDS, SHOP, SUPER_BOOSTER, WEEKLY, stockOf } from './config.js';
+import { BOOSTER, DAILY, EVENTS, MARKET, RARITY_IDS, SHOP, SUPER_BOOSTER, WEEKLY, stockOf } from './config.js';
 import { HttpError } from './http.js';
 
 /**
@@ -15,6 +15,7 @@ export const ODDS_TOTAL = 100_000;
 const MAX_KIRA = 100_000;
 const MAX_SUPER_EVERY = 60;
 const MAX_SUPER_BOOSTERS = 50;
+const MAX_EVENT_HOURS = 168; // the booster of an event: at least one a week
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 /** The rarities sold at the daily shop. */
 const SHOP_RARITIES = Object.keys(SHOP.prices);
@@ -24,7 +25,8 @@ const SHOP_RARITIES = Object.keys(SHOP.prices);
  * { booster, superBooster: { slotWeights, rareSlotWeights },
  *   market: { prices: { setId }, recycle: { rarity }, cardPrices: { rarity sold at the daily shop } },
  *   daily: { superEvery, sets: [setId offered], superDays: ['YYYY-MM-DD' everyone gets a Super Booster] },
- *   weekly: { rewards: [{ superBoosters, kira }, …] (the 1st, the 2nd… of the weekly ranking) } }
+ *   weekly: { rewards: [{ superBoosters, kira }, …] (the 1st, the 2nd… of the weekly ranking) },
+ *   events: { eventId: { enabled, hours, max } (on or off; its booster: one every `hours`, `max` at most) } }
  */
 export function defaultSettings(shopSets) {
   const weights = (rules) => ({ slotWeights: toOddsTotal(rules.slotWeights), rareSlotWeights: toOddsTotal(rules.rareSlotWeights) });
@@ -38,6 +40,8 @@ export function defaultSettings(shopSets) {
     },
     daily: { superEvery: DAILY.superEvery, sets: shopSets.map((set) => set.id), superDays: [] },
     weekly: { rewards: WEEKLY.rewards.map((reward) => ({ ...reward })) },
+    // Every event is off until an admin turns it on.
+    events: Object.fromEntries(Object.entries(EVENTS).map(([id, { hours, max }]) => [id, { enabled: false, hours, max }])),
   };
 }
 
@@ -91,9 +95,23 @@ function cleanRewards(value) {
   });
 }
 
+/** The events: { enabled, hours, max } for each one of EVENTS. */
+function cleanEvents(value) {
+  return Object.fromEntries(
+    Object.keys(EVENTS).map((id) => {
+      const event = value?.[id];
+      if (typeof event?.enabled !== 'boolean') throw invalid(`events.${id}.enabled must be true or false`);
+      if (!isInt(event.hours, 1, MAX_EVENT_HOURS)) throw invalid(`events.${id}.hours must be an integer from 1 to ${MAX_EVENT_HOURS}`);
+      // At most the boosters opened at once, so that a full stock can get the ×10 show.
+      if (!isInt(event.max, 1, BOOSTER.maxPerRequest)) throw invalid(`events.${id}.max must be an integer from 1 to ${BOOSTER.maxPerRequest}`);
+      return [id, { enabled: event.enabled, hours: event.hours, max: event.max }];
+    }),
+  );
+}
+
 /**
- * `current` with the sections of `patch` ({ booster, superBooster, market, daily, weekly }, each
- * given whole) checked and changed. `setIds`: the shop sets; `today`: past event days are dropped.
+ * `current` with the sections of `patch` ({ booster, superBooster, market, daily, weekly, events },
+ * each given whole) checked and changed. `setIds`: the shop sets; `today`: past event days are dropped.
  * Throws a 400 (invalid_settings) on a wrong value.
  */
 export function mergeSettings(current, patch, { setIds, today }) {
@@ -114,6 +132,7 @@ export function mergeSettings(current, patch, { setIds, today }) {
     };
   }
   if (patch.weekly !== undefined) next.weekly = { rewards: cleanRewards(patch.weekly?.rewards) };
+  if (patch.events !== undefined) next.events = cleanEvents(patch.events);
   if (patch.daily !== undefined) {
     const { superEvery, sets, superDays } = patch.daily ?? {};
     if (!isInt(superEvery, 1, MAX_SUPER_EVERY)) throw invalid(`daily.superEvery must be an integer from 1 to ${MAX_SUPER_EVERY}`);
@@ -153,6 +172,9 @@ export function loadSettings(saved, defaults, context, log = console) {
     } else if (key === 'daily') {
       const sets = (value.sets ?? []).filter((id) => context.setIds.includes(id));
       section = { ...defaults.daily, ...value, sets: sets.length ? sets : defaults.daily.sets };
+    } else if (key === 'events') {
+      // An event added since is off.
+      section = Object.fromEntries(Object.entries(defaults.events).map(([id, event]) => [id, { ...event, ...value[id] }]));
     }
     try {
       settings = mergeSettings(settings, { [key]: section }, context);

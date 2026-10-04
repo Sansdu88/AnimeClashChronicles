@@ -87,11 +87,11 @@ export function createSupabaseStore({ url, secretKey }) {
 
     // ── Card catalog ─────────────────────────────────────────────────────────
 
-    /** { cards, sets, meta }: every card (in number order), the booster sets and the catalog info. */
+    /** { cards, sets, meta }: every card (in number order, the events' too), the booster sets and the catalog info. */
     async loadCatalog() {
       const [rows, sets, [info]] = await Promise.all([
         getAll('cards?select=*&order=number,id'),
-        get('booster_sets?select=id,position,name,tagline,era,colors&order=position'),
+        get('booster_sets?select=id,position,name,tagline,era,colors,event&order=position'),
         get('catalog_info?select=generated_at,popularity,license'),
       ]);
       return {
@@ -270,6 +270,36 @@ export function createSupabaseStore({ url, secretKey }) {
         openedAt: booster.openedAt,
         pulls: boosters[i].map((card, j) => ({ card, isNew: booster.pulls[j].isNew })),
       }));
+    },
+
+    /**
+     * Opens boosters of an event from the player's stock of that event (function
+     * open_event_boosters): same result as openBoosters.
+     */
+    async openEventBoosters(playerId, event, setId, boosters, { every, max }) {
+      const result = await request('POST', 'rpc/open_event_boosters', {
+        body: {
+          p_player_id: playerId,
+          p_event: event,
+          p_set_id: setId,
+          p_boosters: boosters.map((cards) => cards.map((card) => ({ id: card.id, rarity: card.rarity }))),
+          p_every: every,
+          p_max: max,
+        },
+      });
+      if (result.error) return result;
+      return result.boosters.map((booster, i) => ({
+        id: booster.id,
+        setId,
+        openedAt: booster.openedAt,
+        pulls: boosters[i].map((card, j) => ({ card, isNew: booster.pulls[j].isNew })),
+      }));
+    },
+
+    /** { eventId: date (ISO) } the player's stock of each event counts from (an event missing: a full stock). */
+    async eventStocks(playerId) {
+      const rows = await get(`event_stocks?select=event,since&player_id=${eq(playerId)}`);
+      return Object.fromEntries(rows.map((row) => [row.event, row.since]));
     },
 
     /** [{ cardId, count, firstPulledAt, lastPulledAt }] */

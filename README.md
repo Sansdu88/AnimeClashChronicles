@@ -44,6 +44,7 @@ can take a minute.
 | **Daily shop** | At the market, 5 cards picked for everyone, new ones every day at midnight (Paris time): 3 R, 1 SR and 1 SSR, and on Sundays a **UR** instead of the SSR. Buy one copy of each with Kira (R 100 ✦, SR 250 ✦, SSR 600 ✦, UR 1,500 ✦ by default); the Kira flies from the wallet to the card. |
 | **Weekly ranking** | On the Stats page: from Monday to Sunday, every card you pull earns points (a new card is worth the points of its rarity, a duplicate 10%). On Sunday at midnight the best players get their reward: 5 Super Boosters for the 1st, 3 for the 2nd, 1 for the 3rd, Kira from the 4th to the 10th (by default). The Super Boosters wait on the player's shelf; the ranking starts again from zero. The weeks are ended by the server (when it starts, every minute and when the ranking is shown), each one only once. |
 | **Daily reward** | Once a day, a **free booster of your choice** (one of the 4), opened at once: it does not use the stock. Every 5th daily reward is a **Super Booster**, a booster of every card with much better odds (see below), with its own entrance: it drops in a rainbow halo, charges up and blows. The first visit of the day opens a popup to claim it, then the **Daily** page (a 5-day stamp card with a countdown to the next day) and a badge on its link remind you. Missing a day loses nothing: it is your 5th reward that is the Super Booster, not your 5th day in a row. The day changes at midnight, Paris time (`DAILY.timeZone`). |
+| **Events** | Limited-time events that the admins turn on and off from the admin panel (see [Events](#events)). The first one is **Halloween**: a **Halloween Booster** of **100 spooky monsters** of anime and manga (Ryuk, the Titans, Sukuna, Alucard, No-Face, Kitarō…), with only **1 REV**, its own stock (**+1 every 8 hours, 10 at most** by default, so 3 a day) and a full stock of 10 opened with the ×10 show. While it is on, the whole game wears a Halloween theme (a night header, a moon, bats, ghosts and cobwebs) and plays spooky sounds (an organ, thunder, ghosts and a witch's cackle). The booster is not sold at the market; its cards form a collection of their own, in a tab of the collection, and stay in the players' collections when the event ends. |
 | **Opening** | Shake and tear the pack, then flip 5 face-down cards. Rare cards glow before you flip them, and SSR/UR reveals trigger manga effects (RUMBLE, BOOM!!), confetti and sounds (synthesized, can be muted; on an iPhone they play in silent mode too while the game's sound is on). A REV card gets its own moment: two heartbeats, then the whole screen turns negative for a few seconds under a giant **REVERSE**. |
 | **Cards** | Picture, type (Action, Mecha, Romance…), year, power level, and a one-sentence summary from Wikipedia. SSR, UR and REV are full-art cards with a holographic effect that follows your mouse; REV (Reversed) cards have inverted colors. |
 | **Collection** | A pokédex-style grid: missing cards show up as `???`. Filters, sorting, and completion per rarity, 50 or 100 cards per page with page numbers. Click a card for its full Wikipedia summary. |
@@ -54,7 +55,7 @@ can take a minute.
 | **Accounts** | Sign up with an e-mail and a password, log in from any browser with your e-mail or your player name (names are unique), rename yourself, change your password, log out. Several people on the same network can play on one server (see `HOST` below). |
 | **Colorblind mode** | The 👁 button (off by default) switches rarities to colors that stay distinct with every kind of color blindness and adds card-game symbols: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR · ☆☆☆ REV. |
 | **Live drops** | A banner under the menu shows the latest drops of the players of the whole world in an endless carousel: the best card of each of the latest boosters, your friends' first, then the rarest, then the newest (at most 2 per player; yours and the admins' are left out). It stops when hovered, and a click shows the card. |
-| **Admin panel** | For the admins only (set from the database console, see [Admins](#admins)): the Kira price of each booster, of a card of the daily shop by rarity and the Kira of a recycled duplicate, the rewards of the weekly ranking (Super Boosters and Kira for each of the 10 first), the daily reward (a Super Booster every N daily rewards, the boosters the players can choose, Super Booster event days for everyone), the rarity odds of the boosters and of the Super Booster. Every change applies at once. A list of all the players with a search bar, to give a player their daily reward back, give them a Super Booster for their next one, clear their data (cards, boosters, Kira, friends, trades, daily rewards; the account stays) or delete them. |
+| **Admin panel** | For the admins only (set from the database console, see [Admins](#admins)): the limited-time events (on or off for everyone, and the stock of their booster: one every N hours, M at most), the Kira price of each booster, of a card of the daily shop by rarity and the Kira of a recycled duplicate, the rewards of the weekly ranking (Super Boosters and Kira for each of the 10 first), the daily reward (a Super Booster every N daily rewards, the boosters the players can choose, Super Booster event days for everyone), the rarity odds of the boosters and of the Super Booster. Every change applies at once. A list of all the players with a search bar, to give a player their daily reward back, give them a Super Booster for their next one, clear their data (cards, boosters, Kira, friends, trades, daily rewards; the account stays) or delete them. |
 | **Phones** | Below 760px wide, the game looks like an app: a slim bar at the top (logo and Kira), the main pages as tabs at the bottom (Open, Daily, Market, Collection) and a **More** tab whose sheet holds the other pages (Friends, Trades, Stats, Rules, Admin) with their badges, and the settings (language, sound, colorblind mode, name, log out). The two booster stocks sit side by side, and the collection folds its filters behind a button (the search stays). |
 | **Languages** | An **EN / FR** switch in the header translates the whole interface, and French cards use their French Wikipedia title and text (*Goldorak*, *Ken le Survivant*, *Capitaine Albator*…). The first visit follows the browser's language. |
 
@@ -114,8 +115,8 @@ defaults. The admins change the odds, the Kira prices and values and the daily r
 │   └── config.js           rarities, drop rates, booster stocks, Kira market, daily reward (defaults), types, eras
 ├── client/                 web UI (HTML/CSS/JS modules, no build step)
 │   ├── index.html
-│   ├── css/                base, card, booster, views
-│   └── js/                 main.js (router), i18n (EN/FR), state, api, components/, views/, ui/
+│   ├── css/                base, card, booster, views, events (the look of each event)
+│   └── js/                 main.js (router), i18n (EN/FR), state, events, api, components/, views/, ui/
 ├── data/
 │   └── anime-list.js       the anime and manga that become cards (input of npm run sync)
 ├── supabase/
@@ -131,7 +132,8 @@ defaults. The admins change the odds, the Kira prices and values and the daily r
 ## Database: Supabase
 
 Everything is stored in a **Supabase** (PostgreSQL) database: the card catalog (`cards`,
-`booster_sets`, `catalog_info`) and the players (with their Kira), sessions, boosters, daily rewards, friends and trades.
+`booster_sets`, `catalog_info`; the cards and boosters of the events have their `event` column set) and the
+players (with their Kira), sessions, boosters, daily rewards, the stocks of the events' boosters (`event_stocks`), friends and trades.
 The database is described by the SQL files of [supabase/migrations/](supabase/migrations/): the
 tables first, then the card catalog. The project is linked to Supabase with the **GitHub
 integration**, which applies new migrations when they are pushed on `main`. Without it, paste the
@@ -144,6 +146,37 @@ key (**Project Settings → API Keys**), then `npm start`: the startup message s
 Only the server uses the database, with the **secret** key (it never reaches the browser).
 Row Level Security is enabled on every table: the public (publishable) key can only read the
 card catalog, nothing else.
+
+## Events
+
+Limited-time events are listed in `EVENTS` in [server/config.js](server/config.js) and turned on and off
+from the admin panel (**Limited-time events**), for every player at once: the pages already open follow
+within 10 seconds (the notifications check), without a reload. While an event is on:
+
+- its booster has a spotlight on the Open page and a **stock of its own**: one every N hours, M at most
+  (8 hours and 10 by default, set from the admin panel). A player starts with a full stock, like the other
+  stocks. It has the odds of the other boosters, is not sold at the market and is not a daily reward;
+- the website wears the event's **theme** (`html[data-event="…"]`, [client/css/events.css](client/css/events.css))
+  and plays its **sounds** (`sfx.theme`, [client/js/ui/sfx.js](client/js/ui/sfx.js));
+- its cards form a **collection of their own** (a tab of the Collection page, numbered #001/100): they do not
+  change the completion of the main collection (3021 cards) but count in the score and the weekly ranking.
+  Players keep them when the event ends, and can recycle and trade them like any card.
+
+Admins can open the booster of an event at any time (their boosters are unlimited), even when it is off,
+to try it out before starting it.
+
+**Halloween** ([supabase/migrations/20261004120000_events_halloween.sql](supabase/migrations/20261004120000_events_halloween.sql)):
+the Halloween Booster holds 100 spooky monsters of anime and manga. Each card is the Halloween edition of a
+card of the catalog (same picture and texts, id `halloween:<card id>`), with the monster of that anime as its
+description (*Ryuk, the Shinigami*, *Ken Kaneki, the half-ghoul*…, in English and French). Their rarity follows
+the popularity of the anime among the 100, with the shares of the main catalog: **1 REV** (the Titans), 5 UR,
+12 SSR, 20 SR, 27 R and 35 N.
+
+To add an event: a line in `EVENTS` (its id, booster set, hours and max), a migration that adds its booster
+set and its cards (`booster_sets.event` and `cards.event` set to its id, like the Halloween one), its texts in
+[client/js/i18n.js](client/js/i18n.js) (`events.<id>`, `sets.<id>`, `open.stocks.<id>`), its emblem and decor
+in [client/js/events.js](client/js/events.js), its look in [client/css/events.css](client/css/events.css), and
+optionally its sounds (`THEMES` in sfx.js) and its ×10 show (`SHOWS` in components/booster-show.js).
 
 ## Kira market
 
@@ -199,8 +232,8 @@ with the token returned by register/login.
 | Method | Route | Description |
 |---|---|---|
 | GET | `/api/health` | Server status |
-| GET | `/api/meta` | Rarities (with odds), types, eras, booster sets |
-| GET | `/api/cards` | All cards. Filters: `rarity`, `type`, `era`, `set`, `q` (search), `sort` (`number`, `rarity`, `name`, `year`, `power`) |
+| GET | `/api/meta` | Rarities (with odds), types, eras, booster sets, the booster stocks (`stocks`, the events' on now too) and the events (`events: [{ id, active, hours, max, set }]`) |
+| GET | `/api/cards` | All the cards of the main collection. Filters: `rarity`, `type`, `era`, `set`, `q` (search), `sort` (`number`, `rarity`, `name`, `year`, `power`). The cards of an event: `set=<its booster>`, e.g. `?set=halloween` (they have `"event": "halloween"`) |
 | GET | `/api/cards/:cardId` | One card |
 | GET | `/api/sets` · `/api/sets/:setId` | Booster sets (with their cards) |
 | POST | `/api/auth/register` | Create an account. Body: `{ "email", "password", "name"? }` → `{ player, token }` + session cookie. The name is unique whatever the case (taken → 409 `name_taken`) and cannot contain `@` |
@@ -210,7 +243,7 @@ with the token returned by register/login.
 | POST | `/api/auth/password` | Change password. Body: `{ "currentPassword", "newPassword" }` |
 | GET | `/api/players/:playerId` | Profile and stats |
 | PATCH | `/api/players/:playerId` | Rename. Body: `{ "name": "…" }` (1–24 characters, no `@`; taken → 409 `name_taken`) |
-| POST | `/api/players/:playerId/boosters` | Open boosters from their stock. Body: `{ "setId": "all-stars", "count": 1 }` (`count` 1–10). The era boosters share a stock (+1 every 2 minutes), All-Stars has its own (+1 every 10 minutes), 10 at most each: not enough → 429 `booster_cooldown` with `details.retryIn` (seconds) and `details.stock`. `"setId": "super"` opens Super Boosters won in the weekly ranking (not enough → 409 `no_super_booster`). Profiles include `stocks` (`{ "era": { "stock", "nextIn" }, "all-stars": { … } }`, `nextIn` = seconds before the next one, 0 when full), `kira`, `superBoosters` and `lastWeekly` (what you won when the last week ended, or `null`) |
+| POST | `/api/players/:playerId/boosters` | Open boosters from their stock. Body: `{ "setId": "all-stars", "count": 1 }` (`count` 1–10). The era boosters share a stock (+1 every 2 minutes), All-Stars has its own (+1 every 10 minutes), 10 at most each: not enough → 429 `booster_cooldown` with `details.retryIn` (seconds) and `details.stock`. `"setId": "super"` opens Super Boosters won in the weekly ranking (not enough → 409 `no_super_booster`). The booster of an event (`"setId": "halloween"`) comes from its own stock while the event is on (off → 409 `event_over`; admins can always open it). Profiles include `stocks` (`{ "era": { "stock", "nextIn" }, "all-stars": { … }, "halloween": { … } }` (the events on now), `nextIn` = seconds before the next one, 0 when full), `kira`, `superBoosters` and `lastWeekly` (what you won when the last week ended, or `null`) |
 | GET | `/api/players/:playerId/boosters?limit=20` | Booster history, newest first (`kira`: the price of a booster bought at the market) |
 | GET | `/api/players/:playerId/market` | `{ kira, spare, shop }`: your Kira, for each card the duplicates you can recycle, and today's daily shop `{ day, nextIn, items: [{ cardId, rarity, price, bought }] }` |
 | POST | `/api/players/:playerId/market/shop` | Buy a card of today's daily shop. Body: `{ "cardId": "naruto", "price": 600 }` (`price`: optional, as for boosters). Returns `{ cardId, isNew, kira, shop, player }`. Not in today's shop → 409 `shop_changed`, already bought today → 409 `already_bought`, not enough Kira → 409 `not_enough_kira` |
@@ -218,7 +251,7 @@ with the token returned by register/login.
 | POST | `/api/players/:playerId/market/buy` | Buy boosters with Kira, opened at once. Body: `{ "setId": "showa", "count": 3, "price": 50 }` (`count`: 1 to 10, 1 by default; `price`: optional, the price of one booster the player saw: if an admin changed it → 409 `price_changed`). Returns `{ boosters, player }`. Not enough Kira for all of them → 409 `not_enough_kira` with `details.price`, `details.total` and `details.kira` |
 | GET | `/api/players/:playerId/daily` | Today's daily reward: `{ today, available, claims, day, cycle, super, superReason, choices, nextIn }` (`day` of the cycle, `super` for a Super Booster because of `superReason`: `cycle`, `event` or `gift`, `choices` = the boosters offered, `nextIn` = seconds before the next day). Profiles include it as `daily` |
 | POST | `/api/players/:playerId/daily` | Claim today's daily reward, opened at once. Body: `{ "setId": "heisei" }` (ignored on Super Booster days, when `"super"` is accepted). Returns `{ booster, player }`. Already claimed → 409 `daily_claimed` with `details.nextIn` |
-| GET | `/api/players/:playerId/collection` | Owned cards (with copies) and completion |
+| GET | `/api/players/:playerId/collection` | Owned cards (with copies, the events' too) and the completion of the main collection; `byEvent`: `{ "halloween": { owned, total } }` |
 | DELETE | `/api/players/:playerId/collection` | Reset the collection (and the Kira) |
 | GET | `/api/players/:playerId/friends` | Your friend code, friends, requests received/sent and the friends ranking |
 | POST | `/api/players/:playerId/friends` | Send a friend request. Body: `{ "code": "#K7Q2XM" }` (a friend code or an e-mail) |
@@ -232,7 +265,7 @@ with the token returned by register/login.
 | POST | `/api/players/:playerId/trades/:tradeId/accept` | The player who offered accepts: both cards change hands in one transaction |
 | POST | `/api/players/:playerId/trades/:tradeId/decline` | The friend declines the trade, or takes back the card they chose |
 | DELETE | `/api/players/:playerId/trades/:tradeId` | The player who offered cancels the trade |
-| GET | `/api/players/:playerId/notifications` | `{ friendRequests, trades }`: friend requests received and trades waiting for your answer (the web page checks every 10 seconds for its badges) |
+| GET | `/api/players/:playerId/notifications` | `{ friendRequests, trades, events }`: friend requests received, trades waiting for your answer and the events on now (the web page checks every 10 seconds for its badges, and follows when an event starts or ends) |
 | GET | `/api/leaderboard?limit=10` | Best collectors by score (admins left out) |
 | GET | `/api/weekly` | This week's ranking: `{ week, from, to, nextIn, rewards, players, you, last }` (`players`: the ones who get a reward; `you`: your row; `last`: the last week ended and its winners). Admins left out |
 | GET | `/api/drops` | The latest drops for the banner: `{ drops: [{ playerName, friend, cardId, rarity, setId, openedAt }] }`, the best card of each of the latest 100 boosters, the logged-in player's friends first, then the rarest, then the newest (12 at most, 2 per player, without the admins nor yourself) |
@@ -243,8 +276,8 @@ Admin routes (an admin's session only, 403 `not_admin` otherwise):
 
 | Method | Route | Description |
 |---|---|---|
-| GET | `/api/admin/settings` | `{ settings, defaults }`: `{ booster, superBooster: { slotWeights, rareSlotWeights }, market: { prices, recycle, cardPrices }, daily: { superEvery, sets, superDays }, weekly: { rewards: [{ superBoosters, kira }, …] } }`; odds in thousandths of a percent (each slot adds up to 100000, so 0.001% is the smallest step); `oddsTotal` |
-| PATCH | `/api/admin/settings` | Change sections of the settings (each given whole), e.g. `{ "market": { "prices": {…}, "recycle": {…}, "cardPrices": {…} } }` or `{ "weekly": { "rewards": [10 × { "superBoosters", "kira" }] } }`. Wrong values → 400 `invalid_settings` |
+| GET | `/api/admin/settings` | `{ settings, defaults }`: `{ booster, superBooster: { slotWeights, rareSlotWeights }, market: { prices, recycle, cardPrices }, daily: { superEvery, sets, superDays }, weekly: { rewards: [{ superBoosters, kira }, …] }, events: { halloween: { enabled, hours, max } } }`; odds in thousandths of a percent (each slot adds up to 100000, so 0.001% is the smallest step); `oddsTotal` |
+| PATCH | `/api/admin/settings` | Change sections of the settings (each given whole), e.g. `{ "market": { "prices": {…}, "recycle": {…}, "cardPrices": {…} } }`, `{ "weekly": { "rewards": [10 × { "superBoosters", "kira" }] } }` or `{ "events": { "halloween": { "enabled": true, "hours": 8, "max": 10 } } }` (`hours` 1–168, `max` 1–10). Wrong values → 400 `invalid_settings` |
 | GET | `/api/admin/players` | Every player with their cards, boosters, Kira and daily reward |
 | POST | `/api/admin/players/:id/daily/reset` | The player can claim today's daily reward again |
 | POST | `/api/admin/players/:id/daily/gift` | Body: `{ "super": true }`: their next daily reward is a Super Booster (`false` takes it back) |

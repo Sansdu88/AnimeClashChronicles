@@ -19,7 +19,8 @@ import { renderStats, rewardText } from './views/stats.js';
 import { renderRules } from './views/rules.js';
 import { renderFriendCollection, renderFriends } from './views/friends.js';
 import { renderTrades } from './views/trades.js';
-import { boosterStock, dailyStatus, fetchNotifications, refreshDaily, syncCollection } from './state.js';
+import { boosterStock, dailyStatus, fetchNotifications, refreshDaily, refreshMeta, syncCollection } from './state.js';
+import { activeEvents, applyEventTheme } from './events.js';
 
 const ROUTES = {
   open: renderOpen,
@@ -79,7 +80,8 @@ const isBusy = () =>
   document.body.classList.contains('has-tour') ||
   Boolean(document.activeElement?.matches?.('input, select, textarea'));
 
-function showNotifications({ friendRequests, trades }) {
+function showNotifications({ friendRequests, trades, events = [] }) {
+  followEvents(events);
   const before = { ...badges };
   paintBadge('friends', friendRequests);
   paintBadge('trades', trades);
@@ -115,6 +117,44 @@ function stopNotifications() {
   clearInterval(notifyTimer);
   badges.friends = null;
   badges.trades = null;
+}
+
+// ── Events ───────────────────────────────────────────────────────────────────
+// When an admin starts or ends an event (Halloween…), the notifications say it and the game
+// follows without a reload: its theme, its booster and its stock (events.js).
+
+const EVENT_TOAST_KEY = 'animeClashChronicles.eventToast';
+let followingEvents = false;
+
+/** Once per player, event and year: the event is on, here is its booster. */
+function maybeEventToast() {
+  for (const event of activeEvents()) {
+    const key = `${EVENT_TOAST_KEY}.${event.id}`;
+    const seen = `${state.player.id} ${new Date().getFullYear()}`;
+    if (storage.get(key) === seen) continue;
+    storage.set(key, seen);
+    toast(t(`events.${event.id}.started`, { count: event.set.cardCount }), 'success', 8000);
+  }
+}
+
+/** `ids`: the events on now, says the server. */
+async function followEvents(ids) {
+  const shown = activeEvents().map((event) => event.id);
+  if (followingEvents || ids.join() === shown.join()) return;
+  followingEvents = true;
+  try {
+    await refreshMeta(); // the theme follows (subscribe below)
+  } catch {
+    return; /* next check */
+  } finally {
+    followingEvents = false;
+  }
+  if (screen !== 'app') return;
+  for (const id of shown.filter((id) => !ids.includes(id))) {
+    toast(t('events.ended', { name: t(`events.${id}.title`) }), 'info', 7000);
+  }
+  maybeEventToast();
+  if (!isBusy()) render({ scroll: false });
 }
 
 function paintStockBadge() {
@@ -366,6 +406,7 @@ function enterApp() {
   if (shouldShowTutorial(state.player)) showTutorial(maybeDailyPopup);
   else maybeDailyPopup();
   maybeWeeklyToast();
+  maybeEventToast();
 }
 
 async function doLogout() {
@@ -387,6 +428,7 @@ async function start() {
   let player;
   try {
     await loadCatalog();
+    applyEventTheme(); // the login screen wears it too
     player = await restoreSession();
   } catch (err) {
     mount(
@@ -405,6 +447,8 @@ async function start() {
   setupHeader();
   setupSheet();
   subscribe(updateHeader);
+  // An event started or ended (the admin panel, or the notifications): the theme follows.
+  subscribe(applyEventTheme);
 
   window.addEventListener('hashchange', () => {
     if (screen !== 'app') return;

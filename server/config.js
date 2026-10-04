@@ -45,8 +45,23 @@ export const STOCKS = {
   'all-stars': { cooldownSeconds: 600, stackMax: 10 },
 };
 
-/** The stock a booster set is opened from: 'era' for the sets of one era, 'all-stars' for the set of every card. */
-export const stockOf = (set) => (set.era ? 'era' : 'all-stars');
+/**
+ * Limited-time events, turned on and off from the admin panel (settings.events). An event
+ * has its own booster set (`setId`, public.booster_sets.event) made of its own cards
+ * (public.cards.event): a collection of their own, that the players keep when the event
+ * ends. While it is on, its booster comes from a stock of its own (its id is the event's):
+ * one every `hours`, `max` at most (both changed from the admin panel), and the website
+ * wears its theme. It cannot be bought with Kira nor chosen as a daily reward.
+ */
+export const EVENTS = {
+  halloween: { setId: 'halloween', hours: 8, max: 10 },
+};
+
+/**
+ * The stock a booster set is opened from: 'era' for the sets of one era, 'all-stars' for
+ * the set of every card, the event's id for the booster of an event.
+ */
+export const stockOf = (set) => set.event ?? (set.era ? 'era' : 'all-stars');
 
 /**
  * The Kira market. Kira (✦) is the game's money: a duplicate (a copy beyond the
