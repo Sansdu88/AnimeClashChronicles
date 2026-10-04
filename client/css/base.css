@@ -160,14 +160,16 @@ code {
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 
+/* The logo and the side (wallets, profile, settings) on top, the navigation on its own line under them. */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 10px max(16px, calc((100vw - var(--header-width)) / 2));
+  gap: 8px 12px;
+  padding: 8px max(16px, calc((100vw - var(--header-width)) / 2));
   background: var(--panel);
   border-bottom: var(--border);
   box-shadow: 0 4px 0 rgba(22, 19, 15, 0.12);
@@ -201,13 +203,18 @@ code {
 }
 
 .nav {
+  order: 3;
   display: flex;
+  justify-content: space-between;
   gap: 2px;
-  margin-inline: auto;
+  width: 100%;
+  overflow-x: auto;
 }
 
 .nav a {
+  position: relative;
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   padding: 8px 9px 5px;
@@ -237,6 +244,47 @@ code {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* "Coming soon" (the Forge): a small sign after its name in the menu, on the corner of its tile in the "More" sheet. */
+.nav a[data-route='forge'] > [data-i18n]::after {
+  content: '🚧';
+  margin-left: 4px;
+  font-size: 0.7em;
+  vertical-align: 0.2em;
+}
+
+.nav__soon {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* The badges of the achievements, after a player's name (views/achievements.js). */
+.badges {
+  display: inline-flex;
+  gap: 1px;
+  vertical-align: -0.1em;
+  white-space: nowrap;
+}
+
+.badge {
+  font-size: 0.95em;
+  font-style: normal;
+  line-height: 1;
+  filter: drop-shadow(1px 1px 0 rgba(22, 19, 15, 0.35));
+  cursor: default;
+}
+
+.player-chip__badges {
+  flex-shrink: 0;
+}
+
+.player-chip__badges:empty {
+  display: none;
 }
 
 .player-chip {
@@ -276,6 +324,7 @@ code {
 }
 
 .icon-btn {
+  position: relative;
   width: 40px;
   height: 40px;
   display: grid;
@@ -299,6 +348,25 @@ code {
 .icon-btn--logout:hover {
   background: var(--red);
   color: #fff;
+}
+
+/* The "Events" button: a red dot blinks on it while an event is on. */
+.icon-btn--events.is-live {
+  background: var(--yellow);
+}
+
+.icon-btn--events.is-live::after,
+.sheet__events.is-live::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  background: var(--red);
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  animation: live-blink 1.2s ease-in-out infinite;
 }
 
 /* EN | FR */
@@ -335,6 +403,8 @@ code {
 /* Logged out: only the logo, the language switch and the sound button. */
 body.is-logged-out .nav,
 body.is-logged-out .player-chip,
+body.is-logged-out .gem-chip,
+body.is-logged-out .icon-btn--events,
 body.is-logged-out .icon-btn--logout {
   display: none;
 }
@@ -430,6 +500,88 @@ body.is-logged-out .icon-btn--logout {
   transform: translateY(-1px) rotate(-2deg);
 }
 
+/* ── Gems (💎), the rare money ───────────────────────────────────────────── */
+
+/* A cut gem inked like the rest of the game (ui/gems.js), sized after the text around it. */
+.gem-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 1.3em;
+  height: 1.1em;
+  vertical-align: -0.2em;
+}
+
+.gem-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.gem-icon--big {
+  width: 86px;
+  height: 73px;
+  filter: drop-shadow(4px 4px 0 var(--ink));
+  animation: gem-glint 4s ease-in-out infinite;
+}
+
+/* Every few seconds the gem turns and catches the light. */
+@keyframes gem-glint {
+  0%,
+  70%,
+  100% {
+    transform: none;
+  }
+  80% {
+    transform: rotate(-8deg) scale(1.08);
+    filter: drop-shadow(4px 4px 0 var(--ink)) brightness(1.3);
+  }
+  90% {
+    transform: rotate(5deg);
+  }
+}
+
+/* Gems just landed in it. */
+.gem-icon.is-bumped {
+  animation: coin-bump 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.6);
+}
+
+/* "12 💎": a number and its gem. */
+.gem-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.gem-amount .gem-icon {
+  vertical-align: 0;
+}
+
+/* The gems in the header (a link to the market): a night-blue chip next to the Kira. */
+.gem-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 4px 7px;
+  color: #a8f0ff;
+  background: linear-gradient(180deg, #123a63, #0b2540);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 2px 2px 0 rgba(22, 19, 15, 0.35);
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 1px;
+  line-height: 1;
+  text-decoration: none;
+  transition: transform 0.15s;
+}
+
+.gem-chip:hover {
+  transform: translateY(-1px) rotate(2deg);
+}
+
 /* The sparkles a recycled card turns into, flying to the wallet (ui/kira.js). */
 .kira-spark {
   position: fixed;
@@ -441,6 +593,19 @@ body.is-logged-out .icon-btn--logout {
   -webkit-text-stroke: 1.5px var(--ink);
   paint-order: stroke fill;
   filter: drop-shadow(0 0 6px rgba(255, 210, 63, 0.9));
+}
+
+/* Gems flying from or to a wallet. */
+.gem-spark {
+  width: 24px;
+  height: 20px;
+  filter: drop-shadow(0 0 6px rgba(54, 197, 240, 0.95));
+}
+
+.gem-spark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* ── Latest drops (the banner under the menu) ──────────────────────────────── */
@@ -683,6 +848,11 @@ body.is-logged-out .icon-btn--logout {
 /* Paid with Kira. */
 .btn--kira {
   background: linear-gradient(180deg, #ffe680, #ffc21a 55%, #f4a100);
+}
+
+/* Paid with gems. */
+.btn--gems {
+  background: linear-gradient(180deg, #d4f8ff, #66d6f5 55%, #2aa3dc);
 }
 
 .btn--danger {
@@ -1458,39 +1628,18 @@ body.has-tour {
 
 /* ── Small screens ──────────────────────────────────────────────────────── */
 
-/* Only the player's name in their chip… */
-@media (min-width: 1421px) and (max-width: 1600px) {
+/* Only the player's name and badges in their chip, and a smaller logo, so the side stays next to it. */
+@media (max-width: 1100px) {
   .player-chip {
-    max-width: 170px;
+    max-width: 200px;
   }
 
   .player-chip__progress {
     display: none;
   }
-}
 
-/* …then the navigation gets its own line under the logo. */
-@media (max-width: 1420px) {
-  .topbar {
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    padding-block: 8px;
-  }
-
-  .nav {
-    order: 3;
-    width: 100%;
-    margin: 0;
-    overflow-x: auto;
-    justify-content: space-between;
-  }
-
-  .nav a {
-    flex: 1;
-  }
-
-  .topbar__side {
-    margin-left: auto;
+  .logo__main {
+    font-size: 22px;
   }
 }
 
@@ -1549,8 +1698,8 @@ body.has-tour {
 }
 
 /* ── Phones: an app layout ──────────────────────────────────────────────── */
-/* One slim bar at the top (logo and Kira), the main pages as tabs at the bottom,
-   the other pages and the settings in the sheet of the "More" tab (main.js). */
+/* One slim bar at the top (logo, Kira and gems), the main pages as tabs at the bottom,
+   the other pages, the events and the settings in the sheet of the "More" tab (main.js). */
 
 .nav__icon,
 .nav__more,
@@ -1571,12 +1720,19 @@ body.has-tour {
 
   .topbar__side {
     flex-wrap: nowrap;
+    gap: 6px;
     margin-left: auto;
   }
 
-  /* Only the Kira stays at the top: the rest is in the "More" sheet. */
-  .topbar__side > :not(.kira-chip) {
+  /* Only the Kira and the gems stay at the top: the rest is in the "More" sheet. */
+  .topbar__side > :not(.kira-chip, .gem-chip) {
     display: none;
+  }
+
+  .kira-chip,
+  .gem-chip {
+    padding-right: 10px;
+    font-size: 17px;
   }
 
   /* The tab bar */
@@ -1598,6 +1754,8 @@ body.has-tour {
     box-shadow: 0 -4px 0 rgba(22, 19, 15, 0.12);
   }
 
+  .nav a[data-route='forge'],
+  .nav a[data-route='achievements'],
   .nav a[data-route='friends'],
   .nav a[data-route='trades'],
   .nav a[data-route='stats'],
@@ -1682,6 +1840,20 @@ body.has-tour {
 
   .drops__label {
     padding-right: 20px;
+  }
+}
+
+/* Small phones: a smaller logo and wallets, so both wallets fit next to it. */
+@media (max-width: 420px) {
+  .logo__main {
+    font-size: 16px;
+  }
+
+  .kira-chip,
+  .gem-chip {
+    gap: 4px;
+    padding: 4px 8px 3px 4px;
+    font-size: 16px;
   }
 }
 
@@ -1784,12 +1956,14 @@ body.has-sheet {
   margin: 14px 0;
 }
 
-.sheet__links a {
+.sheet__links a,
+.sheet__links .sheet__events {
   position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 14px 12px 12px;
+  color: var(--ink);
   background: #fff;
   border: 2px solid var(--ink);
   border-radius: 14px;
@@ -1798,6 +1972,7 @@ body.has-sheet {
   font-size: 19px;
   letter-spacing: 1px;
   line-height: 1;
+  text-align: left;
   text-decoration: none;
 }
 

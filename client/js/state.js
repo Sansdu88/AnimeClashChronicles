@@ -76,6 +76,12 @@ export function boosterStock(id) {
 /** Kira price of a booster of a set at the market (set by the admins: an era booster costs less than All-Stars). */
 export const priceOf = (setId) => state.meta.market.prices[setId];
 
+/** Gems price of a booster of a set at the market (its Kira price divided by meta.gems.kiraPerGem, rounded up). */
+export const gemPriceOf = (setId) => state.meta.gems.prices[setId];
+
+/** The price of a booster of a set in a currency of the market: 'kira' or 'gems'. */
+export const priceIn = (currency, setId) => (currency === 'gems' ? gemPriceOf(setId) : priceOf(setId));
+
 /**
  * Today's daily reward (see dailyStatus in server/booster.js): { today, available, claims, day,
  * cycle, super, nextIn }, `nextIn` counted down here. `newDay`: the day changed since the
@@ -92,6 +98,10 @@ export const typeOf = (id) => state.meta.types.find((t) => t.id === id);
 export const setOf = (id) =>
   state.meta.sets.find((s) => s.id === id) ??
   (state.meta.daily.superSet?.id === id ? state.meta.daily.superSet : state.meta.events.find((event) => event.set.id === id)?.set);
+
+/** The cards of a booster set: the cards of its event, of its era, or every card (All-Stars, Super Booster). */
+export const cardsOfSet = (set) =>
+  set.event ? (state.eventCards[set.event] ?? []) : state.cards.filter((card) => !set.era || card.era === set.era);
 const rarityRank = (id) => state.meta.rarities.findIndex((r) => r.id === id);
 
 /** Rarest first, then most popular. */
@@ -245,10 +255,14 @@ export async function claimDaily(setId) {
 
 // ── Kira market ──────────────────────────────────────────────────────────────
 
-/** { kira, spare: { cardId: duplicates you can recycle }, shop: { day, nextIn, items: [{ cardId, rarity, price, bought }] } } */
+/**
+ * { kira, gems, spare: { cardId: duplicates you can recycle },
+ *   shop: { day, nextIn, items: [{ cardId, rarity, price, gemPrice, bought }] } }
+ */
 export async function fetchMarket() {
   const market = await api(playerPath('/market'));
   state.player.kira = market.kira;
+  state.player.gems = market.gems;
   emit();
   return market;
 }
@@ -269,30 +283,51 @@ export async function recycleCards(cards) {
 }
 
 /**
- * Buys `count` boosters of `setId` with Kira, opened at once. Returns the boosters, like openBoosters.
- * The price shown is sent: if an admin changed it since, the server refuses (price_changed).
+ * Buys `count` boosters of `setId` with Kira (`currency` 'kira') or gems ('gems'), opened at once.
+ * Returns the boosters, like openBoosters. The price shown is sent: if an admin changed it since,
+ * the server refuses (price_changed).
  */
-export async function buyBoosters(setId, count = 1) {
-  const result = await api(playerPath('/market/buy'), { method: 'POST', body: { setId, count, price: priceOf(setId) } });
+export async function buyBoosters(setId, count = 1, currency = 'kira') {
+  const result = await api(playerPath('/market/buy'), {
+    method: 'POST',
+    body: { setId, count, currency, price: priceIn(currency, setId) },
+  });
   setPlayer(result.player);
   addPulls(result.boosters);
   return result.boosters;
 }
 
 /**
- * Buys a card of today's daily shop; `price`: the one shown (if an admin changed it, the server
- * refuses: price_changed). Returns { cardId, isNew, kira, shop: the shop now }.
+ * Buys a card of today's daily shop with Kira or gems (`currency`); `price`: the one shown, in that
+ * currency (if an admin changed it, the server refuses: price_changed). Returns { cardId, isNew, kira, gems, shop: the shop now }.
  */
-export async function buyShopCard(cardId, price) {
-  const result = await api(playerPath('/market/shop'), { method: 'POST', body: { cardId, price } });
+export async function buyShopCard(cardId, price, currency = 'kira') {
+  const result = await api(playerPath('/market/shop'), { method: 'POST', body: { cardId, price, currency } });
   setPlayer(result.player);
   addCopy(cardId, new Date().toISOString());
   emit();
   return result;
 }
 
-/** How many boosters of `setId` the player's Kira buys at once (up to the most boosters per request). */
-export const affordable = (setId) => Math.min(Math.floor(state.player.kira / priceOf(setId)), state.meta.booster.maxPerRequest);
+/** How many boosters of `setId` the player's Kira (or gems: `currency`) buys at once (up to the most boosters per request). */
+export const affordable = (setId, currency = 'kira') =>
+  Math.min(Math.floor(state.player[currency] / priceIn(currency, setId)), state.meta.booster.maxPerRequest);
+
+// ── Gifts & achievements ─────────────────────────────────────────────────────
+
+/** Claims a gift (player.gift: the gems of the launch…). Returns { gift: { id, gems }, gems: the new balance }. */
+export async function claimGift(giftId) {
+  const result = await api(playerPath(`/gifts/${encodeURIComponent(giftId)}`), { method: 'POST' });
+  setPlayer(result.player);
+  emit();
+  return result;
+}
+
+/** The popups of these achievements were shown: they are not shown again (here, nor in another browser). */
+export async function markAchievementsSeen(ids) {
+  for (const row of state.player.achievements) if (ids.includes(row.id)) row.seen = true;
+  await api(playerPath('/achievements/seen'), { method: 'POST', body: { ids } });
+}
 
 export async function renamePlayer(name) {
   setPlayer(await api(playerPath(), { method: 'PATCH', body: { name } }));

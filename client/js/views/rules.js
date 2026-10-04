@@ -6,6 +6,7 @@ import { fmt, html, mount, raw } from '../dom.js';
 import { rarityName, setName, setTagline, t, tHtml, typeName } from '../i18n.js';
 import { state } from '../state.js';
 import { EVENT_ICONS, activeEvents, eventCards } from '../events.js';
+import { gemsHTML } from '../ui/gems.js';
 import { kiraHTML } from '../ui/kira.js';
 import { rewardText } from './stats.js';
 
@@ -145,6 +146,24 @@ export function renderRules(main) {
         <ul class="rates__list">
           ${rarities.filter((r) => r.id in market.cardPrices).map((r) => html`<li class="r-${r.id}" title="${rarityName(r.id)}">
             <span class="rarity-badge">${r.id}</span> ${kiraHTML(market.cardPrices[r.id])}
+          </li>`)}
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel__title">💎 ${t('rules.gemsTitle')}</h2>
+        <p>${raw(tHtml('rules.gems', {
+          reward: fmt.number(Math.max(0, ...meta.achievements.map((achievement) => achievement.gems))),
+          kira: fmt.number(meta.gems.kiraPerGem),
+        }))}</p>
+        <h3 class="panel__subtitle">${t('rules.marketPrices')}</h3>
+        <ul class="rates__list">
+          ${meta.sets.map((set) => html`<li>${setName(set.id)} ${gemsHTML(meta.gems.prices[set.id])}</li>`)}
+        </ul>
+        <h3 class="panel__subtitle">${t('rules.shopPrices')}</h3>
+        <ul class="rates__list">
+          ${rarities.filter((r) => r.id in meta.gems.cardPrices).map((r) => html`<li class="r-${r.id}" title="${rarityName(r.id)}">
+            <span class="rarity-badge">${r.id}</span> ${gemsHTML(meta.gems.cardPrices[r.id])}
           </li>`)}
         </ul>
       </section>

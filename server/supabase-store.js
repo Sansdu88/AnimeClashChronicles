@@ -1,6 +1,7 @@
 /**
  * Data storage in Supabase (PostgreSQL): the card catalog, and the players'
- * accounts, sessions, boosters, daily rewards, Kira, collections, friends and the game settings. It talks to the Supabase REST API (PostgREST) with
+ * accounts, sessions, boosters, daily rewards, Kira and gems, collections, achievements,
+ * gifts, friends and the game settings. It talks to the Supabase REST API (PostgREST) with
  * fetch and the secret key from .env, so the project has no dependency.
  *
  * The tables are created by the SQL files of supabase/migrations/.
@@ -327,10 +328,13 @@ export function createSupabaseStore({ url, secretKey }) {
       };
     },
 
-    /** Latest boosters first: [{ id, setId, openedAt, kira (paid at the market, or null), pulls: [{ cardId, rarity, isNew }] }] */
+    /**
+     * Latest boosters first: [{ id, setId, openedAt, kira, gems (paid at the market, or null),
+     * pulls: [{ cardId, rarity, isNew }] }]
+     */
     async history(playerId, limit) {
       const rows = await get(
-        `boosters?select=id,set_id,opened_at,kira,pulls(position,card_id,rarity,is_new)&player_id=${eq(playerId)}` +
+        `boosters?select=id,set_id,opened_at,kira,gems,pulls(position,card_id,rarity,is_new)&player_id=${eq(playerId)}` +
           `&order=id.desc&limit=${Number(limit)}&pulls.order=position.asc`,
       );
       return rows.map((booster) => ({
@@ -338,21 +342,23 @@ export function createSupabaseStore({ url, secretKey }) {
         setId: booster.set_id,
         openedAt: booster.opened_at,
         kira: booster.kira,
+        gems: booster.gems,
         pulls: booster.pulls.map((pull) => ({ cardId: pull.card_id, rarity: pull.rarity, isNew: pull.is_new })),
       }));
     },
 
     /**
-     * { boostersFrom, starsFrom, kira, superBoosters }: the dates (ISO) the era and the All-Stars
-     * stocks count from (null = full, see boosterStock() in booster.js), the player's Kira, and
-     * the Super Boosters they won in the weekly ranking and have not opened yet.
+     * { boostersFrom, starsFrom, kira, gems, superBoosters }: the dates (ISO) the era and the All-Stars
+     * stocks count from (null = full, see boosterStock() in booster.js), the player's Kira and gems,
+     * and the Super Boosters they won in the weekly ranking and have not opened yet.
      */
     async wallet(playerId) {
-      const [row] = await get(`players?select=boosters_from,stars_from,kira,super_boosters&id=${eq(playerId)}`);
+      const [row] = await get(`players?select=boosters_from,stars_from,kira,gems,super_boosters&id=${eq(playerId)}`);
       return {
         boostersFrom: row?.boosters_from ?? null,
         starsFrom: row?.stars_from ?? null,
         kira: row?.kira ?? 0,
+        gems: row?.gems ?? 0,
         superBoosters: row?.super_boosters ?? 0,
       };
     },
@@ -391,6 +397,28 @@ export function createSupabaseStore({ url, secretKey }) {
       }));
     },
 
+    /**
+     * Same as buyBoosters, paid with gems: `price` gems each (function buy_boosters_with_gems).
+     * Returns the saved boosters, or { error: 'no_gems', gems } when the player cannot pay for all of them.
+     */
+    async buyBoostersWithGems(playerId, setId, boosters, price) {
+      const result = await request('POST', 'rpc/buy_boosters_with_gems', {
+        body: {
+          p_player_id: playerId,
+          p_set_id: setId,
+          p_boosters: boosters.map((cards) => cards.map((card) => ({ id: card.id, rarity: card.rarity }))),
+          p_price: price,
+        },
+      });
+      if (result.error) return result;
+      return result.boosters.map((booster, i) => ({
+        id: booster.id,
+        setId,
+        openedAt: booster.openedAt,
+        pulls: boosters[i].map((card, j) => ({ card, isNew: booster.pulls[j].isNew })),
+      }));
+    },
+
     // ── Daily shop ───────────────────────────────────────────────────────────
 
     /** Set of the cards the player bought at the daily shop of `day` ('YYYY-MM-DD'). */
@@ -405,6 +433,63 @@ export function createSupabaseStore({ url, secretKey }) {
      */
     async buyShopCard(playerId, day, cardId, price) {
       return request('POST', 'rpc/buy_shop_card', { body: { p_player_id: playerId, p_day: day, p_card_id: cardId, p_price: price } });
+    },
+
+    /**
+     * Same as buyShopCard, paid with `price` gems (function buy_shop_card_with_gems): { gems: new balance,
+     * isNew }, or { error: 'bought' } or { error: 'no_gems', gems }.
+     */
+    async buyShopCardWithGems(playerId, day, cardId, price) {
+      return request('POST', 'rpc/buy_shop_card_with_gems', {
+        body: { p_player_id: playerId, p_day: day, p_card_id: cardId, p_price: price },
+      });
+    },
+
+    // ── Achievements & gifts ─────────────────────────────────────────────────
+
+    /** The achievements the player unlocked, oldest first: [{ id, gems, unlockedAt, seen }]. */
+    async achievements(playerId) {
+      const rows = await get(
+        `player_achievements?select=achievement,gems,unlocked_at,seen_at&player_id=${eq(playerId)}&order=unlocked_at,achievement`,
+      );
+      return rows.map((row) => ({ id: row.achievement, gems: row.gems, unlockedAt: row.unlocked_at, seen: row.seen_at !== null }));
+    },
+
+    /**
+     * Unlocks achievements and gives their gems (function unlock_achievements): `achievements` =
+     * [{ id, gems }]; one already unlocked is skipped. Returns { unlocked: [ids unlocked now], gems: balance }.
+     */
+    async unlockAchievements(playerId, achievements) {
+      return request('POST', 'rpc/unlock_achievements', { body: { p_player_id: playerId, p_achievements: achievements } });
+    },
+
+    /** The player saw the popups of these achievements (ids of ACHIEVEMENTS, checked by the server). */
+    async markAchievementsSeen(playerId, ids) {
+      if (!ids.length) return;
+      await request('PATCH', `player_achievements?player_id=${eq(playerId)}&achievement=in.(${ids.join(',')})&seen_at=is.null`, {
+        body: { seen_at: new Date().toISOString() },
+      });
+    },
+
+    /** Map(playerId → [achievement ids]) for every player who unlocked one (badges of the rankings). */
+    async allAchievements() {
+      const byPlayer = new Map();
+      for (const row of await getAll('player_achievements?select=player_id,achievement&order=player_id,unlocked_at')) {
+        if (!byPlayer.has(row.player_id)) byPlayer.set(row.player_id, []);
+        byPlayer.get(row.player_id).push(row.achievement);
+      }
+      return byPlayer;
+    },
+
+    /** Set of the gifts (ids of GIFTS) the player claimed. */
+    async claimedGifts(playerId) {
+      const rows = await get(`player_gifts?select=gift&player_id=${eq(playerId)}`);
+      return new Set(rows.map((row) => row.gift));
+    },
+
+    /** Claims a gift of `gems` gems (function claim_gift): { gems: new balance }, or { error: 'claimed' }. */
+    async claimGift(playerId, giftId, gems) {
+      return request('POST', 'rpc/claim_gift', { body: { p_player_id: playerId, p_gift: giftId, p_gems: gems } });
     },
 
     // ── Weekly ranking ───────────────────────────────────────────────────────
@@ -685,10 +770,18 @@ export function createSupabaseStore({ url, secretKey }) {
       return new Set(rows.map((row) => row.id));
     },
 
-    /** Every player, for the admin panel: [{ id, name, email, friendCode, createdAt, isAdmin, kira, superBoosters, dailyGift }] */
+    /** Every player, for the admin panel: [{ id, name, email, friendCode, createdAt, isAdmin, kira, gems, superBoosters, dailyGift }] */
     async allPlayers() {
-      const rows = await getAll('players?select=id,name,email,friend_code,created_at,is_admin,kira,super_boosters,daily_super&order=created_at');
-      return rows.map((row) => ({ ...toPlayer(row), kira: row.kira, superBoosters: row.super_boosters, dailyGift: row.daily_super }));
+      const rows = await getAll(
+        'players?select=id,name,email,friend_code,created_at,is_admin,kira,gems,super_boosters,daily_super&order=created_at',
+      );
+      return rows.map((row) => ({
+        ...toPlayer(row),
+        kira: row.kira,
+        gems: row.gems,
+        superBoosters: row.super_boosters,
+        dailyGift: row.daily_super,
+      }));
     },
 
     /** Map(playerId → { claims, lastDay }) of every player who claimed a daily reward. */

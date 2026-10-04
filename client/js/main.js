@@ -1,8 +1,10 @@
 import { $, $$, html, mount, storage } from './dom.js';
 import { errorText, getLang, setLang, t, tHtml } from './i18n.js';
-import { loadCatalog, logout, renamePlayer, restoreSession, state, subscribe } from './state.js';
+import { loadCatalog, logout, markAchievementsSeen, renamePlayer, restoreSession, state, subscribe } from './state.js';
 import { enableCardEffects } from './components/card.js';
 import { repaintDrops, startDrops, stopDrops } from './components/drops.js';
+import { openEventsPopup } from './components/events-popup.js';
+import { openGiftPopup } from './components/gift.js';
 import { formDialog } from './components/modal.js';
 import { shouldShowTutorial, startTutorial } from './components/tutorial.js';
 import { closeAllLayers, pushLayer } from './ui/layers.js';
@@ -12,9 +14,12 @@ import { renderAuth } from './views/auth.js';
 import { renderOpen } from './views/open.js';
 import { openDailyPopup, renderDaily } from './views/daily.js';
 import { renderMarket } from './views/market.js';
+import { renderForge } from './views/forge.js';
 import { renderAdmin } from './views/admin.js';
+import { GEM_SVG } from './ui/gems.js';
 import { rollNumber } from './ui/kira.js';
 import { renderCollection } from './views/collection.js';
+import { badgesHTML, openAchievementPopup, renderAchievements } from './views/achievements.js';
 import { renderStats, rewardText } from './views/stats.js';
 import { renderRules } from './views/rules.js';
 import { renderFriendCollection, renderFriends } from './views/friends.js';
@@ -26,9 +31,12 @@ const ROUTES = {
   open: renderOpen,
   daily: renderDaily,
   market: renderMarket,
+  // Announced for a future update.
+  forge: renderForge,
   // Shown in the menu to admins only (the server checks every admin call).
   admin: renderAdmin,
   collection: renderCollection,
+  achievements: renderAchievements,
   stats: renderStats,
   rules: renderRules,
   // #/friends, or #/friends/<id> for a friend's collection
@@ -157,6 +165,15 @@ async function followEvents(ids) {
   if (!isBusy()) render({ scroll: false });
 }
 
+/** The "Events" button glows while an event is on. */
+function paintEventsButton() {
+  const live = activeEvents().length > 0;
+  for (const button of [$('#events-button'), $('[data-proxy="events-button"]')]) {
+    button.classList.toggle('is-live', live);
+    button.title = t(live ? 'header.eventsLive' : 'header.events');
+  }
+}
+
 function paintStockBadge() {
   if (screen !== 'app' || !state.player) return;
   const badge = $('#open-badge');
@@ -211,6 +228,33 @@ async function paintDaily() {
   if (screen !== 'app') return;
   $('#daily-badge').hidden = !dailyStatus().available;
   maybeDailyPopup();
+}
+
+// ── Gifts & achievements ─────────────────────────────────────────────────────
+// A gift waiting (the gems of the launch…) opens its popup at the next visit, before the
+// daily reward's. A new achievement (a booster, a trade or the daily shop completed a booster)
+// gets its popup once the booster stage is closed: checked every second.
+
+/** The popup of the gift waiting, if there is one, then `next()`. */
+function maybeGiftPopup(next) {
+  if (!state.player.gift) {
+    next();
+    return;
+  }
+  openGiftPopup(state.player.gift, { onClose: () => screen === 'app' && next() });
+}
+
+let celebrating = false; // the popup of new achievements is open
+
+function maybeAchievementPopup() {
+  if (screen !== 'app' || celebrating || !state.player) return;
+  const fresh = (state.player.achievements ?? []).filter((row) => !row.seen);
+  if (!fresh.length || isBusy() || document.body.classList.contains('has-stage')) return;
+  celebrating = true;
+  openAchievementPopup(fresh, { onClose: () => (celebrating = false) });
+  markAchievementsSeen(fresh.map((row) => row.id)).catch(() => {
+    /* shown again at the next visit */
+  });
 }
 
 // ── Tutorial ─────────────────────────────────────────────────────────────────
@@ -274,7 +318,13 @@ function updateHeader() {
   $('#player-progress').textContent = `${player.stats.uniqueCards}/${player.stats.totalCards}`;
   $('#sheet-player-name').textContent = player.name;
   $('#sheet-player-progress').textContent = `${player.stats.uniqueCards}/${player.stats.totalCards}`;
+  // The badges of the achievements, after the name.
+  const badges = String(badgesHTML((player.achievements ?? []).map((row) => row.id)));
+  for (const slot of [$('#player-badges'), $('#sheet-player-badges')]) {
+    if (slot.innerHTML !== badges) slot.innerHTML = badges;
+  }
   rollNumber($('#kira-balance'), player.kira);
+  rollNumber($('#gem-balance'), player.gems ?? 0);
   $('#admin-link').hidden = !player.isAdmin;
   $('#sheet-admin-link').hidden = !player.isAdmin;
 }
@@ -284,7 +334,7 @@ function updateHeader() {
 // other ones and the settings of the header (its buttons click the header's).
 
 const sheet = $('#more-sheet');
-const MORE_ROUTES = ['friends', 'trades', 'stats', 'rules', 'admin'];
+const MORE_ROUTES = ['achievements', 'forge', 'friends', 'trades', 'stats', 'rules', 'admin'];
 let removeSheetLayer = null;
 
 function openSheet() {
@@ -314,13 +364,14 @@ function setupSheet() {
     if (event.target.closest('[data-close-sheet], .sheet__links a')) closeSheet();
     const proxy = event.target.closest('[data-proxy]');
     if (!proxy) return;
-    // Renaming and logging out leave the sheet; sound and colorblind mode keep it open.
-    if (['player-chip', 'logout'].includes(proxy.dataset.proxy)) closeSheet();
+    // Renaming, the events and logging out leave the sheet; sound and colorblind mode keep it open.
+    if (['player-chip', 'events-button', 'logout'].includes(proxy.dataset.proxy)) closeSheet();
     $(`#${proxy.dataset.proxy}`).click();
   });
 }
 
 function setupHeader() {
+  $('#gem-chip .gem-icon').innerHTML = GEM_SVG;
   $('#player-chip').addEventListener('click', async () => {
     const saved = await formDialog({
       title: t('header.renameTitle'),
@@ -348,6 +399,11 @@ function setupHeader() {
   });
 
   for (const button of $$('[data-lang]')) button.addEventListener('click', () => setLang(button.dataset.lang));
+
+  $('#events-button').addEventListener('click', () => {
+    sfx.play('click');
+    openEventsPopup();
+  });
 
   $('#logout').addEventListener('click', doLogout);
 }
@@ -402,9 +458,11 @@ function enterApp() {
   startDrops();
   paintStockBadge();
   paintDaily();
-  // A new player first gets the tutorial, then the daily reward popup.
-  if (shouldShowTutorial(state.player)) showTutorial(maybeDailyPopup);
-  else maybeDailyPopup();
+  paintEventsButton();
+  // A new player first gets the tutorial, then the popup of a gift waiting, then the daily reward's.
+  const popups = () => maybeGiftPopup(maybeDailyPopup);
+  if (shouldShowTutorial(state.player)) showTutorial(popups);
+  else popups();
   maybeWeeklyToast();
   maybeEventToast();
 }
@@ -447,8 +505,9 @@ async function start() {
   setupHeader();
   setupSheet();
   subscribe(updateHeader);
-  // An event started or ended (the admin panel, or the notifications): the theme follows.
+  // An event started or ended (the admin panel, or the notifications): the theme and the "Events" button follow.
   subscribe(applyEventTheme);
+  subscribe(() => screen === 'app' && paintEventsButton());
 
   window.addEventListener('hashchange', () => {
     if (screen !== 'app') return;
@@ -460,6 +519,8 @@ async function start() {
   window.addEventListener('mb:lang', () => {
     applyStaticTexts();
     if (screen === 'app') {
+      updateHeader(); // the names of the badges
+      paintEventsButton();
       render({ scroll: false });
       repaintDrops();
     } else if (screen === 'auth') {
@@ -470,10 +531,11 @@ async function start() {
   window.addEventListener('mb:tutorial', () => screen === 'app' && showTutorial());
   window.addEventListener('mb:friend-requests', (event) => pageBadge('friends', event.detail));
   window.addEventListener('mb:trades-waiting', (event) => pageBadge('trades', event.detail));
-  // Boosters in stock (both stocks), on the "Open" link, and the daily reward.
+  // Boosters in stock (both stocks), on the "Open" link, the daily reward and the new achievements.
   setInterval(() => {
     paintStockBadge();
     paintDaily();
+    maybeAchievementPopup();
   }, 1000);
   // Back on the tab: check at once instead of waiting for the next check.
   document.addEventListener('visibilitychange', checkNotifications);

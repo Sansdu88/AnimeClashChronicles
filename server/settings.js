@@ -1,10 +1,10 @@
 /**
  * Game settings the admins change from the admin panel, saved in the database
  * (table game_settings, see supabase/migrations/): the booster odds, the Kira
- * prices and values (boosters and cards of the daily shop), the daily reward, the
- * rewards of the weekly ranking and the events. Their defaults come from config.js.
+ * prices and values (boosters and cards of the daily shop), the value of a gem, the
+ * daily reward, the rewards of the weekly ranking and the events. Their defaults come from config.js.
  */
-import { BOOSTER, DAILY, EVENTS, MARKET, RARITY_IDS, SHOP, SUPER_BOOSTER, WEEKLY, stockOf } from './config.js';
+import { BOOSTER, DAILY, EVENTS, GEMS, MARKET, RARITY_IDS, SHOP, SUPER_BOOSTER, WEEKLY, stockOf } from './config.js';
 import { HttpError } from './http.js';
 
 /**
@@ -24,6 +24,7 @@ const SHOP_RARITIES = Object.keys(SHOP.prices);
  * The defaults, for the booster sets of the shop:
  * { booster, superBooster: { slotWeights, rareSlotWeights },
  *   market: { prices: { setId }, recycle: { rarity }, cardPrices: { rarity sold at the daily shop } },
+ *   gems: { kiraPerGem (the Kira a gem is worth: gems prices are the Kira prices divided by it) },
  *   daily: { superEvery, sets: [setId offered], superDays: ['YYYY-MM-DD' everyone gets a Super Booster] },
  *   weekly: { rewards: [{ superBoosters, kira }, …] (the 1st, the 2nd… of the weekly ranking) },
  *   events: { eventId: { enabled, hours, max } (on or off; its booster: one every `hours`, `max` at most) } }
@@ -38,6 +39,7 @@ export function defaultSettings(shopSets) {
       recycle: { ...MARKET.recycle },
       cardPrices: { ...SHOP.prices },
     },
+    gems: { kiraPerGem: GEMS.kiraPerGem },
     daily: { superEvery: DAILY.superEvery, sets: shopSets.map((set) => set.id), superDays: [] },
     weekly: { rewards: WEEKLY.rewards.map((reward) => ({ ...reward })) },
     // Every event is off until an admin turns it on.
@@ -110,7 +112,7 @@ function cleanEvents(value) {
 }
 
 /**
- * `current` with the sections of `patch` ({ booster, superBooster, market, daily, weekly, events },
+ * `current` with the sections of `patch` ({ booster, superBooster, market, gems, daily, weekly, events },
  * each given whole) checked and changed. `setIds`: the shop sets; `today`: past event days are dropped.
  * Throws a 400 (invalid_settings) on a wrong value.
  */
@@ -130,6 +132,11 @@ export function mergeSettings(current, patch, { setIds, today }) {
       recycle: cleanAmounts(patch.market?.recycle, RARITY_IDS, 'market.recycle'),
       cardPrices: cleanAmounts(patch.market?.cardPrices, SHOP_RARITIES, 'market.cardPrices'),
     };
+  }
+  if (patch.gems !== undefined) {
+    const kiraPerGem = patch.gems?.kiraPerGem;
+    if (!isInt(kiraPerGem, 1, MAX_KIRA)) throw invalid(`gems.kiraPerGem must be an integer from 1 to ${MAX_KIRA}`);
+    next.gems = { kiraPerGem };
   }
   if (patch.weekly !== undefined) next.weekly = { rewards: cleanRewards(patch.weekly?.rewards) };
   if (patch.events !== undefined) next.events = cleanEvents(patch.events);

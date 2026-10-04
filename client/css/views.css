@@ -1758,11 +1758,22 @@
   color: var(--yellow);
 }
 
+/* The Kira wallet, the gems wallet and the recycling rates. */
 .market-top {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 22px;
   margin: 24px 0;
+}
+
+@media (max-width: 1100px) {
+  .market-top {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .market-top .rates {
+    grid-column: 1 / -1;
+  }
 }
 
 .wallet {
@@ -1801,6 +1812,45 @@
   margin-top: 6px !important;
   font-size: 14px;
   color: var(--muted);
+}
+
+/* The gems wallet: night blue, like the gems chip of the header. */
+.wallet--gems {
+  background:
+    radial-gradient(rgba(168, 240, 255, 0.25) 1.1px, transparent 1.5px) 0 0 / 12px 12px,
+    linear-gradient(160deg, #eafbff, #d2f1fb);
+}
+
+.wallet--gems .wallet__amount b {
+  color: #1471b8;
+}
+
+.wallet__rate {
+  display: inline-block;
+  margin-top: 4px !important;
+  padding: 1px 10px;
+  font-weight: 900;
+  color: #a8f0ff;
+  background: #0b2540;
+  border-radius: 999px;
+}
+
+/* "or" between the Kira and the gems buttons of a booster. */
+.shop-item__or {
+  margin: -4px 0;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The two buy buttons of a card of the daily shop: Kira, or gems. */
+.shop-card__buy {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  max-width: 100%;
 }
 
 .rates .panel__title {
@@ -2638,4 +2688,590 @@
   .weekly__table td:nth-child(4) {
     display: none;
   }
+}
+
+/* ── Gems on phones (market) ────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  .wallet .gem-icon--big {
+    width: 60px;
+    height: 51px;
+  }
+}
+
+/* ── Achievements ───────────────────────────────────────────────────────── */
+
+/* A trophy room: gold rays on deep blue. */
+.hero--achievements {
+  background:
+    radial-gradient(rgba(255, 210, 63, 0.2) 1.2px, transparent 1.6px) 0 0 / 11px 11px,
+    repeating-conic-gradient(from 0deg at 50% 60%, rgba(255, 210, 63, 0.16) 0deg 5deg, transparent 5deg 12deg),
+    linear-gradient(160deg, #1d3d8f, #0b1638);
+}
+
+.hero--achievements .hero__title {
+  color: var(--yellow);
+}
+
+.achievements-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 28px;
+  margin: 24px 0;
+}
+
+.achievements-summary p {
+  margin: 0;
+}
+
+.achievements-summary__count {
+  font-family: var(--font-display);
+  font-size: 34px;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
+.achievements-summary__earned {
+  margin-top: 6px !important;
+  font-weight: 900;
+}
+
+.achievements-summary__earned .gem-amount {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 1px;
+  color: #1471b8;
+}
+
+.achievements-summary__badges {
+  display: grid;
+  gap: 4px;
+}
+
+.achievements-summary__name {
+  font-size: 20px;
+}
+
+.achievement-list {
+  display: grid;
+  gap: 16px;
+  margin: 0 0 26px;
+  padding: 0;
+  list-style: none;
+}
+
+.achievement {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 20px;
+  background: var(--panel);
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.achievement.is-unlocked {
+  background:
+    radial-gradient(rgba(244, 161, 0, 0.18) 1.1px, transparent 1.5px) 0 0 / 10px 10px,
+    linear-gradient(160deg, #fff8dc, #ffe9a6);
+}
+
+/* A medal: greyed while locked, shining once unlocked. */
+.achievement__badge {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  font-size: 38px;
+  background: var(--paper-2);
+  border: var(--border);
+  border-radius: 50%;
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+.achievement.is-unlocked .achievement__badge {
+  background: radial-gradient(circle at 35% 30%, #fffbe0, #ffd23f 50%, #f4a100);
+  box-shadow: 3px 3px 0 var(--ink);
+  filter: none;
+  opacity: 1;
+  animation: medal-glint 5s ease-in-out infinite;
+}
+
+@keyframes medal-glint {
+  0%,
+  80%,
+  100% {
+    transform: none;
+  }
+  88% {
+    transform: rotate(-10deg) scale(1.08);
+  }
+  94% {
+    transform: rotate(6deg);
+  }
+}
+
+.achievement__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 26px;
+  letter-spacing: 1px;
+  line-height: 1.1;
+}
+
+.achievement__text {
+  margin: 2px 0 8px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.achievement__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.achievement__progress .meter {
+  flex: 1;
+  max-width: 420px;
+}
+
+.achievement__count {
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.achievement__hint {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.achievement__done {
+  margin: 0;
+  font-weight: 900;
+  color: #8a5a00;
+}
+
+.achievement__side {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  text-align: right;
+}
+
+.achievement__reward {
+  padding: 4px 12px 2px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 1px;
+  color: #a8f0ff;
+  background: #0b2540;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+}
+
+.achievement.is-unlocked .achievement__reward {
+  opacity: 0.6;
+}
+
+.achievement__status {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.achievement.is-unlocked .achievement__status {
+  font-size: 26px;
+}
+
+@media (max-width: 600px) {
+  .achievement {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px 14px;
+    padding: 14px;
+  }
+
+  .achievement__badge {
+    width: 56px;
+    height: 56px;
+    font-size: 30px;
+  }
+
+  .achievement__name {
+    font-size: 22px;
+  }
+
+  .achievement__side {
+    grid-column: 1 / -1;
+    grid-template-columns: auto auto;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+}
+
+/* The popup of an achievement just unlocked. */
+.achievement-popup {
+  text-align: center;
+}
+
+.achievement-popup__kicker {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 40px;
+  letter-spacing: 2px;
+  line-height: 1;
+  color: var(--yellow);
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 4px 4px 0 var(--ink);
+  transform: rotate(-2deg);
+}
+
+.achievement-popup__list {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.achievement-popup__item {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.achievement-popup__badge {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  font-size: 52px;
+  background: radial-gradient(circle at 35% 30%, #fffbe0, #ffd23f 50%, #f4a100);
+  border: var(--border);
+  border-radius: 50%;
+  box-shadow: var(--shadow);
+  animation: medal-drop 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+@keyframes medal-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-40px) scale(0.4) rotate(-30deg);
+  }
+}
+
+.achievement-popup__name {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 28px;
+  letter-spacing: 1px;
+  line-height: 1.1;
+}
+
+.achievement-popup__text {
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.achievement-popup__gems {
+  margin: 4px 0;
+  font-family: var(--font-display);
+  font-size: 40px;
+  letter-spacing: 1px;
+  color: #1471b8;
+}
+
+.achievement-popup .btn-row {
+  margin-top: 16px;
+}
+
+/* ── Forge (coming in a future update) ──────────────────────────────────── */
+
+/* A smithy at night: iron grey, glowing embers. */
+.hero--forge {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding-block: 34px 38px;
+  background:
+    radial-gradient(rgba(255, 140, 40, 0.22) 1.2px, transparent 1.6px) 0 0 / 10px 10px,
+    radial-gradient(ellipse at 50% 85%, rgba(255, 106, 0, 0.55), transparent 60%),
+    linear-gradient(160deg, #3b3a40, #141317);
+}
+
+.hero--forge .hero__title {
+  color: #ffb347;
+}
+
+.forge-anvil {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.forge-anvil__icon {
+  display: block;
+  font-size: 92px;
+  line-height: 120px;
+  filter: drop-shadow(4px 4px 0 var(--ink));
+  transform-origin: 70% 80%;
+  animation: forge-strike 1.6s ease-in-out infinite;
+}
+
+/* The hammer strikes… */
+@keyframes forge-strike {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  40% {
+    transform: rotate(-18deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+  60% {
+    transform: rotate(0);
+  }
+}
+
+/* …and sparks fly at each strike. */
+.forge-anvil__sparks span {
+  position: absolute;
+  top: 58%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  background: #ffd23f;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #ff8c00;
+  opacity: 0;
+  animation: forge-spark 1.6s ease-out infinite;
+  animation-delay: calc(0.5s + var(--i) * 0.03s);
+}
+
+@keyframes forge-spark {
+  0% {
+    opacity: 1;
+    transform: rotate(calc(var(--i) * 45deg - 160deg)) translateX(0);
+  }
+  45% {
+    opacity: 0;
+    transform: rotate(calc(var(--i) * 45deg - 160deg)) translateX(70px);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.forge-soon {
+  margin: 0 0 6px;
+  padding: 4px 16px 2px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: 1px;
+  color: var(--ink);
+  background: var(--yellow);
+  border: var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  transform: rotate(-2deg);
+}
+
+.forge-back {
+  margin-top: 18px;
+}
+
+/* ── Events (the popup of the "Events" button) ──────────────────────────── */
+
+.modal--events .modal__panel {
+  width: min(720px, 100%);
+}
+
+.event-list {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-item {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 18px;
+  padding: 16px;
+  background: var(--paper-2);
+  border: var(--border);
+  border-radius: var(--radius);
+}
+
+/* Halloween: the night of its theme. */
+.event-item.ev-halloween {
+  color: #fff;
+  background:
+    radial-gradient(rgba(255, 107, 0, 0.18) 1.2px, transparent 1.6px) 0 0 / 10px 10px,
+    linear-gradient(160deg, #3c096c, #10002b);
+}
+
+.event-item.ev-halloween .muted,
+.event-item.ev-halloween .event-item__rule {
+  color: #e0c3ff;
+}
+
+.event-item.ev-halloween .event-item__pitch strong {
+  color: #ff9e40;
+}
+
+.event-item:not(.is-live) .event-item__pack {
+  filter: grayscale(0.7);
+}
+
+.event-item__pack {
+  align-self: start;
+  pointer-events: none;
+}
+
+.event-item__body p {
+  margin: 0 0 8px;
+}
+
+.event-item__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.event-item__name {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 30px;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
+.event-item__state {
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--ink);
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+}
+
+.event-item.is-live .event-item__state {
+  color: #fff;
+  background: var(--red);
+  animation: live-blink 1.6s ease-in-out infinite;
+}
+
+.event-item__rule {
+  font-weight: 800;
+}
+
+.event-item__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.event-item__progress .meter {
+  flex: 1;
+}
+
+.event-item__count {
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .event-item {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .event-item__name {
+    font-size: 24px;
+  }
+}
+
+/* ── The gift popup (the gems of the launch) ────────────────────────────── */
+
+.modal--gift .modal__panel {
+  width: min(560px, 100%);
+}
+
+.hero--gems {
+  display: grid;
+  justify-items: center;
+  background:
+    radial-gradient(rgba(168, 240, 255, 0.22) 1.2px, transparent 1.6px) 0 0 / 11px 11px,
+    repeating-conic-gradient(from 0deg at 50% 40%, rgba(168, 240, 255, 0.14) 0deg 5deg, transparent 5deg 12deg),
+    linear-gradient(160deg, #1666a8, #0b2540);
+}
+
+.hero--gems .hero__title {
+  color: #a8f0ff;
+}
+
+.gift-popup__gem {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.gift-popup__amount {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 34px;
+  letter-spacing: 1px;
+  color: var(--yellow);
+  -webkit-text-stroke: 1.5px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 3px 3px 0 var(--ink);
+}
+
+.gift-popup__intro {
+  margin: 18px 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.gift-popup__list {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.gift-popup__list li {
+  padding: 10px 14px;
+  background: var(--paper-2);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+
+/* ── Admin: the value of a gem ──────────────────────────────────────────── */
+
+.admin-gems .input-kira .input {
+  flex: 0 1 120px;
+}
+
+.admin-gems__preview {
+  margin-bottom: 4px;
 }

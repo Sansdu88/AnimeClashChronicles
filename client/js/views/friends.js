@@ -7,6 +7,7 @@ import { errorText, rarityName, t } from '../i18n.js';
 import { acceptFriend, addFriend, declineFriend, fetchFriendCollection, fetchFriends, removeFriend, state } from '../state.js';
 import { confirmDialog } from '../components/modal.js';
 import { toast } from '../ui/toast.js';
+import { badgesHTML } from './achievements.js';
 import { renderCollection } from './collection.js';
 
 let renderId = 0;
@@ -33,7 +34,7 @@ function rankingHTML(ranking, scoring) {
         ${ranking.map((row) => html`<tr class="${row.you ? 'is-you' : ''}">
           <td>${row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : row.rank}</td>
           <td>
-            ${row.name}${row.you ? html` <span class="you-pill">${t('stats.you')}</span>` : ''}
+            ${row.name} ${badgesHTML(row.badges)}${row.you ? html` <span class="you-pill">${t('stats.you')}</span>` : ''}
             <span class="ranking__rarities">
               ${RARITIES_DESC.filter((id) => row.byRarity[id]).map(
                 (id) => html`<span class="mini-chip r-${id}" title="${rarityName(id)}"><b>${id}</b> ×${row.byRarity[id]}</span>`,
@@ -53,7 +54,7 @@ function friendCardHTML(friend) {
     <div class="friend__head">
       <span class="friend__avatar" aria-hidden="true">${[...friend.name][0]?.toUpperCase() ?? '?'}</span>
       <span>
-        <b class="friend__name">${friend.name}</b><br>
+        <b class="friend__name">${friend.name}</b> ${badgesHTML(friend.badges)}<br>
         <span class="muted">#${friend.friendCode}${friend.since ? html` · ${t('friends.since', { date: fmt.date(friend.since) })}` : ''}</span>
       </span>
     </div>

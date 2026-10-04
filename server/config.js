@@ -74,6 +74,37 @@ export const MARKET = {
 };
 
 /**
+ * Gems (💎): the rare money of the game. They buy the same things as Kira (the boosters of
+ * the market and the cards of the daily shop) at the Kira price divided by `kiraPerGem` (set
+ * from the admin panel), rounded up: a gem is worth many Kira, and never buys more than its
+ * worth in Kira. Kira cannot be turned into gems: players get them from the achievements and
+ * the gifts, so they stay rare (they could be sold one day).
+ */
+export const GEMS = { kiraPerGem: 50 };
+
+/** Gems price of something that costs `kira` Kira (0 stays free). */
+export const gemPrice = (kira, kiraPerGem = GEMS.kiraPerGem) => (kira > 0 ? Math.max(1, Math.ceil(kira / kiraPerGem)) : 0);
+
+/** Gifts, each claimed once per player from a popup at their next visit: `gems` given. */
+export const GIFTS = {
+  'gems-launch': { gems: 50 },
+};
+
+/**
+ * Achievements: every card of a booster collected (All-Stars, which holds every card, is not
+ * one of them). `sets`: the booster sets to complete, `any`: one of them is enough. Unlocking
+ * one gives `gems` and a badge (`icon`) next to the player's name; it stays unlocked even if
+ * cards leave the collection later (trades). The ones whose sets are not in the catalog are left out.
+ */
+export const ACHIEVEMENTS = [
+  { id: 'first-complete', icon: '🏅', sets: ['showa', 'heisei', 'reiwa', 'halloween'], any: true, gems: 200 },
+  { id: 'complete-showa', icon: '🏮', sets: ['showa'], gems: 200 },
+  { id: 'complete-heisei', icon: '🗼', sets: ['heisei'], gems: 200 },
+  { id: 'complete-reiwa', icon: '🌸', sets: ['reiwa'], gems: 200 },
+  { id: 'complete-halloween', icon: '🎃', sets: ['halloween'], gems: 200 },
+];
+
+/**
  * The daily shop: 5 cards a day, the same for everyone (drawn from the day), that a
  * player can buy once each with Kira. `slots` give their rarities (`sundaySlots` on
  * Sundays: the last one is a UR), `prices` the Kira of a card by rarity (changed from
