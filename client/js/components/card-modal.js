@@ -1,6 +1,7 @@
 import { fmt, html, raw } from '../dom.js';
 import { cardText, rarityName, setName, t, typeName } from '../i18n.js';
 import { state, typeOf } from '../state.js';
+import { EVENT_ICONS, eventOf } from '../events.js';
 import { cardHTML } from './card.js';
 import { openModal } from './modal.js';
 
@@ -8,7 +9,8 @@ function detailHTML(card, position) {
   const owned = state.owned.get(card.id);
   const text = cardText(card);
   const type = typeOf(card.type);
-  const eraSet = state.meta.sets.find((set) => set.era === card.era) ?? { id: 'all-stars' };
+  // The booster it comes from: its event's, or the one of its era.
+  const eraSet = (card.event && eventOf(card.event)?.set) || (state.meta.sets.find((set) => set.era === card.era) ?? { id: 'all-stars' });
   const english = raw(text.translated ? '' : 'lang="en"');
 
   return html`<div class="detail">
@@ -24,11 +26,12 @@ function detailHTML(card, position) {
       <h2 class="detail__title">${text.name}</h2>
       <div class="detail__tags">
         <span class="tag tag--rarity r-${card.rarity}">${card.rarity} · ${rarityName(card.rarity)}</span>
+        ${card.event && html`<span class="tag tag--event ev-${card.event}">${EVENT_ICONS[card.event]} ${t(`events.${card.event}.card`)}</span>`}
         <span class="tag tag--type" style="--type:${type.color}">${type.icon} ${typeName(card.type)}</span>
         <span class="tag">📅 ${card.year}</span>
         <span class="tag">⚡ PWR ${card.power}</span>
       </div>
-      ${text.description && html`<p class="detail__desc">${text.description}</p>`}
+      ${text.description && html`<p class="detail__desc">${card.event ? t(`events.${card.event}.monster`, { monster: text.description }) : text.description}</p>`}
       ${!text.translated && html`<p class="detail__note">${t('detail.englishOnly')}</p>`}
       <div class="detail__summary" ${english}>${text.summary.split(/\n+/).map((p) => html`<p>${p}</p>`)}</div>
       <dl class="detail__facts">

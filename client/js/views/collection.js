@@ -1,6 +1,7 @@
 /**
  * "Collection" page: every card, owned ones face up, missing ones as ??? silhouettes,
- * 50 or 100 per page.
+ * 50 or 100 per page. The cards of an event (Halloween…) are a collection of their own,
+ * in a tab: shown while the event is on, and afterwards to the players who own some.
  */
 import { $, $$, fmt, html, mount, raw } from '../dom.js';
 import { cardText, eraName, rarityName, t, tHtml, typeName } from '../i18n.js';
@@ -9,10 +10,13 @@ import { cardHTML, lockedCardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
 import { PAGE_SIZES, onPageClick, pageCount, pageSize, paginationHTML } from '../components/pagination.js';
 import { toast } from '../ui/toast.js';
+import { EVENT_ICONS, eventCards } from '../events.js';
 
 // Kept between visits of the page (the page number too, unless it shows another player's cards).
 const filters = { q: '', show: 'all', rarity: '', type: '', era: '', copies: '', sort: 'number' };
 const DEFAULT_FILTERS = { ...filters };
+// The collection on screen: 'main', or the id of an event.
+let book = 'main';
 // Phones: the filters other than the search are folded behind a button.
 let filtersOpen = false;
 const paging = { page: 1, playerId: null };
@@ -35,8 +39,38 @@ const SORTS = {
 
 const option = (value, label, current) => html`<option value="${value}" ${raw(value === current ? 'selected' : '')}>${label}</option>`;
 
-function progressHTML(player) {
-  const { stats } = player;
+/** The cards of the collection on screen. */
+const bookCards = () => (book === 'main' ? state.cards : eventCards(book));
+
+/** The events whose collection has a tab: on now, or with cards in this collection. */
+const eventBooks = () =>
+  state.meta.events.filter((event) => event.active || eventCards(event.id).some((card) => owned.has(card.id)));
+
+/** Completion numbers of an event's collection, like player.stats for the main one. */
+function eventStats(id) {
+  const cards = eventCards(id);
+  const have = (list) => list.filter((card) => owned.has(card.id)).length;
+  const uniqueCards = have(cards);
+  const byRarity = Object.fromEntries(
+    state.meta.rarities.map((rarity) => {
+      const list = cards.filter((card) => card.rarity === rarity.id);
+      return [rarity.id, { owned: have(list), total: list.length }];
+    }),
+  );
+  return { uniqueCards, totalCards: cards.length, completion: cards.length ? uniqueCards / cards.length : 0, byRarity };
+}
+
+/** The tabs: the main collection, then the collection of each event. */
+function booksHTML(player, books) {
+  const tab = (id, label, stats) => html`<button class="books__tab${id === 'main' ? '' : ` books__tab--event ev-${id}`}" type="button"
+      data-book="${id}" aria-pressed="${String(book === id)}">${label} <b>${stats.uniqueCards}/${stats.totalCards}</b></button>`;
+  return html`<div class="books" role="group" aria-label="${t('collection.books')}">
+    ${tab('main', `📚 ${t('collection.mainBook')}`, player.stats)}
+    ${books.map((event) => tab(event.id, `${EVENT_ICONS[event.id]} ${t(`events.${event.id}.book`)}`, eventStats(event.id)))}
+  </div>`;
+}
+
+function progressHTML(stats) {
   const percent = stats.completion * 100;
   return html`<div class="progress">
     <div class="ring" style="--p:${percent.toFixed(1)}" role="img" aria-label="${t('collection.complete', { percent: fmt.percent(stats.completion) })}">
@@ -57,7 +91,7 @@ function progressHTML(player) {
 
 function visibleCards() {
   const query = filters.q.trim().toLowerCase();
-  return state.cards
+  return bookCards()
     .filter((card) => {
       const isOwned = owned.has(card.id);
       if (filters.show === 'owned' && !isOwned) return false;
@@ -91,19 +125,26 @@ export function renderCollection(main, options) {
   const friend = player.id !== state.player.id;
   owned = shown;
   if (paging.playerId !== player.id) Object.assign(paging, { page: 1, playerId: player.id });
+  const books = eventBooks();
+  if (!books.some((event) => event.id === book)) book = 'main';
+  const event = book === 'main' ? null : book;
   mount(
     main,
-    html`<section class="view view-collection">
+    html`<section class="view view-collection${event ? ` view-collection--event ev-${event}` : ''}">
       <header class="view-head">
         <div>
           ${friend && html`<a class="link" href="#/friends">${t('friends.back')}</a>`}
           <h1 class="view-title">${friend ? t('friends.collectionOf', { name: player.name }) : t('collection.title')}</h1>
           <p class="view-sub">${friend
             ? t('friends.collectionSub', { code: player.friendCode, score: fmt.number(player.stats.score) })
-            : raw(tHtml('collection.sub'))}</p>
+            : event
+              ? t(`events.${event}.bookSub`)
+              : raw(tHtml('collection.sub'))}</p>
         </div>
-        <div class="panel progress-panel">${progressHTML(player)}</div>
+        <div class="panel progress-panel">${progressHTML(event ? eventStats(event) : player.stats)}</div>
       </header>
+
+      ${books.length > 0 && booksHTML(player, books)}
 
       <form class="filters panel" role="search" aria-label="${t('collection.filterLabel')}">
         <label class="field field--search">
@@ -249,6 +290,16 @@ export function renderCollection(main, options) {
     renderGrid();
   });
   $('.filters', main).addEventListener('submit', (event) => event.preventDefault());
+
+  // Another collection: the main one, or an event's.
+  $('.books', main)?.addEventListener('click', (event) => {
+    const tab = event.target.closest('[data-book]');
+    if (!tab || tab.dataset.book === book) return;
+    book = tab.dataset.book;
+    paging.page = 1;
+    renderCollection(main, options);
+    $(`[data-book="${book}"]`, main)?.focus({ preventScroll: true });
+  });
 
   const activate = (target) => {
     const owned = target.closest('.card[data-card]');

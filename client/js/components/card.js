@@ -1,12 +1,17 @@
 /**
  * Card rendering: face, back, "not collected yet" silhouette, and the
- * holographic tilt effect that follows the pointer.
+ * holographic tilt effect that follows the pointer. The cards of an event
+ * (card.event) get its frame (css/events.css), its emblem and their own numbers.
  */
 import { fmt, html, prefersReducedMotion, raw } from '../dom.js';
 import { cardText, eraName, rarityName, t, typeName } from '../i18n.js';
 import { state, typeOf } from '../state.js';
+import { EVENT_ICONS, eventCards } from '../events.js';
 
 const FULL_ART = new Set(['SSR', 'UR', 'REV']);
+
+/** "#007/100": the card's number in its collection (the main one, or its event's). */
+const numberOf = (card) => `#${fmt.pad(card.number)}/${card.event ? eventCards(card.event).length : state.cards.length}`;
 
 function nameSize(name) {
   if (name.length > 30) return 'xs';
@@ -26,17 +31,25 @@ function nameSize(name) {
 export function cardHTML(card, { count = 0, isNew = false, tilt = false, interactive = true, lazy = true } = {}) {
   const type = typeOf(card.type);
   const text = cardText(card);
-  const classes = ['card', `r-${card.rarity}`, FULL_ART.has(card.rarity) && 'is-fullart', !card.image && 'no-image']
+  const classes = [
+    'card',
+    `r-${card.rarity}`,
+    FULL_ART.has(card.rarity) && 'is-fullart',
+    !card.image && 'no-image',
+    card.event && `is-event ev-${card.event}`,
+  ]
     .filter(Boolean)
     .join(' ');
   const attributes = [tilt && 'data-tilt', interactive && `tabindex="0" role="button"`].filter(Boolean);
+  const label = t('card.label', { name: text.name, rarity: rarityName(card.rarity) });
 
   return html`<article class="${classes}" data-card="${card.id}" style="--type:${type.color}" ${raw(attributes.join(' '))}
-      aria-label="${t('card.label', { name: text.name, rarity: rarityName(card.rarity) })}">
+      aria-label="${card.event ? `${label} · ${t(`events.${card.event}.card`)}` : label}">
     <div class="card__frame">
       <div class="card__art">
         ${card.image && html`<img class="card__img" src="${card.image.src}" alt="${text.name}" loading="${lazy ? 'lazy' : 'eager'}" decoding="async" draggable="false">`}
         <span class="card__art-fallback" aria-hidden="true">${type.icon}</span>
+        ${card.event && html`<span class="card__event" aria-hidden="true">${EVENT_ICONS[card.event]}</span>`}
       </div>
       <header class="card__head">
         <span class="card__name" data-size="${nameSize(text.name)}">${text.name}</span>
@@ -50,7 +63,7 @@ export function cardHTML(card, { count = 0, isNew = false, tilt = false, interac
         <p class="card__desc">${text.description}</p>
         <p class="card__text" ${raw(text.translated ? '' : 'lang="en"')}>${text.short}</p>
         <footer class="card__foot">
-          <span class="card__num">#${fmt.pad(card.number)}/${state.cards.length}</span>
+          <span class="card__num">${numberOf(card)}</span>
           <span class="card__power">PWR ${card.power}</span>
           <span class="card__era" title="${t('card.era', { era: eraName(card.era) })}">${eraName(card.era)}</span>
         </footer>
@@ -65,10 +78,10 @@ export function cardHTML(card, { count = 0, isNew = false, tilt = false, interac
 
 /** Silhouette for a card the player does not own yet. */
 export function lockedCardHTML(card) {
-  return html`<article class="card card--locked r-${card.rarity}" data-locked="${card.id}" tabindex="0" role="button"
+  return html`<article class="card card--locked r-${card.rarity}${card.event ? ` is-event ev-${card.event}` : ''}" data-locked="${card.id}" tabindex="0" role="button"
       aria-label="${t('card.locked', { number: card.number, rarity: rarityName(card.rarity) })}">
     <div class="card__frame">
-      <span class="locked__num">#${fmt.pad(card.number)}</span>
+      <span class="locked__num">${card.event && `${EVENT_ICONS[card.event]} `}#${fmt.pad(card.number)}</span>
       <span class="locked__mark" aria-hidden="true">?</span>
       <span class="locked__name">???</span>
       <span class="locked__rarity">${card.rarity}</span>

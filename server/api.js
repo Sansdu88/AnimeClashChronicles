@@ -4,7 +4,7 @@
  * "Authorization: Bearer <token>" header) and only give access to your own player.
  * Admin routes (/api/admin/…) need a player whose is_admin is set in the database.
  */
-import { BOOSTER, DAILY, ERAS, RARITIES, RARITY_IDS, RARITY_RANK, SCORE, STOCKS, SUPER_BOOSTER, TYPES, stockOf } from './config.js';
+import { BOOSTER, DAILY, ERAS, EVENTS, RARITIES, RARITY_IDS, RARITY_RANK, SCORE, STOCKS, SUPER_BOOSTER, TYPES, stockOf } from './config.js';
 import {
   addDays,
   boosterOdds,
@@ -90,10 +90,17 @@ const SORTS = {
 export function createApi({ catalog, store, rng = Math.random, secureCookies = false, savedSettings = {} }) {
   const router = createRouter();
   const totalCards = catalog.cards.length;
-  // The Super Booster is only given by the daily reward: the shop sets are the others.
+  // The Super Booster is only given by the daily reward, the booster of an event only
+  // comes from its event: the shop sets are the others.
   const superSet = catalog.getSet(DAILY.superSetId);
-  const shopSets = catalog.sets.filter((set) => set !== superSet);
+  const shopSets = catalog.sets.filter((set) => set !== superSet && !set.event);
   const setIds = shopSets.map((set) => set.id);
+  // eventId → its booster set, for the events of EVENTS whose set is in the catalog.
+  const eventSets = new Map(
+    Object.entries(EVENTS)
+      .map(([id, event]) => [id, catalog.getSet(event.setId)])
+      .filter(([id, set]) => set?.event === id),
+  );
 
   // Game settings: the defaults of config.js, changed from the admin panel (they apply at once).
   const settingsContext = () => ({ setIds, today: rewardDay().today });
@@ -102,6 +109,15 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   const boosterRules = () => ({ ...BOOSTER, ...settings.booster });
   const superRules = () => ({ ...SUPER_BOOSTER, ...settings.superBooster });
   const dailyRules = () => ({ ...DAILY, ...settings.daily });
+  /** The events on now (turned on from the admin panel), e.g. ['halloween']. */
+  const activeEvents = () => [...eventSets.keys()].filter((id) => settings.events[id]?.enabled);
+  /** The booster stocks ({ stockId: { cooldownSeconds, stackMax } }): STOCKS, and the stock of each event on now. */
+  const stockRules = () => ({
+    ...STOCKS,
+    ...Object.fromEntries(
+      activeEvents().map((id) => [id, { cooldownSeconds: settings.events[id].hours * 3600, stackMax: settings.events[id].max }]),
+    ),
+  });
   const loginLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
   const opening = new Set(); // players whose booster is being saved (blocks double clicks)
   const claiming = new Set(); // players whose daily reward is being saved
@@ -111,9 +127,12 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     name: set.name,
     tagline: set.tagline,
     era: set.era,
+    // The event of an event's booster (null for the others).
+    event: set.event ?? null,
     colors: set.colors,
-    // The stock it is opened from (see STOCKS); the Super Booster only comes from the daily reward.
-    stock: set === superSet ? null : stockOf(set),
+    // The stock it is opened from (see stockRules); the Super Booster only comes from the daily
+    // reward, and the booster of an event has no stock while the event is off.
+    stock: set === superSet || (set.event && !activeEvents().includes(set.event)) ? null : stockOf(set),
     cardCount: set.cards.length,
     rarityCounts: Object.fromEntries(RARITY_IDS.map((id) => [id, set.byRarity[id].length])),
     featured: set.featured && {
@@ -153,43 +172,53 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
 
   // ── Profiles ───────────────────────────────────────────────────────────────
 
-  /** Collection rows (cards still in the catalog) + completion numbers. */
+  /**
+   * Collection rows (cards still in the catalog, the events' too) + completion numbers of the
+   * main collection, and of the collection of each event (`byEvent`).
+   */
   async function collectionOf(playerId) {
     const entries = (await store.collection(playerId)).filter((row) => catalog.getCard(row.cardId));
     const owned = new Set(entries.map((row) => row.cardId));
     const progress = (cards) => ({ owned: cards.filter((card) => owned.has(card.id)).length, total: cards.length });
+    const { owned: uniqueCards } = progress(catalog.cards);
     return {
       entries,
       summary: {
-        uniqueCards: owned.size,
+        uniqueCards,
         totalCards,
-        completion: owned.size / totalCards,
+        completion: uniqueCards / totalCards,
         byRarity: Object.fromEntries(
           RARITY_IDS.map((id) => [id, progress(catalog.cards.filter((card) => card.rarity === id))]),
         ),
         bySet: Object.fromEntries(shopSets.map((set) => [set.id, progress(set.cards)])),
+        byEvent: Object.fromEntries([...eventSets].map(([id, set]) => [id, progress(set.cards)])),
       },
     };
   }
 
   const rarityOfCard = (cardId) => catalog.getCard(cardId)?.rarity;
+  /** A card of the main collection (not of an event). */
+  const isMainCard = (cardId) => !catalog.getCard(cardId)?.event;
 
   /**
-   * { kira, superBoosters, stocks: { era: { stock, nextIn }, 'all-stars': { … } } }: the player's Kira,
-   * the Super Boosters they won in the weekly ranking, and for each booster stock the boosters
-   * they can open now and the seconds before the next one (0 when full).
+   * { kira, superBoosters, stocks: { era: { stock, nextIn }, 'all-stars': { … }, eventId: { … } } }: the
+   * player's Kira, the Super Boosters they won in the weekly ranking, and for each booster stock (the
+   * events' on now too) the boosters they can open now and the seconds before the next one (0 when full).
    */
   async function walletOf(playerId) {
-    const { boostersFrom, starsFrom, kira, superBoosters } = await store.wallet(playerId);
-    const since = { era: boostersFrom, 'all-stars': starsFrom };
+    const [{ boostersFrom, starsFrom, kira, superBoosters }, eventsFrom] = await Promise.all([
+      store.wallet(playerId),
+      activeEvents().length ? store.eventStocks(playerId) : {},
+    ]);
+    const since = { ...eventsFrom, era: boostersFrom, 'all-stars': starsFrom };
     const now = Date.now();
-    const stocks = Object.fromEntries(Object.entries(STOCKS).map(([id, rules]) => [id, boosterStock(since[id], now, rules)]));
+    const stocks = Object.fromEntries(Object.entries(stockRules()).map(([id, rules]) => [id, boosterStock(since[id], now, rules)]));
     return { kira, superBoosters, stocks };
   }
 
   /** The stocks of an admin: always full, they never wait for a booster. */
   const unlimitedStocks = () =>
-    Object.fromEntries(Object.entries(STOCKS).map(([id, rules]) => [id, { stock: rules.stackMax, nextIn: 0, unlimited: true }]));
+    Object.fromEntries(Object.entries(stockRules()).map(([id, rules]) => [id, { stock: rules.stackMax, nextIn: 0, unlimited: true }]));
 
   /** Daily reward status (see dailyStatus in booster.js). */
   const dailyOf = async (playerId) => dailyStatus(await store.dailyClaims(playerId), Date.now(), dailyRules());
@@ -202,7 +231,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     cards: booster.pulls.map(({ card, isNew }) => ({ ...card, isNew })),
   });
 
-  /** Seconds before a stock (`rules`: one of STOCKS) holds `count` boosters. */
+  /** Seconds before a stock (`rules`: one of stockRules()) holds `count` boosters. */
   const secondsUntil = ({ stock, nextIn }, count, rules) =>
     stock >= count ? 0 : nextIn + (count - stock - 1) * rules.cooldownSeconds;
 
@@ -222,8 +251,8 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       createdAt: player.createdAt,
       isAdmin: player.isAdmin === true,
       stats: { ...stats, cardsPulled, ...summary, score: collectionScore(entries, rarityOfCard).score },
-      // Kira (the game's money, see settings.market) and the booster stocks: { era: { stock, nextIn }, 'all-stars': … }
-      // (an admin's are unlimited: { stock: max, nextIn: 0, unlimited: true }).
+      // Kira (the game's money, see settings.market) and the booster stocks: { era: { stock, nextIn }, 'all-stars': …,
+      // and one per event on now } (an admin's are unlimited: { stock: max, nextIn: 0, unlimited: true }).
       kira,
       stocks: player.isAdmin ? unlimitedStocks() : stocks,
       // Super Boosters won in the weekly ranking, not opened yet (an admin's are unlimited anyway).
@@ -241,20 +270,25 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return rest;
   }
 
-  /** Ranking rows (score, cards…) for a list of players, best first. */
+  /**
+   * Ranking rows (score, cards…) for a list of players, best first. The score counts every card
+   * (the events' too); the cards and the completion are the ones of the main collection.
+   */
   async function rank(players, collections, youId) {
     const rows = await Promise.all(
       players.map(async (player) => {
-        const score = collectionScore(collections.get(player.id) ?? [], rarityOfCard);
+        const entries = collections.get(player.id) ?? [];
+        const score = collectionScore(entries, rarityOfCard);
+        const main = collectionScore(entries.filter((row) => isMainCard(row.cardId)), rarityOfCard);
         return {
           id: player.id,
           name: player.name,
           you: player.id === youId,
           score: score.score,
-          uniqueCards: score.uniqueCards,
+          uniqueCards: main.uniqueCards,
           cardsPulled: score.cardsPulled,
-          completion: score.uniqueCards / totalCards,
-          byRarity: score.byRarity,
+          completion: main.uniqueCards / totalCards,
+          byRarity: main.byRarity,
           boostersOpened: player.boostersOpened ?? (await store.stats(player.id)).boostersOpened,
           createdAt: player.createdAt,
         };
@@ -364,7 +398,13 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     eras: ERAS,
     sets: shopSets.map(publicSet),
     booster: { ...boosterRules(), odds: boosterOdds(boosterRules()) },
-    stocks: STOCKS,
+    // { stockId: { cooldownSeconds, stackMax } }: the era and All-Stars stocks, and the stock of each event on now.
+    stocks: stockRules(),
+    // The events, on or off: [{ id, active, hours, max, set: its booster (cards: GET /api/cards?set=<set.id>) }].
+    events: [...eventSets].map(([id, set]) => {
+      const { enabled, hours, max } = settings.events[id];
+      return { id, active: enabled, hours, max, set: publicSet(set) };
+    }),
     // { prices: { setId: Kira }, recycle: { rarity: Kira }, cardPrices: { rarity: Kira at the daily shop } }
     market: settings.market,
     // { rewards: [{ superBoosters, kira }, …] }: what the 1st, the 2nd… of the weekly ranking get.
@@ -383,7 +423,8 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     const rarity = oneOf(query.get('rarity'), RARITY_IDS, 'rarity');
     const type = oneOf(query.get('type'), Object.keys(TYPES), 'type');
     const era = oneOf(query.get('era'), ERAS.map((e) => e.id), 'era');
-    const setId = oneOf(query.get('set'), setIds, 'set');
+    // The cards of an event are only listed with ?set=<its booster>.
+    const setId = oneOf(query.get('set'), [...setIds, ...[...eventSets.values()].map((set) => set.id)], 'set');
     const sort = oneOf(query.get('sort'), Object.keys(SORTS), 'sort') ?? 'number';
     const search = (query.get('q') ?? '').trim().toLowerCase();
 
@@ -512,13 +553,18 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   router.post('/api/players/:playerId/boosters', async ({ req, params, body }) => {
     const player = await requireSelf(req, params.playerId);
     // The Super Booster: admins open as many as they want, the others the ones they won in the weekly ranking.
-    const allowed = superSet ? [...setIds, superSet.id] : setIds;
+    // The booster of an event: from its own stock while the event is on (admins: any time, to try it).
+    const allowed = [...setIds, ...(superSet ? [superSet.id] : []), ...[...eventSets.values()].map((set) => set.id)];
     const setId = oneOf(body.setId, allowed, 'setId') ?? 'all-stars';
     const count = intParam(body.count, { name: 'count', min: 1, max: BOOSTER.maxPerRequest, fallback: 1 });
     const set = catalog.getSet(setId);
+    const event = set.event ?? null;
+    if (event && !player.isAdmin && !activeEvents().includes(event)) {
+      throw new HttpError(409, 'This event is over: its booster cannot be opened anymore', { event }, 'event_over');
+    }
     const rarityRules = set === superSet ? superRules() : boosterRules();
     const stockId = stockOf(set);
-    const rules = STOCKS[stockId];
+    const rules = stockRules()[stockId];
 
     const notEnough = (stock) =>
       new HttpError(
@@ -546,9 +592,11 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     try {
       const opened = Array.from({ length: count }, () => openBooster(set, { rng, rules: rarityRules }));
       // The database checks the stock again (not an admin's), in the same transaction as the save.
+      const stock = { every: rules?.cooldownSeconds, max: rules?.stackMax };
       if (unlimited) saved = await store.recordBoosters(player.id, setId, opened);
       else if (won) saved = await store.openSuperBoosters(player.id, setId, opened);
-      else saved = await store.openBoosters(player.id, setId, opened, { every: rules.cooldownSeconds, max: rules.stackMax });
+      else if (event) saved = await store.openEventBoosters(player.id, event, setId, opened, stock);
+      else saved = await store.openBoosters(player.id, setId, opened, stock);
     } finally {
       opening.delete(player.id);
     }
@@ -746,7 +794,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return { settings, defaults, oddsTotal: ODDS_TOTAL };
   });
 
-  /** Body: the sections to change, each whole: { booster, superBooster, market, daily }. */
+  /** Body: the sections to change, each whole: { booster, superBooster, market, daily, weekly, events }. */
   router.patch('/api/admin/settings', async ({ req, body }) => {
     const admin = await requireAdmin(req);
     const next = mergeSettings(settings, body, settingsContext());
@@ -773,7 +821,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
         const claims = daily.get(player.id);
         return {
           ...player,
-          cards: entries.length,
+          cards: entries.filter((row) => isMainCard(row.cardId)).length,
           copies: entries.reduce((sum, row) => sum + row.count, 0),
           boosters: boosters.get(player.id) ?? 0,
           daily: { claims: claims?.claims ?? 0, claimedToday: claims?.lastDay === today, gift: player.dailyGift },
@@ -1090,10 +1138,14 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return tradesOf(player);
   });
 
-  /** Numbers for the header badges; the web page asks every few seconds, so it only makes two small queries. */
-  router.get('/api/players/:playerId/notifications', async ({ req, params }) =>
-    store.notifications((await requireSelf(req, params.playerId)).id),
-  );
+  /**
+   * Numbers for the header badges; the web page asks every few seconds, so it only makes two small
+   * queries. `events`: the events on now (the page follows when an admin starts or ends one).
+   */
+  router.get('/api/players/:playerId/notifications', async ({ req, params }) => ({
+    ...(await store.notifications((await requireSelf(req, params.playerId)).id)),
+    events: activeEvents(),
+  }));
 
   /** The player who offered the card cancels the trade. */
   router.delete('/api/players/:playerId/trades/:tradeId', async ({ req, params }) => {

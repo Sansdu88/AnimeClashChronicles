@@ -9,9 +9,11 @@
  * The daily reward (views/daily.js) and the boosters bought with Kira
  * (views/market.js: one, several or the ×10 show too) open here too, and so do
  * the Super Boosters won in the weekly ranking (views/stats.js), from the shelf.
+ * While an event is on (events.js), its booster has a spotlight above the shelf and
+ * a stock of its own; it cannot be bought, and its stage wears the event's theme.
  */
 import { $, $$, escapeHtml, everySecond, fmt, html, mount, raw, wait } from '../dom.js';
-import { cardText, errorText, rarityName, setName, setTagline, t, tHtml } from '../i18n.js';
+import { cardText, errorText, has, rarityName, setName, setTagline, t, tHtml } from '../i18n.js';
 import {
   boosterStock,
   buyBoosters,
@@ -34,11 +36,14 @@ import { kiraHTML } from '../ui/kira.js';
 import { pushLayer } from '../ui/layers.js';
 import { sfx } from '../ui/sfx.js';
 import { toast } from '../ui/toast.js';
+import { EVENT_ICONS, applyEventTheme, eventCards, themeEvent } from '../events.js';
 
-const setCards = (set) => state.cards.filter((card) => !set.era || card.era === set.era);
+const setCards = (set) => (set.event ? eventCards(set.event) : state.cards.filter((card) => !set.era || card.era === set.era));
 const packStyle = (set) => `--c1:${set.colors[0]};--c2:${set.colors[1]}`;
 const BIG = new Set(['SSR', 'UR', 'REV']);
 const isSuper = (set) => set.id === state.meta.daily.superSet?.id;
+/** Sold at the Kira market (the booster of an event is not). */
+const isBuyable = (set) => set.id in state.meta.market.prices;
 
 /** The picture of a pack: its set's most popular card, or the 4 most popular ones on the Super Booster. */
 function packArtHTML(set) {
@@ -51,9 +56,11 @@ function packArtHTML(set) {
 }
 
 export function packHTML(set) {
-  return html`<span class="pack__inner${isSuper(set) ? ' pack__inner--super' : ''}" style="${packStyle(set)}">
+  const variant = isSuper(set) ? ' pack__inner--super' : set.event ? ` pack__inner--event pack__inner--${set.event}` : '';
+  return html`<span class="pack__inner${variant}" style="${packStyle(set)}">
     <span class="pack__crimp pack__crimp--top"></span>
     <span class="pack__body">
+      ${set.event && html`<span class="pack__sticker" aria-hidden="true">${EVENT_ICONS[set.event]}</span>`}
       <span class="pack__brand">ANIME CLASH</span>
       ${packArtHTML(set)}
       <span class="pack__name">${setName(set.id)}</span>
@@ -81,8 +88,9 @@ const showCount = (set) => state.meta.stocks[stockIdOf(set)]?.stackMax ?? state.
 function packTileHTML(set) {
   const cards = setCards(set);
   const have = cards.filter((card) => state.owned.has(card.id)).length;
-  const buyable = Boolean(set.stock);
-  return html`<div class="pack-tile${isSuper(set) ? ' pack-tile--super' : ''}" data-set="${set.id}" data-stock="${stockIdOf(set)}">
+  const buyable = Boolean(set.stock) && isBuyable(set);
+  const variant = isSuper(set) ? ' pack-tile--super' : set.event ? ` pack-tile--event pack-tile--${set.event}` : '';
+  return html`<div class="pack-tile${variant}" data-set="${set.id}" data-stock="${stockIdOf(set)}">
     <button class="pack" type="button" data-open="${set.id}" data-count="1" aria-label="${t('open.openOne', { set: setName(set.id) })}">${packHTML(set)}</button>
     <div class="pack-tile__progress" title="${t('open.progress', { have, total: cards.length })}">
       <span class="meter"><span class="meter__fill" style="width:${((have / cards.length) * 100).toFixed(1)}%"></span></span>
@@ -95,7 +103,27 @@ function packTileHTML(set) {
         aria-label="${t('market.buyLabel', { set: setName(set.id), price: priceOf(set.id), count: 1 })}">${t('market.buy')} · ${kiraHTML(priceOf(set.id))}</button>`}
     </div>
     ${isSuper(set) && html`<span class="admin-badge">${state.player.isAdmin ? t('open.adminOnly') : `🏆 ${t('open.superWon', { count: state.player.superBoosters })}`}</span>`}
+    ${set.event && !set.stock && html`<span class="admin-badge">${t('open.eventOff')}</span>`}
   </div>`;
+}
+
+/**
+ * The booster of an event, in the spotlight above the shelf: while the event is on, or for the
+ * admins (to try it out before or after: their boosters are unlimited).
+ */
+function eventSpotHTML(event) {
+  const cards = eventCards(event.id);
+  const count = (rarity) => cards.filter((card) => card.rarity === rarity).length;
+  return html`<section class="event-spot event-spot--${event.id}" aria-labelledby="event-${event.id}">
+    <div class="event-spot__text">
+      <p class="event-spot__kicker">${EVENT_ICONS[event.id]} ${t(event.active ? 'open.eventLive' : 'open.eventOffTitle')}</p>
+      <h2 class="event-spot__title" id="event-${event.id}">${t(`events.${event.id}.title`)}</h2>
+      <p class="event-spot__sub">${raw(tHtml(`events.${event.id}.pitch`, { count: cards.length, rev: count('REV'), ur: count('UR') }))}</p>
+      <p class="event-spot__rule">⏳ ${t('open.eventStock', { count: event.hours, max: event.max })}</p>
+      <p class="event-spot__rule">✦ ${t('open.eventKeep')}</p>
+    </div>
+    ${packTileHTML(event.set)}
+  </section>`;
 }
 
 /** A booster stock ('era' or 'all-stars'): its slots fill up one by one. */
@@ -139,6 +167,8 @@ export function renderOpen(main) {
   // The Super Booster: the admins' (unlimited like their other boosters), or the ones won in the weekly ranking.
   const withSuper = meta.daily.superSet && (player.isAdmin || player.superBoosters > 0);
   const shelf = withSuper ? [...meta.sets, meta.daily.superSet] : meta.sets;
+  // The boosters of the events on now (the admins see the others too, to try them out).
+  const events = meta.events.filter((event) => event.active || player.isAdmin);
   mount(
     main,
     html`<section class="view view-open">
@@ -157,6 +187,7 @@ export function renderOpen(main) {
         <span class="daily-banner__text"></span>
         <span class="daily-banner__cta">${t('open.dailyClaim')} →</span>
       </a>
+      ${events.map(eventSpotHTML)}
       <div class="shelf${shelf.length > 4 ? ' shelf--five' : ''}">${shelf.map(packTileHTML)}</div>
       <p class="open-footer">
         <span>${t('open.collection')} <strong>${player.stats.uniqueCards}/${player.stats.totalCards}</strong>
@@ -168,11 +199,12 @@ export function renderOpen(main) {
     </section>`,
   );
 
-  $('.shelf', main).addEventListener('click', (event) => {
+  // The shelf and the boosters of the events.
+  $('.view-open', main).addEventListener('click', (event) => {
     const buy = event.target.closest('[data-buy]');
     const button = event.target.closest('[data-open]');
     if (!buy && !button) return;
-    sfx.play('click');
+    sfx.play(button && setOf(button.dataset.open)?.event ? 'ghost' : 'click');
     if (buy) {
       openBought(buy.dataset.buy);
       return;
@@ -279,6 +311,7 @@ function createStage() {
       element.classList.add('is-leaving');
       setTimeout(() => element.remove(), 250);
       document.body.classList.remove('has-stage');
+      applyEventTheme(); // the sounds of an event's booster were on stage only
       window.dispatchEvent(new CustomEvent('mb:refresh'));
     },
   };
@@ -291,6 +324,17 @@ function createStage() {
     if (link && route(link.hash) === route(location.hash)) stage.close();
   });
   return stage;
+}
+
+/**
+ * The stage takes the colors of the set, and the theme and the sounds of its event (the
+ * Halloween booster…), even when an admin tries it out while the event is off.
+ */
+function dressStage(stage, set) {
+  stage.element.style.cssText = packStyle(set);
+  if (set.event) stage.element.dataset.event = set.event;
+  else delete stage.element.dataset.event;
+  sfx.theme = set.event ?? themeEvent();
 }
 
 function preloadImages(cards, timeout = 3500) {
@@ -321,7 +365,7 @@ async function requestBoosters(stage, ask, minWait) {
     toast(errorText(err), 'error');
     if (['booster_cooldown', 'not_enough_kira', 'no_super_booster'].includes(err.code)) reloadPlayer().catch(() => {});
     if (['daily_claimed', 'not_super_day', 'daily_changed'].includes(err.code)) refreshDaily().catch(() => {});
-    if (err.code === 'price_changed') refreshMeta().catch(() => {});
+    if (['price_changed', 'event_over'].includes(err.code)) refreshMeta().catch(() => {});
     stage.close();
     return null;
   }
@@ -362,7 +406,7 @@ function nextButtons(slot, set, stage) {
         ? html`<button class="btn btn--primary btn--big" type="button" data-again="1">${t('stage.again')}</button>
             ${many >= 2 && html`<button class="btn btn--secondary btn--big" type="button" data-again="${many}"></button>`}`
         : html`<button class="btn btn--primary btn--big" type="button" disabled>⏳ ${t('open.nextIn', { time: fmt.duration(nextIn) })}</button>
-            ${buyButtonHTML(set)}`,
+            ${isBuyable(set) && buyButtonHTML(set)}`,
     );
     const manyButton = $('[data-again]:not([data-again="1"])', slot);
     if (manyButton) paintManyButton(manyButton, many, set.id);
@@ -394,7 +438,7 @@ async function openSingle(setId, stage = createStage(), source = null) {
   const stale = () => stage.closed || stage.run !== run;
   stage.element.dataset.phase = 'pack';
   delete stage.element.dataset.show;
-  stage.element.style.cssText = packStyle(set);
+  dressStage(stage, set);
 
   mount(
     stage.content,
@@ -426,7 +470,7 @@ async function openSingle(setId, stage = createStage(), source = null) {
   pack.disabled = true;
   pack.classList.add('is-shaking');
   $('.stage__hint', stage.content).textContent = t('stage.opening');
-  sfx.play('shake');
+  sfx.play(set.event ? 'thunder' : 'shake');
 
   const ask = source?.daily ? () => claimDaily(setId) : askBoosters(setId, 1, source);
   const boosters = await requestBoosters(stage, ask, 650);
@@ -438,9 +482,10 @@ async function openSingle(setId, stage = createStage(), source = null) {
   pack.classList.remove('is-shaking');
   pack.classList.add('is-torn');
   sfx.play('tear');
+  if (set.event) sfx.play('cackle');
   const box = pack.getBoundingClientRect();
-  flash('rgba(255,255,255,.8)', 280);
-  onomatopoeia(t('fx.tear'), { x: box.left + box.width / 2, y: box.top + box.height * 0.12, color: '#fff', size: 'l' });
+  flash(set.event ? 'rgba(123,44,191,.75)' : 'rgba(255,255,255,.8)', 280);
+  onomatopoeia(t(set.event ? `events.${set.event}.tear` : 'fx.tear'), { x: box.left + box.width / 2, y: box.top + box.height * 0.12, color: '#fff', size: 'l' });
   await wait(600);
   if (stale()) return;
   showReveal(stage, set, booster, run, source);
@@ -494,7 +539,7 @@ function showReveal(stage, set, booster, run, source = null) {
     sfx.play('flip');
     await wait(260);
     if (stale()) return;
-    const pause = celebrate(flip.getBoundingClientRect(), card.rarity);
+    const pause = celebrate(flip.getBoundingClientRect(), card);
     if (card.isNew) flip.classList.add('show-new');
     flip.dataset.state = 'revealed';
     const params = { name: cardText(card).name, rarity: rarityName(card.rarity) };
@@ -586,7 +631,7 @@ async function openSuper(stage = createStage(), daily = null) {
   const stale = () => stage.closed || stage.run !== run;
   stage.element.dataset.phase = 'super';
   stage.element.dataset.show = 'super';
-  stage.element.style.cssText = packStyle(set);
+  dressStage(stage, set);
 
   mount(
     stage.content,
@@ -645,7 +690,7 @@ async function openMany(setId, count, stage = createStage(), source = null) {
   const stale = () => stage.closed || stage.run !== run;
   stage.element.dataset.phase = 'packs';
   delete stage.element.dataset.show;
-  stage.element.style.cssText = packStyle(set);
+  dressStage(stage, set);
 
   // The packs arrive as a fanned-out hand.
   mount(
@@ -668,7 +713,7 @@ async function openMany(setId, count, stage = createStage(), source = null) {
   packs.disabled = true;
   packs.classList.add('is-shaking');
   $('.stage__hint', stage.content).textContent = t('stage.opening');
-  sfx.play('shake');
+  sfx.play(set.event ? 'thunder' : 'shake');
   setTimeout(() => !stale() && sfx.play('charge'), 350);
 
   const boosters = await requestBoosters(stage, askBoosters(setId, count, source), 1100);
@@ -688,10 +733,12 @@ async function openMany(setId, count, stage = createStage(), source = null) {
     await wait(Math.max(70, 190 - i * 14));
   }
   const box = packs.getBoundingClientRect();
-  flash('rgba(255,255,255,.9)', 420);
+  flash(set.event ? 'rgba(123,44,191,.85)' : 'rgba(255,255,255,.9)', 420);
   shakeScreen();
-  burst(box.left + box.width / 2, box.top + box.height / 2, { colors: ['#fff', '#ffd23f', '#ff2e88', '#3a86ff'], count: 110, power: 1.6 });
-  onomatopoeia(t('fx.tear'), { x: box.left + box.width / 2, y: box.top + box.height * 0.3, color: '#fff', size: 'xl' });
+  const colors = set.event ? showFor(set).colors : ['#fff', '#ffd23f', '#ff2e88', '#3a86ff'];
+  burst(box.left + box.width / 2, box.top + box.height / 2, { colors, count: 110, power: 1.6 });
+  if (set.event) sfx.play('cackle');
+  onomatopoeia(t(set.event ? `events.${set.event}.tear` : 'fx.tear'), { x: box.left + box.width / 2, y: box.top + box.height * 0.3, color: '#fff', size: 'xl' });
   await wait(750);
   if (stale()) return;
   showManyReveal(stage, set, boosters, run, null, source);
@@ -742,7 +789,7 @@ async function openTen(setId, count, stage = createStage(), source = null) {
   const stale = () => stage.closed || stage.run !== run;
   stage.element.dataset.phase = 'giant';
   stage.element.dataset.show = show.theme;
-  stage.element.style.cssText = packStyle(set);
+  dressStage(stage, set);
 
   mount(
     stage.content,
@@ -831,6 +878,7 @@ async function openTen(setId, count, stage = createStage(), source = null) {
   display.classList.remove('is-charging');
   display.classList.add('is-open');
   sfx.play('tear');
+  if (set.event) sfx.play('cackle');
   await wait(skipped ? 350 : 650);
   if (stale()) return;
 
@@ -838,7 +886,7 @@ async function openTen(setId, count, stage = createStage(), source = null) {
   const box = display.getBoundingClientRect();
   display.classList.add('is-empty');
   sfx.play('boom');
-  flash('#fff', 750);
+  flash(set.event ? '#c77dff' : '#fff', 750);
   shakeScreen();
   confettiStorm(show.colors, { rounds: 8 });
   scatterPacks(packHTML(set), count, box.left + box.width / 2, box.top + box.height * 0.45);
@@ -927,7 +975,7 @@ function showManyReveal(stage, set, boosters, run, show = null, source = null) {
     await wait(quick ? 140 : 240);
     if (stale()) return;
     // Skipping: only the rarest cards still get their effects.
-    const pause = !quick || big ? celebrate(flip.getBoundingClientRect(), card.rarity) : 0;
+    const pause = !quick || big ? celebrate(flip.getBoundingClientRect(), card) : 0;
     if (card.isNew) flip.classList.add('show-new');
     flip.dataset.state = 'revealed';
     flip.setAttribute('aria-label', t('stage.revealed', {
@@ -1050,13 +1098,16 @@ function finale(rarity, count) {
 const REVERSE_MS = 5300;
 
 /**
- * Sound + particles + lettering for a revealed card, centered on `box`.
- * Returns how long (ms) the reveal should wait before going on (the REVERSE moment).
+ * Sound + particles + lettering for a revealed card, centered on `box` (the cards of an
+ * event have their own lettering: BOO!…). Returns how long (ms) the reveal should wait
+ * before going on (the REVERSE moment).
  */
-function celebrate(box, rarity) {
+function celebrate(box, card) {
+  const { rarity } = card;
   const x = box.left + box.width / 2;
   const y = box.top + box.height / 2;
   const colors = RARITY_COLORS[rarity];
+  const fx = (key) => (card.event && has(`events.${card.event}.fx.${key}`) ? t(`events.${card.event}.fx.${key}`) : t(`fx.${key}`));
   sfx.play(rarity === 'REV' ? 'reverse' : rarity);
   switch (rarity) {
     case 'R':
@@ -1064,19 +1115,19 @@ function celebrate(box, rarity) {
       break;
     case 'SR':
       burst(x, y, { colors, count: 32 });
-      onomatopoeia(t('fx.sparkle'), { x, y: box.top, color: '#e0aaff', size: 'm', tilt: 6 });
+      onomatopoeia(fx('sparkle'), { x, y: box.top, color: '#e0aaff', size: 'm', tilt: 6 });
       break;
     case 'SSR':
       flash('rgba(255, 210, 63, .55)', 420);
       burst(x, y, { colors, count: 70, power: 1.3 });
-      onomatopoeia(t('fx.rumble'), { x, y: box.top - 10, color: '#ffd23f', size: 'l' });
+      onomatopoeia(fx('rumble'), { x, y: box.top - 10, color: '#ffd23f', size: 'l' });
       break;
     case 'UR':
       flash('#fff', 650);
       shakeScreen();
       burst(x, y, { colors, count: 120, power: 1.7 });
       setTimeout(() => burst(x, y, { colors, count: 60, power: 1.2 }), 280);
-      onomatopoeia(t('fx.boom'), { x, y: box.top - 20, color: '#ff2e88', size: 'xl' });
+      onomatopoeia(fx('boom'), { x, y: box.top - 20, color: '#ff2e88', size: 'xl' });
       break;
     case 'REV': {
       // The rarest card: the heart skips twice (in time with the sound), then the
@@ -1089,9 +1140,12 @@ function celebrate(box, rarity) {
         burst(x, y, { colors, count: 160, power: 2 });
         setTimeout(() => burst(x, y, { colors, count: 90, power: 1.4 }), 300);
         const rev = state.meta.rarities.find((rarity) => rarity.id === 'REV');
+        const eventCount = card.event && eventCards(card.event).filter((each) => each.rarity === 'REV').length;
         reverseWorld({
           title: t('reverse.title'),
-          subtitle: t('reverse.sub', { count: rev?.cardCount ?? 0, total: state.meta.totalCards }),
+          subtitle: card.event
+            ? t(`events.${card.event}.reverse`, { count: eventCount, total: eventCards(card.event).length })
+            : t('reverse.sub', { count: rev?.cardCount ?? 0, total: state.meta.totalCards }),
         });
       }, 850);
       return REVERSE_MS;

@@ -1,8 +1,9 @@
 /**
  * "Admin" page, for the players whose is_admin is set in the database (the server
- * checks it on every call): the game settings, which apply at once (Kira prices and
- * values, daily shop prices, rewards of the weekly ranking, daily reward, Super Booster
- * events, rarity odds), and the list of players with their tools (give the daily back,
+ * checks it on every call): the game settings, which apply at once (the limited-time
+ * events such as Halloween, Kira prices and values, daily shop prices, rewards of the
+ * weekly ranking, daily reward, Super Booster event days, rarity odds), and the list
+ * of players with their tools (give the daily back,
  * Super Booster gift, clear their data, delete them).
  */
 import { $, $$, fmt, html, mount } from '../dom.js';
@@ -21,6 +22,7 @@ import {
 } from '../state.js';
 import { confirmDialog } from '../components/modal.js';
 import { onPageClick, pageCount, pageSize, paginationHTML } from '../components/pagination.js';
+import { EVENT_ICONS, eventCards } from '../events.js';
 import { coinHTML, kiraHTML } from '../ui/kira.js';
 import { toast } from '../ui/toast.js';
 
@@ -112,6 +114,36 @@ function eventsHTML(daily) {
     <button type="button" class="btn btn--special" data-event-today ${days.includes(today) ? 'disabled' : ''}>${t('admin.eventToday')}</button>`;
 }
 
+/** The limited-time events (Halloween…): on or off for everyone, and the stock of their booster. */
+function limitedFieldsHTML(events) {
+  return Object.entries(events).map(([id, event]) => {
+    const cards = eventCards(id);
+    const rarities = rarestFirst()
+      .map((rarity) => [rarity, cards.filter((card) => card.rarity === rarity).length])
+      .filter(([, count]) => count)
+      .map(([rarity, count]) => `${count} ${rarity}`)
+      .join(' · ');
+    return html`<fieldset class="admin-event ev-${id}">
+      <legend class="admin-event__name">${EVENT_ICONS[id]} ${t(`events.${id}.title`)}
+        <span class="admin-event__state${event.enabled ? ' is-on' : ''}">${t(event.enabled ? 'admin.eventOn' : 'admin.eventOff')}</span></legend>
+      <label class="admin-check admin-switch">
+        <input type="checkbox" name="on:${id}" ${event.enabled ? 'checked' : ''}> ${t('admin.eventSwitch')}
+      </label>
+      <div class="admin-fields">
+        <label class="field">
+          <span class="field__label">${t('admin.eventHours')}</span>
+          ${numberField(`hours:${id}`, event.hours, { min: 1, max: 168 })}
+        </label>
+        <label class="field">
+          <span class="field__label">${t('admin.eventMax')}</span>
+          ${numberField(`max:${id}`, event.max, { min: 1, max: state.meta.booster.maxPerRequest })}
+        </label>
+      </div>
+      <p class="muted admin-event__info">${t('admin.eventInfo', { count: cards.length, rarities, perDay: fmt.number(Math.round((24 / event.hours) * 10) / 10) })}</p>
+    </fieldset>`;
+  });
+}
+
 function oddsRowsHTML(settings) {
   return rarestFirst().map((id) => html`<tr class="r-${id}">
     <td><span class="rarity-badge">${id}</span> ${rarityName(id)}</td>
@@ -177,6 +209,16 @@ export async function renderAdmin(main) {
           <p class="view-sub">${t('admin.sub')}</p>
         </div>
       </header>
+
+      ${Object.keys(settings.events ?? {}).length > 0 && html`<form class="panel admin-form admin-limited" data-form="limited" novalidate>
+        <h2 class="panel__title">🎉 ${t('admin.limited')}</h2>
+        <p class="muted">${t('admin.limitedText')}</p>
+        <div class="admin-limited__events" data-fields></div>
+        <div class="btn-row btn-row--end">
+          <button class="btn btn--ghost" type="button" data-defaults>${t('admin.defaults')}</button>
+          <button class="btn btn--primary" type="submit">${t('admin.save')}</button>
+        </div>
+      </form>`}
 
       <div class="admin-columns">
         <form class="panel admin-form" data-form="market" novalidate>
@@ -261,6 +303,7 @@ export async function renderAdmin(main) {
   // ── Settings ───────────────────────────────────────────────────────────────
 
   const paint = {
+    limited: (values) => mount(fieldsOf('limited'), limitedFieldsHTML(values.events)),
     market: (values) => mount(fieldsOf('market'), marketFieldsHTML(values.market)),
     weekly: (values) => mount(fieldsOf('weekly'), weeklyRowsHTML(values.weekly)),
     daily: (values) => mount(fieldsOf('daily'), dailyFieldsHTML(values.daily)),
@@ -285,6 +328,14 @@ export async function renderAdmin(main) {
 
   /** The values of a form, as the sections of the settings to save. */
   const read = {
+    limited(form) {
+      const value = (name) => Number(form.elements[name].value);
+      return {
+        events: Object.fromEntries(
+          Object.keys(settings.events).map((id) => [id, { enabled: form.elements[`on:${id}`].checked, hours: value(`hours:${id}`), max: value(`max:${id}`) }]),
+        ),
+      };
+    },
     market(form) {
       const value = (name) => Number(form.elements[name].value);
       return {
@@ -324,6 +375,14 @@ export async function renderAdmin(main) {
     }
   }
 
+  /** The message once saved: starting or ending an event says so. */
+  const savedMessage = {
+    limited({ events: next }) {
+      const [id, event] = Object.entries(next).find(([id, event]) => event.enabled !== settings.events[id]?.enabled) ?? [];
+      return id && t(event.enabled ? 'admin.eventStarted' : 'admin.eventEnded', { name: t(`events.${id}.title`) });
+    },
+  };
+
   for (const [name, form] of Object.entries(forms)) {
     paint[name](settings);
     form.addEventListener('submit', async (event) => {
@@ -338,7 +397,7 @@ export async function renderAdmin(main) {
       }
       const submit = $('[type="submit"]', form);
       submit.disabled = true;
-      if (await save(sections)) paint[name](settings);
+      if (await save(sections, savedMessage[name]?.(sections) || undefined)) paint[name](settings);
       submit.disabled = false;
       if (name === 'odds') paintTotals();
     });

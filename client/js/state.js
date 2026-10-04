@@ -11,7 +11,11 @@ const listeners = new Set();
 
 export const state = {
   meta: null,
+  /** The main collection. */
   cards: [],
+  /** eventId → the cards of that event (see meta.events). */
+  eventCards: {},
+  /** Every card, the events' too. */
   cardsById: new Map(),
   player: null,
   /** cardId → { count, firstPulledAt, lastPulledAt } */
@@ -51,7 +55,7 @@ function setPlayer(player) {
 }
 
 /**
- * A booster stock ('era' or 'all-stars', see setOf(id).stock): { stock, max, every, nextIn, unlimited }:
+ * A booster stock ('era', 'all-stars' or an event on now, see setOf(id).stock): { stock, max, every, nextIn, unlimited }:
  * boosters you can open now, the most you can keep, seconds between two of them, and
  * seconds before the next one (0 when full). An admin's stocks are `unlimited` (always full).
  * 'super': the Super Boosters won in the weekly ranking (they do not come back).
@@ -84,8 +88,10 @@ export function dailyStatus() {
 
 export const rarityOf = (id) => state.meta.rarities.find((r) => r.id === id);
 export const typeOf = (id) => state.meta.types.find((t) => t.id === id);
-/** A booster set: the ones of the shelf, or the Super Booster of the daily reward. */
-export const setOf = (id) => state.meta.sets.find((s) => s.id === id) ?? (state.meta.daily.superSet?.id === id ? state.meta.daily.superSet : undefined);
+/** A booster set: the ones of the shelf, the Super Booster of the daily reward, or the booster of an event. */
+export const setOf = (id) =>
+  state.meta.sets.find((s) => s.id === id) ??
+  (state.meta.daily.superSet?.id === id ? state.meta.daily.superSet : state.meta.events.find((event) => event.set.id === id)?.set);
 const rarityRank = (id) => state.meta.rarities.findIndex((r) => r.id === id);
 
 /** Rarest first, then most popular. */
@@ -94,16 +100,24 @@ export const byRarity = (a, b) =>
 
 export const byLocalName = (a, b) => cardText(a).name.localeCompare(cardText(b).name);
 
+/** The game rules, the cards, and the cards of every event (on or not: players keep them when it ends). */
 export async function loadCatalog() {
   const [meta, { cards }] = await Promise.all([api('/meta'), api('/cards')]);
+  const events = await Promise.all(meta.events.map((event) => api(`/cards?set=${encodeURIComponent(event.set.id)}`)));
   state.meta = meta;
   state.cards = cards;
-  state.cardsById = new Map(cards.map((card) => [card.id, card]));
+  state.eventCards = Object.fromEntries(meta.events.map((event, i) => [event.id, events[i].cards]));
+  state.cardsById = new Map([...cards, ...events.flatMap((event) => event.cards)].map((card) => [card.id, card]));
 }
 
-/** Reloads the game rules (an admin changed the prices, the odds or the daily reward). */
+/**
+ * Reloads the game rules (an admin changed the prices, the odds, the daily reward or an event),
+ * and the player with them: the stock of an event that just started comes with both.
+ */
 export async function refreshMeta() {
-  state.meta = await api('/meta');
+  const [meta, player] = await Promise.all([api('/meta'), state.player ? api(playerPath()) : null]);
+  state.meta = meta;
+  if (player && state.player) setPlayer(player);
   emit();
 }
 

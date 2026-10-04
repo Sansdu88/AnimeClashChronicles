@@ -1,0 +1,742 @@
+/* ==========================================================================
+   Limited-time events (js/events.js). While an event is on, the page wears its
+   theme: html[data-event="…"]. Its booster (.pack__inner--<event>, its stage
+   .stage[data-event="…"]), its stock (.stock--<event>) and its cards
+   (.card.ev-<event>) keep their look in any case: the cards stay in the
+   collections after the event, and admins can try its booster when it is off.
+   One section per event.
+   ========================================================================== */
+
+/* ── Shared ─────────────────────────────────────────────────────────────── */
+
+/* The decor of an event, behind the pages: it never takes a click. */
+.event-decor {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The booster of an event, in the spotlight above the shelf (views/open.js). */
+.event-spot {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 250px);
+  align-items: center;
+  gap: 18px 32px;
+  margin: 30px 0 0;
+  padding: 26px 30px;
+  border: var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.event-spot__kicker {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 5px 14px 3px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
+.event-spot__title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(46px, 7vw, 78px);
+  letter-spacing: 3px;
+  line-height: 0.95;
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 5px 5px 0 var(--ink);
+  transform: rotate(-2deg);
+  transform-origin: left;
+}
+
+.event-spot__sub {
+  max-width: 560px;
+  margin: 0 0 8px;
+  font-weight: 800;
+  font-size: 17px;
+}
+
+.event-spot__rule {
+  margin: 4px 0 0;
+  font-weight: 700;
+}
+
+.event-spot .pack-tile {
+  position: relative;
+  z-index: 1;
+}
+
+/* Their emblem on a booster. */
+.pack__sticker {
+  position: absolute;
+  top: 17cqw;
+  left: 3cqw;
+  z-index: 1;
+  font-size: 15cqw;
+  line-height: 1;
+  filter: drop-shadow(0.8cqw 0.8cqw 0 var(--ink));
+  transform: rotate(-14deg);
+  animation: sticker-bob 2.4s ease-in-out infinite;
+}
+
+@keyframes sticker-bob {
+  50% {
+    transform: rotate(-6deg) translateY(-1.5cqw);
+  }
+}
+
+/* Their emblem on a card: at the bottom of the picture (under the name on full-art cards). */
+.card__event {
+  position: absolute;
+  right: 2cqw;
+  bottom: 2cqw;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 11cqw;
+  aspect-ratio: 1;
+  font-size: 6.4cqw;
+  line-height: 1;
+  border-radius: 50%;
+  border: 0.6cqw solid;
+  box-shadow: 0.5cqw 0.5cqw 0 var(--ink);
+}
+
+.card.is-fullart .card__event {
+  top: 17cqw;
+  bottom: auto;
+  right: 3cqw;
+}
+
+/* The tabs of the collection: the main one, then one per event (views/collection.js). */
+.books {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin: 0 0 18px;
+}
+
+.books__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 6px;
+  border: var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-display);
+  font-size: 21px;
+  letter-spacing: 1px;
+  line-height: 1;
+  transition: transform 0.15s;
+}
+
+.books__tab:hover {
+  transform: translateY(-2px);
+}
+
+.books__tab b {
+  padding: 3px 9px 2px;
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 0;
+  color: var(--yellow);
+  background: var(--ink);
+  border-radius: 999px;
+}
+
+.books__tab[aria-pressed='true'] {
+  background: var(--yellow);
+}
+
+/* Admin panel: the events, on or off. */
+.admin-limited {
+  margin-bottom: 24px;
+}
+
+.admin-limited__events {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-event {
+  margin: 0;
+  padding: 12px 18px 16px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+}
+
+.admin-event__name {
+  padding: 0 8px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  letter-spacing: 1px;
+}
+
+.admin-event__state {
+  margin-left: 6px;
+  padding: 3px 10px 1px;
+  vertical-align: middle;
+  font-size: 15px;
+  background: var(--paper-2);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+}
+
+.admin-event__state.is-on {
+  color: #fff;
+  background: #2b8a3e;
+}
+
+.admin-switch {
+  margin: 4px 0 12px;
+}
+
+.admin-event .admin-fields {
+  margin-bottom: 4px;
+}
+
+.admin-event__info {
+  margin: 8px 0 0;
+}
+
+@media (max-width: 760px) {
+  .event-spot {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    padding: 20px 16px 24px;
+    text-align: center;
+  }
+
+  .event-spot__title {
+    transform-origin: center;
+  }
+
+  .event-spot .pack-tile {
+    width: min(100%, 220px);
+  }
+
+  .event-spot .pack {
+    max-width: 190px;
+  }
+
+  /* The stock of an event under the two others, across. */
+  .stocks .stock[data-stock]:nth-child(n + 3) {
+    grid-column: 1 / -1;
+  }
+
+  .books__tab {
+    font-size: 18px;
+  }
+}
+
+/* ══ Halloween ═══════════════════════════════════════════════════════════ */
+/* Pumpkin orange, night purple, a moon, bats and ghosts. */
+
+html[data-event='halloween'] {
+  --red: #e8590c;
+  --red-dark: #b33d00;
+  --paper: #f6ead8;
+  --paper-2: #ecd9bf;
+  --blue: #7b2cbf;
+}
+
+html[data-event='halloween'] body {
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(rgba(60, 9, 108, 0.13) 1.1px, transparent 1.4px),
+    radial-gradient(rgba(232, 89, 12, 0.1) 1.1px, transparent 1.4px),
+    linear-gradient(180deg, #d7bff0 0, rgba(246, 234, 216, 0) 560px);
+  background-size: 14px 14px, 14px 14px, 100% 100%;
+  background-position: 0 0, 7px 7px, 0 0;
+  background-repeat: repeat, repeat, no-repeat;
+}
+
+/* The header at night. */
+html[data-event='halloween'] .topbar {
+  background: linear-gradient(100deg, #1a0b2e, #3c096c 55%, #1a0b2e);
+  border-bottom-color: #000;
+  box-shadow: 0 4px 0 rgba(232, 89, 12, 0.6);
+}
+
+html[data-event='halloween'] .logo__main {
+  color: #f5ecd7;
+}
+
+@media (min-width: 761px) {
+  html[data-event='halloween'] .nav a {
+    color: #f5ecd7;
+  }
+
+  html[data-event='halloween'] .nav a:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  html[data-event='halloween'] .nav a[aria-current='page'] {
+    color: var(--ink);
+    background: #ff922b;
+    border-color: #000;
+    box-shadow: 3px 3px 0 #000;
+  }
+}
+
+/* Phones: the tab bar at night too. */
+@media (max-width: 760px) {
+  html[data-event='halloween'] .nav {
+    background: #1a0b2e;
+    border-top-color: #000;
+    box-shadow: 0 -4px 0 rgba(232, 89, 12, 0.6);
+  }
+
+  html[data-event='halloween'] .nav a,
+  html[data-event='halloween'] .nav__more {
+    color: #f5ecd7;
+  }
+
+  html[data-event='halloween'] .nav a[aria-current='page'],
+  html[data-event='halloween'] .nav__more.is-current,
+  html[data-event='halloween'] .nav__more[aria-expanded='true'] {
+    color: var(--ink);
+    background: #ff922b;
+    border-color: #000;
+  }
+
+  html[data-event='halloween'] .nav__icon--kira {
+    color: #ffc078;
+  }
+}
+
+/* The hero of the Open page: a night sky with a full moon and two pumpkins. */
+html[data-event='halloween'] .hero {
+  background:
+    radial-gradient(circle at 88% 24%, #fff6d5 0 32px, rgba(255, 236, 170, 0.5) 34px, transparent 78px),
+    radial-gradient(rgba(0, 0, 0, 0.25) 1.2px, transparent 1.6px) 0 0 / 9px 9px,
+    linear-gradient(180deg, #24103b, #5a189a 62%, #e8590c 150%);
+}
+
+html[data-event='halloween'] .hero::before,
+html[data-event='halloween'] .hero::after {
+  content: '🎃';
+  position: absolute;
+  bottom: 4px;
+  font-size: 46px;
+  line-height: 1;
+  filter: drop-shadow(3px 3px 0 #000);
+}
+
+html[data-event='halloween'] .hero::before {
+  left: 16px;
+  transform: rotate(-12deg);
+}
+
+html[data-event='halloween'] .hero::after {
+  right: 16px;
+  font-size: 34px;
+  transform: rotate(10deg);
+}
+
+html[data-event='halloween'] .hero__sub strong {
+  color: #ffc078;
+}
+
+/* The decor: a moon, bats crossing the sky, two ghosts and cobwebs in the corners. */
+.event-decor--halloween .decor__moon {
+  position: absolute;
+  top: 92px;
+  right: max(18px, calc((100vw - var(--page-width)) / 2 - 140px));
+  width: 110px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 34%, #fffbe6, #ffe8a3 56%, #f2c46d);
+  box-shadow: 0 0 46px 14px rgba(255, 220, 140, 0.5);
+  opacity: 0.85;
+}
+
+.event-decor--halloween .decor__moon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 62% 30%, rgba(190, 140, 60, 0.35) 0 9px, transparent 10px),
+    radial-gradient(circle at 35% 66%, rgba(190, 140, 60, 0.3) 0 13px, transparent 14px),
+    radial-gradient(circle at 70% 70%, rgba(190, 140, 60, 0.25) 0 6px, transparent 7px);
+}
+
+.event-decor--halloween .decor__bat {
+  position: absolute;
+  top: calc(16% + var(--i) * 16%);
+  left: -90px;
+  width: calc(42px + var(--i) * 7px);
+  color: #2b1145;
+  opacity: 0.5;
+  animation: bat-fly calc(24s + var(--i) * 6s) linear calc(var(--i) * -7s) infinite;
+}
+
+.event-decor--halloween .decor__bat svg {
+  display: block;
+  width: 100%;
+  fill: currentColor;
+  transform-origin: 50% 40%;
+  animation: bat-flap 0.32s ease-in-out infinite alternate;
+}
+
+@keyframes bat-fly {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(28vw, -34px);
+  }
+  50% {
+    transform: translate(55vw, 18px);
+  }
+  75% {
+    transform: translate(82vw, -22px);
+  }
+  100% {
+    transform: translate(calc(100vw + 180px), 6px);
+  }
+}
+
+@keyframes bat-flap {
+  to {
+    transform: scaleY(0.4);
+  }
+}
+
+.event-decor--halloween .decor__ghost {
+  position: absolute;
+  bottom: 9%;
+  left: calc(1.5% + var(--i) * 91%);
+  width: 62px;
+  opacity: 0.55;
+  animation: ghost-float calc(5s + var(--i) * 1.5s) ease-in-out infinite alternate;
+}
+
+.event-decor--halloween .decor__ghost svg {
+  display: block;
+  width: 100%;
+  fill: #2b1145;
+}
+
+.event-decor--halloween .ghost__body {
+  fill: #fffaf0;
+  stroke: #2b1145;
+  stroke-width: 3;
+}
+
+@keyframes ghost-float {
+  to {
+    transform: translateY(-26px) rotate(6deg);
+  }
+}
+
+.event-decor--halloween .decor__web {
+  position: absolute;
+  top: 64px;
+  width: 170px;
+  height: 170px;
+  opacity: 0.3;
+  background:
+    repeating-radial-gradient(circle at 0 0, transparent 0 17px, #3c096c 17px 18.5px),
+    repeating-conic-gradient(from 90deg at 0 0, #3c096c 0 1deg, transparent 1deg 15deg);
+  -webkit-mask: radial-gradient(circle at 0 0, #000 62%, transparent 72%);
+  mask: radial-gradient(circle at 0 0, #000 62%, transparent 72%);
+}
+
+.event-decor--halloween .decor__web--left {
+  left: 0;
+}
+
+.event-decor--halloween .decor__web--right {
+  right: 0;
+  transform: scaleX(-1);
+}
+
+/* The Halloween stock: a night panel with pumpkin slots. */
+.stock--halloween {
+  color: #f5ecd7;
+  background: linear-gradient(100deg, #24103b, #3c096c);
+  border-color: #000;
+}
+
+.stock--halloween .stock__label {
+  color: #fff;
+  background: #e8590c;
+}
+
+.stock--halloween .stock__count {
+  color: #ffc078;
+}
+
+.stock--halloween .stock__next {
+  color: #e9d8fd;
+}
+
+.stock--halloween .stock__slot {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #000;
+}
+
+.stock--halloween .stock__slot.is-full {
+  background: linear-gradient(160deg, #ffc078, #e8590c);
+}
+
+.stock--halloween .stock__slot.is-charging::after {
+  background: rgba(255, 146, 43, 0.5);
+}
+
+.stock--halloween.is-full {
+  background: linear-gradient(100deg, #3c096c, #7b2cbf);
+}
+
+.stock--halloween.is-full .stock__next {
+  color: #ffc078;
+}
+
+/* The spotlight of the Halloween Booster. */
+.event-spot--halloween {
+  color: #f5ecd7;
+  background:
+    radial-gradient(circle at 97% 6%, #fff6d5 0 24px, rgba(255, 236, 170, 0.4) 26px, transparent 58px),
+    radial-gradient(rgba(0, 0, 0, 0.28) 1.2px, transparent 1.6px) 0 0 / 9px 9px,
+    linear-gradient(160deg, #1a0b2e, #3c096c 55%, #7b2cbf 88%, #e8590c 135%);
+}
+
+.event-spot--halloween .event-spot__kicker {
+  color: #fff;
+  background: #e8590c;
+}
+
+.event-spot--halloween .event-spot__title {
+  color: #ff922b;
+}
+
+.event-spot--halloween .event-spot__sub strong {
+  color: #ffc078;
+}
+
+.event-spot--halloween .event-spot__rule {
+  color: #e9d8fd;
+}
+
+.event-spot--halloween .pack-tile__progress {
+  color: #f5ecd7;
+}
+
+/* The Halloween Booster: candy-corn crimps, a night body and a pumpkin. */
+.pack__inner--halloween .pack__crimp {
+  background: repeating-linear-gradient(90deg, #ff922b 0 2.4cqw, #1a0b2e 2.4cqw 4.8cqw);
+}
+
+.pack__inner--halloween .pack__body {
+  background:
+    radial-gradient(rgba(0, 0, 0, 0.25) 0.7cqw, transparent 0.9cqw) 0 0 / 3.6cqw 3.6cqw,
+    repeating-conic-gradient(from 0deg at 50% 42%, rgba(255, 146, 43, 0.2) 0deg 6deg, transparent 6deg 14deg),
+    linear-gradient(165deg, #3c096c 0%, #1a0b2e 60%, #e8590c 135%);
+}
+
+.pack__inner--halloween .pack__brand {
+  color: #ff922b;
+}
+
+.pack__inner--halloween .pack__art {
+  border-color: #ff922b;
+  background: #ff922b;
+  box-shadow: 0 0 0 1.1cqw var(--ink), 0 0 7cqw 1cqw rgba(255, 146, 43, 0.6);
+}
+
+.pack__inner--halloween .pack__name {
+  color: #ffc078;
+}
+
+.pack__inner--halloween .pack__count {
+  background: #ff922b;
+}
+
+.pack__inner--halloween .pack__foil {
+  background: linear-gradient(115deg, transparent 30%, rgba(186, 104, 255, 0.45) 45%, rgba(255, 146, 43, 0.45) 55%, transparent 68%);
+  background-size: 300% 100%;
+  animation: super-foil 4s linear infinite;
+}
+
+.pack-tile--halloween .pack {
+  filter: drop-shadow(6px 8px 0 rgba(22, 19, 15, 0.85)) drop-shadow(0 0 18px rgba(255, 146, 43, 0.65));
+}
+
+/* Halloween cards: an orange ring, purple dots, the monster in purple and the pumpkin emblem. */
+.card.ev-halloween {
+  --card-bg: color-mix(in srgb, var(--type) 10%, #fbeedd);
+}
+
+.card.ev-halloween .card__frame {
+  background:
+    radial-gradient(color-mix(in srgb, #7b2cbf 24%, transparent) 0.55cqw, transparent 0.7cqw) 0 0 / 3.4cqw 3.4cqw padding-box,
+    linear-gradient(var(--card-bg), var(--card-bg)) padding-box,
+    var(--foil) border-box;
+  box-shadow:
+    0 0 0 0.7cqw #1a0b2e,
+    0 0 0 1.6cqw #ff922b,
+    0 2.4cqw 4cqw rgba(0, 0, 0, 0.28);
+}
+
+.card.ev-halloween .card__desc {
+  font-style: normal;
+  font-weight: 900;
+  color: #5a189a;
+}
+
+.card.ev-halloween .card__desc::before {
+  content: '👻 ';
+}
+
+.card.ev-halloween .card__event {
+  color: #ff922b;
+  background: #1a0b2e;
+  border-color: #ff922b;
+}
+
+.card--locked.ev-halloween .card__frame {
+  background:
+    radial-gradient(rgba(255, 146, 43, 0.16) 0.6cqw, transparent 0.75cqw) 0 0 / 4cqw 4cqw padding-box,
+    linear-gradient(160deg, #3c096c, #1a0b2e) padding-box,
+    linear-gradient(135deg, color-mix(in srgb, var(--rc) 55%, #000), var(--rc)) border-box;
+  box-shadow: 0 0 0 0.7cqw #1a0b2e, 0 0 0 1.6cqw #ff922b;
+}
+
+.card--locked.ev-halloween .locked__mark {
+  color: #ffc078;
+  border-color: #ff922b;
+}
+
+.tag--event.ev-halloween {
+  color: #ffc078;
+  background: #1a0b2e;
+  border-color: #000;
+}
+
+.books__tab--event.ev-halloween {
+  color: #f5ecd7;
+  background: linear-gradient(100deg, #24103b, #5a189a);
+}
+
+.books__tab--event.ev-halloween[aria-pressed='true'] {
+  color: var(--ink);
+  background: #ff922b;
+}
+
+.rules-event.ev-halloween,
+.admin-event.ev-halloween {
+  background: linear-gradient(160deg, #fff1e0, #f1e4ff);
+}
+
+/* The stage of a Halloween booster: a purple night, fog, and orange card backs. */
+.stage[data-event='halloween'] {
+  background: radial-gradient(circle at 50% 42%, #5a189a, #1a0b2e 58%, #07020f 88%);
+}
+
+.stage[data-event='halloween']::before {
+  content: '';
+  position: fixed;
+  left: -10%;
+  right: -10%;
+  bottom: 0;
+  height: 34vh;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 25% 100%, rgba(214, 196, 255, 0.28), transparent 62%),
+    radial-gradient(ellipse at 75% 100%, rgba(255, 192, 120, 0.2), transparent 60%);
+  animation: fog-drift 9s ease-in-out infinite alternate;
+}
+
+@keyframes fog-drift {
+  to {
+    transform: translateX(6%);
+  }
+}
+
+.stage[data-event='halloween'] .card-back__rays {
+  background:
+    radial-gradient(rgba(0, 0, 0, 0.25) 0.8cqw, transparent 1cqw) 0 0 / 4.4cqw 4.4cqw,
+    repeating-conic-gradient(from 0deg at 50% 50%, #e8590c 0deg 7deg, #3c096c 7deg 14deg);
+}
+
+.stage[data-event='halloween'] .card-back__name {
+  background: #e8590c;
+}
+
+/* The ×10 show of Halloween: orange title, lightning in the sky. */
+.stage[data-show='spooky'] {
+  --ray: rgba(255, 146, 43, 0.18);
+  --glow: #ff922b;
+}
+
+.stage[data-show='spooky'] .giant__title {
+  color: #ff922b;
+  text-shadow: 4px 4px 0 #000, 0 0 26px rgba(157, 78, 221, 0.9);
+}
+
+.stage[data-show='spooky']::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  animation: lightning 6s infinite;
+}
+
+@keyframes lightning {
+  0%,
+  88%,
+  91%,
+  94%,
+  100% {
+    background: transparent;
+  }
+  89%,
+  92.5% {
+    background: rgba(233, 216, 253, 0.28);
+  }
+}
+
+.cutin--spooky {
+  --band-bg: linear-gradient(90deg, #12061f, #3c096c 50%, #12061f);
+  --band-edge: #ff922b;
+  --band-lines: rgba(255, 146, 43, 0.14);
+  --shout: #ff922b;
+}
+
+.cutin--spooky .cutin__shout {
+  text-shadow: 3px 3px 0 #000, 0 0 18px #39ff14;
+}
+
+.cutin--spooky .cutin__art img {
+  filter: saturate(0.75) contrast(1.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event-decor--halloween .decor__bat {
+    display: none;
+  }
+
+  .event-decor--halloween *,
+  .pack__sticker,
+  .stage[data-event='halloween']::before,
+  .stage[data-show='spooky']::after,
+  .pack__inner--halloween .pack__foil {
+    animation: none !important;
+  }
+}
