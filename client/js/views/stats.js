@@ -15,8 +15,10 @@ import {
   state,
 } from '../state.js';
 import { confirmDialog, formDialog } from '../components/modal.js';
+import { gemsHTML } from '../ui/gems.js';
 import { kiraHTML } from '../ui/kira.js';
 import { toast } from '../ui/toast.js';
+import { badgesHTML } from './achievements.js';
 
 let renderId = 0;
 
@@ -52,7 +54,8 @@ function historyHTML(boosters) {
   return html`<ol class="history">
     ${boosters.map((booster) => html`<li class="history__item">
       <div class="history__head">
-        <strong>${setName(booster.setId)}${booster.kira ? html` <span class="history__price" title="${t('stats.bought')}">${kiraHTML(booster.kira)}</span>` : ''}</strong>
+        <strong>${setName(booster.setId)}${booster.kira ? html` <span class="history__price" title="${t('stats.bought')}">${kiraHTML(booster.kira)}</span>` : ''}${
+          booster.gems ? html` <span class="history__price" title="${t('stats.boughtGems')}">${gemsHTML(booster.gems)}</span>` : ''}</strong>
         <time datetime="${booster.openedAt}" title="${fmt.date(booster.openedAt)}">${fmt.timeAgo(booster.openedAt)}</time>
       </div>
       <div class="history__cards">
@@ -90,7 +93,7 @@ const rewardHTML = (reward) =>
 function weeklyHTML(weekly) {
   const row = (rank, player, reward) => html`<tr class="${player?.you ? 'is-you' : ''}">
     <td>${medal(rank)}</td>
-    <td>${player ? html`${player.name}${player.you ? html` <span class="you-pill">${t('stats.you')}</span>` : ''}` : html`<span class="muted">—</span>`}</td>
+    <td>${player ? html`${player.name} ${badgesHTML(player.badges)}${player.you ? html` <span class="you-pill">${t('stats.you')}</span>` : ''}` : html`<span class="muted">—</span>`}</td>
     <td>${player ? html`<b class="score">${fmt.number(player.points)}</b>` : ''}</td>
     <td>${player ? html`${player.cards} <span class="muted">(${t('weekly.new', { count: player.newCards })})</span>` : ''}</td>
     <td>${reward ? rewardHTML(reward) : ''}</td>
@@ -124,7 +127,7 @@ function weeklyHTML(weekly) {
           ? html`<ol class="weekly__winners">
               ${winners.map((winner) => html`<li class="${winner.you ? 'is-you' : ''}">
                 <span class="weekly__medal">${medal(winner.rank)}</span>
-                <b>${winner.name}</b> <span class="muted">${fmt.number(winner.points)} ${t('weekly.pts')}</span>
+                <b>${winner.name}</b> ${badgesHTML(winner.badges)} <span class="muted">${fmt.number(winner.points)} ${t('weekly.pts')}</span>
                 ${rewardHTML(winner)}
               </li>`)}
             </ol>
@@ -145,7 +148,7 @@ function leaderboardHTML(players) {
     <tbody>
       ${players.map((p) => html`<tr class="${p.you ? 'is-you' : ''}">
         <td>${p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : p.rank}</td>
-        <td>${p.name}${p.you ? html` <span class="you-pill">${t('stats.you')}</span>` : ''}</td>
+        <td>${p.name} ${badgesHTML(p.badges)}${p.you ? html` <span class="you-pill">${t('stats.you')}</span>` : ''}</td>
         <td><b class="score">${fmt.number(p.score)}</b></td>
         <td>${p.uniqueCards} <span class="muted">(${fmt.percent(p.completion)})</span></td>
       </tr>`)}
@@ -218,7 +221,7 @@ export async function renderStats(main) {
         <section class="panel panel--wide">
           <h2 class="panel__title">${t('stats.account')}</h2>
           <dl class="account">
-            <div><dt>${t('stats.player')}</dt><dd>${player.name}</dd></div>
+            <div><dt>${t('stats.player')}</dt><dd>${player.name} ${badgesHTML(player.achievements.map((row) => row.id))}</dd></div>
             <div><dt>${t('stats.email')}</dt><dd>${player.email ?? '—'}</dd></div>
           </dl>
           <p class="muted">${t('stats.accountText')}</p>

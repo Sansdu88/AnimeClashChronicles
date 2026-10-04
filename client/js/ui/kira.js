@@ -40,17 +40,18 @@ export function bump(element) {
 
 /**
  * `count` sparkles fly from `from` (a DOMRect) to the element `to`, each on its own
- * curve. Resolves when the first ones land.
+ * curve. Resolves when the first ones land. `symbol`: what flies (static markup: a Kira
+ * sparkle, or the gem of ui/gems.js with `className` 'gem-spark').
  */
-export function flySparkles(from, to, { count = 10 } = {}) {
+export function flySparkles(from, to, { count = 10, symbol = '✦', className = '' } = {}) {
   if (prefersReducedMotion()) return Promise.resolve();
   const target = to.getBoundingClientRect();
   const tx = target.left + target.width / 2;
   const ty = target.top + target.height / 2;
   for (let i = 0; i < count; i++) {
     const spark = document.createElement('span');
-    spark.className = 'kira-spark';
-    spark.textContent = '✦';
+    spark.className = `kira-spark${className ? ` ${className}` : ''}`;
+    spark.innerHTML = symbol;
     spark.setAttribute('aria-hidden', 'true');
     const x = from.left + from.width * (0.2 + Math.random() * 0.6);
     const y = from.top + from.height * (0.2 + Math.random() * 0.6);

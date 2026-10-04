@@ -29,7 +29,9 @@
         <a href="#/" data-route="open"><span class="nav__icon" aria-hidden="true">🎴</span><span data-i18n="nav.open">Open</span><span class="nav__badge nav__badge--stock" id="open-badge" hidden></span></a>
         <a href="#/daily" data-route="daily"><span class="nav__icon" aria-hidden="true">🎁</span><span data-i18n="nav.daily">Daily</span><span class="nav__badge nav__badge--daily" id="daily-badge" hidden>!</span></a>
         <a href="#/market" data-route="market"><span class="nav__icon nav__icon--kira" aria-hidden="true">✦</span><span data-i18n="nav.market">Market</span></a>
+        <a href="#/forge" data-route="forge"><span data-i18n="nav.forge">Forge</span></a>
         <a href="#/collection" data-route="collection"><span class="nav__icon" aria-hidden="true">📚</span><span data-i18n="nav.collection">Collection</span></a>
+        <a href="#/achievements" data-route="achievements"><span data-i18n="nav.achievements">Achievements</span></a>
         <a href="#/friends" data-route="friends"><span data-i18n="nav.friends">Friends</span><span class="nav__badge" id="friends-badge" hidden></span></a>
         <a href="#/trades" data-route="trades"><span data-i18n="nav.trades">Trades</span><span class="nav__badge" id="trades-badge" hidden></span></a>
         <a href="#/stats" data-route="stats"><span data-i18n="nav.stats">Stats</span></a>
@@ -50,9 +52,18 @@
           <span class="kira-chip__amount" id="kira-balance">0</span>
           <span class="sr-only" data-i18n="header.kiraUnit">Kira</span>
         </a>
+        <!-- Gems, the rare money (the gem is drawn by main.js, from ui/gems.js) -->
+        <a class="gem-chip" id="gem-chip" href="#/market" data-i18n-title="header.gems">
+          <span class="gem-icon" aria-hidden="true"></span>
+          <span class="gem-chip__amount" id="gem-balance">0</span>
+          <span class="sr-only" data-i18n="header.gemsUnit">gems</span>
+        </a>
+        <!-- The limited-time events (components/events-popup.js) -->
+        <button class="icon-btn icon-btn--events" id="events-button" type="button" data-i18n-aria="header.events">🎉</button>
         <button class="player-chip" id="player-chip" type="button" data-i18n-title="header.rename">
           <span aria-hidden="true">👤</span>
           <span class="player-chip__name" id="player-name">…</span>
+          <span class="player-chip__badges" id="player-badges"></span>
           <span class="player-chip__progress" id="player-progress" data-i18n-title="header.progress"></span>
         </button>
         <button class="icon-btn" id="sound-toggle" type="button" aria-pressed="true" data-i18n-aria="header.sound">🔊</button>
@@ -74,10 +85,13 @@
         <span class="sheet__grip" aria-hidden="true"></span>
         <button class="sheet__player" type="button" data-proxy="player-chip">
           <span class="sheet__avatar" aria-hidden="true">👤</span>
-          <span class="sheet__who"><b id="sheet-player-name">…</b><span id="sheet-player-progress"></span></span>
+          <span class="sheet__who"><b><span id="sheet-player-name">…</span> <span id="sheet-player-badges"></span></b><span id="sheet-player-progress"></span></span>
           <span class="sheet__edit" data-i18n="nav.rename">Rename</span>
         </button>
         <nav class="sheet__links" aria-label="Other pages" data-i18n-aria="nav.morePages">
+          <a href="#/achievements" data-route="achievements"><span aria-hidden="true">🏅</span><span data-i18n="nav.achievements">Achievements</span></a>
+          <button class="sheet__events" type="button" data-proxy="events-button"><span aria-hidden="true">🎉</span><span data-i18n="nav.events">Events</span></button>
+          <a href="#/forge" data-route="forge"><span aria-hidden="true">⚒️</span><span data-i18n="nav.forge">Forge</span><span class="nav__soon" aria-hidden="true">🚧</span></a>
           <a href="#/friends" data-route="friends"><span aria-hidden="true">👥</span><span data-i18n="nav.friends">Friends</span><span class="nav__badge" id="sheet-friends-badge" hidden></span></a>
           <a href="#/trades" data-route="trades"><span aria-hidden="true">🔄</span><span data-i18n="nav.trades">Trades</span><span class="nav__badge" id="sheet-trades-badge" hidden></span></a>
           <a href="#/stats" data-route="stats"><span aria-hidden="true">📊</span><span data-i18n="nav.stats">Stats</span></a>

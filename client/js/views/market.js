@@ -4,17 +4,19 @@
  * chosen number, or as many as the wallet pays for (Max). The daily shop sells 5 cards,
  * new ones every day (a UR on Sundays), one copy of each per player.
  * You keep one copy of each card, and the copies promised in your open trades.
- * A recycled copy turns into sparkles that fly to the wallet; Kira spent at the daily
- * shop flies from the wallet to the card.
+ * Gems (💎), the rare money, buy the same boosters and daily shop cards, at their gems price.
+ * A recycled copy turns into sparkles that fly to the wallet; Kira (or gems) spent at the
+ * daily shop flies from the wallet to the card.
  */
 import { $, $$, everySecond, fmt, html, mount, raw } from '../dom.js';
 import { cardText, errorText, rarityName, setName, t, tHtml } from '../i18n.js';
-import { affordable, buyShopCard, byRarity, fetchMarket, priceOf, recycleCards, state } from '../state.js';
+import { affordable, buyShopCard, byRarity, fetchMarket, gemPriceOf, priceOf, recycleCards, state } from '../state.js';
 import { cardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
 import { confirmDialog } from '../components/modal.js';
 import { onPageClick, pageCount, pageSize, paginationHTML } from '../components/pagination.js';
 import { RARITY_COLORS, burst, onomatopoeia } from '../ui/effects.js';
+import { GEM_SVG, gemIconHTML, gemsHTML } from '../ui/gems.js';
 import { bump, coinHTML, flySparkles, kiraHTML, rollNumber } from '../ui/kira.js';
 import { sfx } from '../ui/sfx.js';
 import { toast } from '../ui/toast.js';
@@ -59,13 +61,15 @@ function shopHTML() {
           <button class="btn btn--small btn--secondary" type="button" data-max>${t('market.max')}</button>
         </div>
         <button class="btn btn--kira shop-item__buy" type="button" data-buy="${set.id}"></button>
+        <span class="shop-item__or">${t('gems.or')}</span>
+        <button class="btn btn--gems btn--small shop-item__buy" type="button" data-buy-gems="${set.id}"></button>
         <span class="shop-item__need" aria-live="polite"></span>
       </div>`,
     )}
   </div>`;
 }
 
-/** A card of the daily shop: the card, how many copies you have, and its buy button (or "Bought"). */
+/** A card of the daily shop: the card, how many copies you have, and its buy buttons, Kira or gems (or "Bought"). */
 function shopCardHTML(item) {
   const card = state.cardsById.get(item.cardId);
   const owned = state.owned.get(item.cardId)?.count ?? 0;
@@ -79,8 +83,13 @@ function shopCardHTML(item) {
     <p class="shop-card__owned">${owned ? t('shop.owned', { count: owned }) : html`<b class="shop-card__new">✨ ${t('shop.notOwned')}</b>`}</p>
     ${item.bought
       ? html`<button class="btn btn--ghost" type="button" disabled>✓ ${t('shop.bought')}</button>`
-      : html`<button class="btn btn--kira" type="button" data-shop-buy="${item.cardId}" ${missing > 0 ? 'disabled' : ''}
-          aria-label="${t('shop.buyLabel', { name: cardText(card).name, price: item.price })}">${t('market.buy')} · ${kiraHTML(item.price)}</button>`}
+      : html`<div class="shop-card__buy">
+          <button class="btn btn--kira" type="button" data-shop-buy="${item.cardId}" data-currency="kira" ${missing > 0 ? 'disabled' : ''}
+            aria-label="${t('shop.buyLabel', { name: cardText(card).name, price: item.price })}">${t('market.buy')} · ${kiraHTML(item.price)}</button>
+          <button class="btn btn--gems btn--small" type="button" data-shop-buy="${item.cardId}" data-currency="gems"
+            ${item.gemPrice > state.player.gems ? 'disabled' : ''} aria-label="${t('gems.buyCardLabel', { name: cardText(card).name, price: item.gemPrice })}"
+            title="${item.gemPrice > state.player.gems ? t('gems.missing', { count: item.gemPrice - state.player.gems }) : ''}">${t('gems.or')} ${gemsHTML(item.gemPrice)}</button>
+        </div>`}
     <span class="shop-item__need">${!item.bought && missing > 0 ? t('market.missing', { count: missing }) : ''}</span>
   </div>`;
 }
@@ -143,6 +152,15 @@ export async function renderMarket(main) {
             <p class="wallet__hint">${t('market.kiraInfo')}</p>
           </div>
         </section>
+        <section class="panel wallet wallet--gems" aria-label="${t('gems.wallet')}">
+          ${gemIconHTML('big')}
+          <div>
+            <p class="wallet__label">${t('gems.wallet')}</p>
+            <p class="wallet__amount"><b data-gems data-value="${state.player.gems}">${fmt.number(state.player.gems)}</b> ${t('header.gemsUnit')}</p>
+            <p class="wallet__rate">${t('gems.worth', { kira: fmt.number(state.meta.gems.kiraPerGem) })}</p>
+            <p class="wallet__hint">${t('gems.walletHint', { kira: fmt.number(state.meta.gems.kiraPerGem) })}</p>
+          </div>
+        </section>
         <section class="panel rates">
           <h2 class="panel__title">${t('market.rates')}</h2>
           <ul class="rates__list">
@@ -185,6 +203,7 @@ export async function renderMarket(main) {
   );
 
   const amount = $('[data-kira]', main);
+  const gemAmount = $('[data-gems]', main);
   const picks = $('.rarity-picks', main);
   const recycleAll = $('[data-action="recycle-all"]', main);
   const count = $('.result-count', main);
@@ -211,7 +230,7 @@ export async function renderMarket(main) {
 
   /**
    * Each shop item: the price of the boosters chosen, the quantity buttons, and the buy
-   * button, disabled with what is missing when the wallet is too light.
+   * buttons (Kira, or gems), disabled with what is missing when the wallet is too light.
    */
   function paintShop() {
     for (const item of $$('.shop-item', main)) {
@@ -219,7 +238,15 @@ export async function renderMarket(main) {
       const count = quantityOf(item);
       const price = priceOf(setId) * count;
       const missing = price - state.player.kira;
+      const gemPrice = gemPriceOf(setId) * count;
+      const gemsMissing = gemPrice - state.player.gems;
       const max = affordable(setId);
+      const withGems = $('[data-buy-gems]', item);
+      mount(withGems, gemsHTML(gemPrice));
+      withGems.dataset.count = count;
+      withGems.disabled = gemsMissing > 0;
+      withGems.title = gemsMissing > 0 ? t('gems.missing', { count: gemsMissing }) : '';
+      withGems.setAttribute('aria-label', t('gems.buyLabel', { set: setName(setId), price: gemPrice, count }));
       mount($('.shop-item__price', item), kiraHTML(price));
       mount($('.shop-item__each', item), count > 1 ? html`×${count} · ${kiraHTML(priceOf(setId))} ${t('market.each')}` : '');
       $('[data-step="-1"]', item).disabled = count <= 1;
@@ -274,11 +301,12 @@ export async function renderMarket(main) {
     );
   }
 
-  /** The wallet coin if it is on screen, else the one of the header. */
-  function walletCoin() {
-    const coin = $('.wallet .kira-coin', main);
+  /** The wallet coin if it is on screen, else the one of the header (`currency` 'gems': the gem of the gems wallet). */
+  function walletCoin(currency = 'kira') {
+    const [inPage, inHeader] = currency === 'gems' ? ['.wallet--gems .gem-icon', '#gem-chip .gem-icon'] : ['.wallet .kira-coin', '#kira-chip .kira-coin'];
+    const coin = $(inPage, main);
     const box = coin.getBoundingClientRect();
-    return box.bottom > 70 && box.top < window.innerHeight ? coin : ($('#kira-chip .kira-coin') ?? coin);
+    return box.bottom > 70 && box.top < window.innerHeight ? coin : ($(inHeader) ?? coin);
   }
 
   /** A copy of the card leaves it in a burst of sparkles. */
@@ -329,13 +357,17 @@ export async function renderMarket(main) {
     paintDailyShop();
   }
 
-  /** Buys a card of the daily shop: the Kira flies from the wallet to the card, which joins your collection. */
+  /**
+   * Buys a card of the daily shop with Kira or gems (the button's currency): the money flies from
+   * the wallet to the card, which joins your collection.
+   */
   async function buyFromShop(button) {
     const item = shop.items.find((row) => row.cardId === button.dataset.shopBuy);
-    button.disabled = true;
+    const gems = button.dataset.currency === 'gems';
+    for (const each of $$(`[data-shop-buy="${item.cardId}"]`, main)) each.disabled = true;
     let result;
     try {
-      result = await buyShopCard(item.cardId, item.price);
+      result = await buyShopCard(item.cardId, gems ? item.gemPrice : item.price, gems ? 'gems' : 'kira');
     } catch (err) {
       toast(errorText(err), 'error');
       renderMarket(main); // a new day, a new price, or bought from another page: show the shop again
@@ -343,11 +375,11 @@ export async function renderMarket(main) {
     }
     if (!main.isConnected) return;
     shop = result.shop;
-    const coin = walletCoin();
+    const coin = walletCoin(gems ? 'gems' : 'kira');
     const target = $(`.shop-card[data-card-id="${item.cardId}"] .card`, main);
     sfx.play('coin');
-    rollNumber(amount, result.kira, 700);
-    await flySparkles(coin.getBoundingClientRect(), target, { count: 16 });
+    rollNumber(gems ? gemAmount : amount, gems ? result.gems : result.kira, 700);
+    await flySparkles(coin.getBoundingClientRect(), target, gems ? { count: 12, symbol: GEM_SVG, className: 'gem-spark' } : { count: 16 });
     if (!main.isConnected) return;
     const box = target.getBoundingClientRect();
     sfx.play(item.rarity);
@@ -384,6 +416,12 @@ export async function renderMarket(main) {
     if (buy) {
       sfx.play('click');
       openBought(buy.dataset.buy, Number(buy.dataset.count));
+      return;
+    }
+    const buyWithGems = event.target.closest('[data-buy-gems]');
+    if (buyWithGems) {
+      sfx.play('click');
+      openBought(buyWithGems.dataset.buyGems, Number(buyWithGems.dataset.count), 'gems');
       return;
     }
     const shopBuy = event.target.closest('[data-shop-buy]');

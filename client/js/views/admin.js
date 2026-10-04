@@ -1,9 +1,9 @@
 /**
  * "Admin" page, for the players whose is_admin is set in the database (the server
  * checks it on every call): the game settings, which apply at once (the limited-time
- * events such as Halloween, Kira prices and values, daily shop prices, rewards of the
- * weekly ranking, daily reward, Super Booster event days, rarity odds), and the list
- * of players with their tools (give the daily back,
+ * events such as Halloween, Kira prices and values, daily shop prices, the Kira a gem
+ * is worth, rewards of the weekly ranking, daily reward, Super Booster event days, rarity
+ * odds), and the list of players with their tools (give the daily back,
  * Super Booster gift, clear their data, delete them).
  */
 import { $, $$, fmt, html, mount } from '../dom.js';
@@ -23,8 +23,10 @@ import {
 import { confirmDialog } from '../components/modal.js';
 import { onPageClick, pageCount, pageSize, paginationHTML } from '../components/pagination.js';
 import { EVENT_ICONS, eventCards } from '../events.js';
+import { gemIconHTML, gemsHTML } from '../ui/gems.js';
 import { coinHTML, kiraHTML } from '../ui/kira.js';
 import { toast } from '../ui/toast.js';
+import { badgesHTML } from './achievements.js';
 
 // Odds are weights adding up to `oddsTotal` (100%) in each column, given by the server
 // (thousandths of a percent: odds as small as 0.001%, see server/settings.js).
@@ -71,6 +73,25 @@ function marketFieldsHTML(market) {
 
 /** The rarities sold at the daily shop, rarest first. */
 const shopRarities = (market) => rarestFirst().filter((id) => id in market.cardPrices);
+
+/** Gems price of something that costs `kira` Kira, when a gem is worth `kiraPerGem` (like gemPrice in server/config.js). */
+const gemPrice = (kira, kiraPerGem) => (kira > 0 ? Math.max(1, Math.ceil(kira / kiraPerGem)) : 0);
+
+/** The Kira a gem is worth, and the gems prices it gives (with the Kira prices saved, `market`). */
+function gemsFieldsHTML(gems) {
+  return html`<label class="field admin-field--short">
+      <span class="field__label">${t('admin.kiraPerGem')}</span>
+      <span class="input-kira">${gemIconHTML()} = ${numberField('kiraPerGem', gems.kiraPerGem, { min: 1 })}${coinHTML()}</span>
+    </label>
+    <h3 class="admin-form__subtitle">${t('admin.gemsPreview')}</h3>
+    <ul class="rates__list admin-gems__preview" data-preview></ul>`;
+}
+
+/** The gems prices of the boosters and of the daily shop's cards, for `kiraPerGem` Kira a gem. */
+function gemsPreviewHTML(market, kiraPerGem) {
+  return html`${state.meta.sets.map((set) => html`<li>${setName(set.id)} ${gemsHTML(gemPrice(market.prices[set.id], kiraPerGem))}</li>`)}
+    ${shopRarities(market).map((id) => html`<li class="r-${id}" title="${rarityName(id)}"><span class="rarity-badge">${id}</span> ${gemsHTML(gemPrice(market.cardPrices[id], kiraPerGem))}</li>`)}`;
+}
 
 /** The rewards of the weekly ranking: Super Boosters and Kira for the 1st, the 2nd… */
 function weeklyRowsHTML(weekly) {
@@ -158,7 +179,7 @@ function playerHTML(player) {
   const { daily } = player;
   return html`<li class="admin-player" data-id="${player.id}" data-name="${player.name}">
     <div class="admin-player__who">
-      <b class="admin-player__name">${player.name}</b>
+      <b class="admin-player__name">${player.name}</b> ${badgesHTML(player.badges)}
       ${player.isAdmin && html`<span class="admin-badge">${t('admin.badge')}</span>`}
       ${you && html`<span class="you-pill">${t('stats.you')}</span>`}
       <span class="muted admin-player__meta">${player.email ?? '—'} · #${player.friendCode} · ${t('admin.joined', { date: fmt.day(player.createdAt.slice(0, 10)) })}</span>
@@ -167,6 +188,7 @@ function playerHTML(player) {
       <span>🃏 ${t('admin.cards', { count: player.cards, total: state.meta.totalCards })}</span>
       <span>📦 ${t('admin.boosters', { count: player.boosters })}</span>
       ${kiraHTML(player.kira)}
+      ${gemsHTML(player.gems ?? 0)}
       ${player.superBoosters > 0 && html`<span class="admin-gift">🏆 ${t('weekly.superBoosters', { count: player.superBoosters })}</span>`}
       <span>🎁 ${t(daily.claimedToday ? 'admin.claimedToday' : 'admin.notClaimed')} · ${t('admin.claims', { count: daily.claims })}</span>
       ${daily.gift && html`<span class="admin-gift">${t('admin.giftWaiting')}</span>`}
@@ -230,6 +252,15 @@ export async function renderAdmin(main) {
           </div>
         </form>
         <div class="admin-stack">
+          <form class="panel admin-form admin-gems" data-form="gems" novalidate>
+            <h2 class="panel__title">💎 ${t('admin.gems')}</h2>
+            <p class="muted">${t('admin.gemsText')}</p>
+            <div data-fields></div>
+            <div class="btn-row btn-row--end">
+              <button class="btn btn--ghost" type="button" data-defaults>${t('admin.defaults')}</button>
+              <button class="btn btn--primary" type="submit">${t('admin.save')}</button>
+            </div>
+          </form>
           <form class="panel admin-form" data-form="weekly" novalidate>
             <h2 class="panel__title">🏆 ${t('admin.weekly')}</h2>
             <p class="muted">${t('admin.weeklyText')}</p>
@@ -305,6 +336,10 @@ export async function renderAdmin(main) {
   const paint = {
     limited: (values) => mount(fieldsOf('limited'), limitedFieldsHTML(values.events)),
     market: (values) => mount(fieldsOf('market'), marketFieldsHTML(values.market)),
+    gems: (values) => {
+      mount(fieldsOf('gems'), gemsFieldsHTML(values.gems));
+      paintGemsPreview();
+    },
     weekly: (values) => mount(fieldsOf('weekly'), weeklyRowsHTML(values.weekly)),
     daily: (values) => mount(fieldsOf('daily'), dailyFieldsHTML(values.daily)),
     odds: (values) => {
@@ -312,6 +347,12 @@ export async function renderAdmin(main) {
       paintTotals();
     },
   };
+
+  /** The gems prices the value typed gives, with the Kira prices saved (they follow as it is typed). */
+  function paintGemsPreview() {
+    const kiraPerGem = Math.round(Number(forms.gems.elements.kiraPerGem.value));
+    mount($('[data-preview]', forms.gems), kiraPerGem >= 1 ? gemsPreviewHTML(settings.market, kiraPerGem) : '');
+  }
 
   /** Totals of the odds columns: each must be 100%, else the form cannot be saved. */
   function paintTotals() {
@@ -345,6 +386,9 @@ export async function renderAdmin(main) {
           cardPrices: Object.fromEntries(shopRarities(settings.market).map((id) => [id, value(`card:${id}`)])),
         },
       };
+    },
+    gems(form) {
+      return { gems: { kiraPerGem: Number(form.elements.kiraPerGem.value) } };
     },
     weekly(form) {
       const value = (name) => Number(form.elements[name].value);
@@ -400,11 +444,14 @@ export async function renderAdmin(main) {
       if (await save(sections, savedMessage[name]?.(sections) || undefined)) paint[name](settings);
       submit.disabled = false;
       if (name === 'odds') paintTotals();
+      // New Kira prices give new gems prices.
+      if (name === 'market') paintGemsPreview();
     });
     // Back to the defaults of config.js (saved only with "Save").
     $('[data-defaults]', form).addEventListener('click', () => paint[name](defaults));
   }
   forms.odds.addEventListener('input', paintTotals);
+  forms.gems.addEventListener('input', paintGemsPreview);
 
   // Super Booster events are saved at once.
   const paintEvents = () => mount(events, eventsHTML(settings.daily));

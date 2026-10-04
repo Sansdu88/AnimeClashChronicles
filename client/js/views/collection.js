@@ -11,6 +11,7 @@ import { openCardModal } from '../components/card-modal.js';
 import { PAGE_SIZES, onPageClick, pageCount, pageSize, paginationHTML } from '../components/pagination.js';
 import { toast } from '../ui/toast.js';
 import { EVENT_ICONS, eventCards } from '../events.js';
+import { badgesHTML } from './achievements.js';
 
 // Kept between visits of the page (the page number too, unless it shows another player's cards).
 const filters = { q: '', show: 'all', rarity: '', type: '', era: '', copies: '', sort: 'number' };
@@ -41,6 +42,13 @@ const option = (value, label, current) => html`<option value="${value}" ${raw(va
 
 /** The cards of the collection on screen. */
 const bookCards = () => (book === 'main' ? state.cards : eventCards(book));
+
+/** Shows the collection `id` ('main' or an event's, if it has a tab) the next time the page is drawn. */
+export function chooseBook(id) {
+  if (id === book) return;
+  book = id;
+  paging.page = 1;
+}
 
 /** The events whose collection has a tab: on now, or with cards in this collection. */
 const eventBooks = () =>
@@ -134,7 +142,7 @@ export function renderCollection(main, options) {
       <header class="view-head">
         <div>
           ${friend && html`<a class="link" href="#/friends">${t('friends.back')}</a>`}
-          <h1 class="view-title">${friend ? t('friends.collectionOf', { name: player.name }) : t('collection.title')}</h1>
+          <h1 class="view-title">${friend ? html`${t('friends.collectionOf', { name: player.name })} ${badgesHTML(player.achievements?.map((row) => row.id))}` : t('collection.title')}</h1>
           <p class="view-sub">${friend
             ? t('friends.collectionSub', { code: player.friendCode, score: fmt.number(player.stats.score) })
             : event

@@ -4,7 +4,23 @@
  * "Authorization: Bearer <token>" header) and only give access to your own player.
  * Admin routes (/api/admin/…) need a player whose is_admin is set in the database.
  */
-import { BOOSTER, DAILY, ERAS, EVENTS, RARITIES, RARITY_IDS, RARITY_RANK, SCORE, STOCKS, SUPER_BOOSTER, TYPES, stockOf } from './config.js';
+import {
+  ACHIEVEMENTS,
+  BOOSTER,
+  DAILY,
+  ERAS,
+  EVENTS,
+  GIFTS,
+  RARITIES,
+  RARITY_IDS,
+  RARITY_RANK,
+  SCORE,
+  STOCKS,
+  SUPER_BOOSTER,
+  TYPES,
+  gemPrice,
+  stockOf,
+} from './config.js';
 import {
   addDays,
   boosterOdds,
@@ -78,6 +94,9 @@ function oneOf(value, allowed, name) {
   return value;
 }
 
+/** What the market takes: Kira, or gems (the rare money, see GEMS in config.js). */
+const CURRENCIES = ['kira', 'gems'];
+
 const SORTS = {
   number: (a, b) => a.number - b.number,
   name: (a, b) => a.name.localeCompare(b.name),
@@ -118,6 +137,29 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       activeEvents().map((id) => [id, { cooldownSeconds: settings.events[id].hours * 3600, stackMax: settings.events[id].max }]),
     ),
   });
+  /** Gems price of something that costs `kira` Kira: settings.gems.kiraPerGem Kira make a gem. */
+  const gemsFor = (kira) => gemPrice(kira, settings.gems.kiraPerGem);
+  /** The market in gems: { kiraPerGem, prices: { setId: gems }, cardPrices: { rarity: gems } }. */
+  const gemMarket = () => ({
+    kiraPerGem: settings.gems.kiraPerGem,
+    prices: Object.fromEntries(Object.entries(settings.market.prices).map(([id, kira]) => [id, gemsFor(kira)])),
+    cardPrices: Object.fromEntries(Object.entries(settings.market.cardPrices).map(([rarity, kira]) => [rarity, gemsFor(kira)])),
+  });
+
+  // The achievements whose booster sets are in the catalog (ACHIEVEMENTS in config.js).
+  const achievements = ACHIEVEMENTS.map((achievement) => ({
+    ...achievement,
+    any: Boolean(achievement.any),
+    sets: achievement.sets.filter((id) => catalog.getSet(id)?.cards.length > 0),
+  })).filter((achievement) => achievement.sets.length > 0);
+  const achievementIds = achievements.map((achievement) => achievement.id);
+  /** Every card of a booster set is in `owned` (a Set of card ids). */
+  const completes = (setId, owned) => catalog.getSet(setId).cards.every((card) => owned.has(card.id));
+  const achieved = (achievement, owned) =>
+    achievement.any ? achievement.sets.some((id) => completes(id, owned)) : achievement.sets.every((id) => completes(id, owned));
+  /** The badges of a player: the ids of their achievements, in the order of ACHIEVEMENTS (unknown ones left out). */
+  const badgesOf = (ids = []) => achievementIds.filter((id) => ids.includes(id));
+
   const loginLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
   const opening = new Set(); // players whose booster is being saved (blocks double clicks)
   const claiming = new Set(); // players whose daily reward is being saved
@@ -201,19 +243,41 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   const isMainCard = (cardId) => !catalog.getCard(cardId)?.event;
 
   /**
-   * { kira, superBoosters, stocks: { era: { stock, nextIn }, 'all-stars': { … }, eventId: { … } } }: the
-   * player's Kira, the Super Boosters they won in the weekly ranking, and for each booster stock (the
+   * { kira, gems, superBoosters, stocks: { era: { stock, nextIn }, 'all-stars': { … }, eventId: { … } } }: the
+   * player's Kira and gems, the Super Boosters they won in the weekly ranking, and for each booster stock (the
    * events' on now too) the boosters they can open now and the seconds before the next one (0 when full).
    */
   async function walletOf(playerId) {
-    const [{ boostersFrom, starsFrom, kira, superBoosters }, eventsFrom] = await Promise.all([
+    const [{ boostersFrom, starsFrom, kira, gems, superBoosters }, eventsFrom] = await Promise.all([
       store.wallet(playerId),
       activeEvents().length ? store.eventStocks(playerId) : {},
     ]);
     const since = { ...eventsFrom, era: boostersFrom, 'all-stars': starsFrom };
     const now = Date.now();
     const stocks = Object.fromEntries(Object.entries(stockRules()).map(([id, rules]) => [id, boosterStock(since[id], now, rules)]));
-    return { kira, superBoosters, stocks };
+    return { kira, gems, superBoosters, stocks };
+  }
+
+  /**
+   * The player's achievements after unlocking the ones their collection (`entries`) completes now:
+   * `unlocked` = the ones already in the database ([{ id, gems, unlockedAt, seen }]). The new ones
+   * give their gems at once (the database pays each one once). Returns { achievements, gems: the new
+   * balance, or null when nothing was unlocked }.
+   */
+  async function unlockAchievements(playerId, entries, unlocked) {
+    const owned = new Set(entries.map((row) => row.cardId));
+    const done = new Set(unlocked.map((row) => row.id));
+    const fresh = achievements.filter((achievement) => !done.has(achievement.id) && achieved(achievement, owned));
+    if (!fresh.length) return { achievements: unlocked, gems: null };
+    const result = await store.unlockAchievements(playerId, fresh.map(({ id, gems }) => ({ id, gems })));
+    if (result.error) return { achievements: unlocked, gems: null };
+    return { achievements: await store.achievements(playerId), gems: result.gems };
+  }
+
+  /** The first gift of GIFTS the player has not claimed (`claimed`: a Set of ids): { id, gems }, or null. */
+  function nextGift(claimed) {
+    const [id, gift] = Object.entries(GIFTS).find(([giftId]) => !claimed.has(giftId)) ?? [];
+    return id ? { id, gems: gift.gems } : null;
   }
 
   /** The stocks of an admin: always full, they never wait for a booster. */
@@ -236,12 +300,17 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     stock >= count ? 0 : nextIn + (count - stock - 1) * rules.cooldownSeconds;
 
   async function profile(player) {
-    const [stats, { entries, summary }, { kira, superBoosters, stocks }, daily] = await Promise.all([
+    const [stats, { entries, summary }, wallet, daily, unlocked, claimedGifts] = await Promise.all([
       store.stats(player.id),
       collectionOf(player.id),
       walletOf(player.id),
       dailyOf(player.id),
+      store.achievements(player.id),
+      store.claimedGifts(player.id),
     ]);
+    const { kira, superBoosters, stocks } = wallet;
+    // A booster, a trade or the daily shop may have completed a booster set: its achievement is unlocked now.
+    const { achievements: done, gems } = await unlockAchievements(player.id, entries, unlocked);
     const cardsPulled = Object.values(stats.pullsByRarity).reduce((sum, n) => sum + n, 0);
     return {
       id: player.id,
@@ -254,6 +323,8 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       // Kira (the game's money, see settings.market) and the booster stocks: { era: { stock, nextIn }, 'all-stars': …,
       // and one per event on now } (an admin's are unlimited: { stock: max, nextIn: 0, unlimited: true }).
       kira,
+      // Gems, the rare money (see GEMS in config.js).
+      gems: gems ?? wallet.gems,
       stocks: player.isAdmin ? unlimitedStocks() : stocks,
       // Super Boosters won in the weekly ranking, not opened yet (an admin's are unlimited anyway).
       superBoosters,
@@ -261,20 +332,26 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       daily,
       // What the player won when the last week ended: { week, rank, points, superBoosters, kira }, or null.
       lastWeekly: lastWeeklyOf(player.id),
+      // The achievements unlocked (their badges show next to the name): [{ id, gems, unlockedAt, seen }];
+      // `seen`: the player saw the popup that celebrates it (POST …/achievements/seen).
+      achievements: done.filter((row) => achievementIds.includes(row.id)),
+      // A gift waiting to be claimed from its popup (POST …/gifts/:giftId): { id, gems }, or null.
+      gift: nextGift(claimedGifts),
     };
   }
 
-  /** What friends can see of a player (no e-mail, admin status, daily reward, Kira nor rewards). */
+  /** What friends can see of a player (no e-mail, admin status, daily reward, Kira, gems nor rewards). */
   async function publicProfile(player) {
-    const { email, isAdmin, daily, kira, superBoosters, lastWeekly, ...rest } = await profile(player);
-    return rest;
+    const { email, isAdmin, daily, kira, gems, gift, superBoosters, lastWeekly, achievements: done, ...rest } = await profile(player);
+    return { ...rest, achievements: done.map(({ id, unlockedAt }) => ({ id, unlockedAt })) };
   }
 
   /**
    * Ranking rows (score, cards…) for a list of players, best first. The score counts every card
    * (the events' too); the cards and the completion are the ones of the main collection.
+   * `badges`: Map(playerId → their achievement ids), shown next to their names.
    */
-  async function rank(players, collections, youId) {
+  async function rank(players, collections, youId, badges = new Map()) {
     const rows = await Promise.all(
       players.map(async (player) => {
         const entries = collections.get(player.id) ?? [];
@@ -284,6 +361,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
           id: player.id,
           name: player.name,
           you: player.id === youId,
+          badges: badgesOf(badges.get(player.id)),
           score: score.score,
           uniqueCards: main.uniqueCards,
           cardsPulled: score.cardsPulled,
@@ -306,18 +384,20 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   }
 
   async function friendsOf(player) {
-    const [collections, friends, { incoming, outgoing }] = await Promise.all([
+    const [collections, friends, { incoming, outgoing }, badges] = await Promise.all([
       store.allCollections(),
       store.friends(player.id),
       store.friendRequests(player.id),
+      store.allAchievements(),
     ]);
-    const ranked = await rank([player, ...friends], collections, player.id);
+    const ranked = await rank([player, ...friends], collections, player.id, badges);
     const byId = new Map(ranked.map((row) => [row.id, row]));
     return {
       friendCode: player.friendCode,
       scoring: SCORE,
       friends: friends.map((friend) => ({
         ...friend,
+        badges: byId.get(friend.id).badges,
         score: byId.get(friend.id).score,
         uniqueCards: byId.get(friend.id).uniqueCards,
         completion: byId.get(friend.id).completion,
@@ -407,6 +487,10 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     }),
     // { prices: { setId: Kira }, recycle: { rarity: Kira }, cardPrices: { rarity: Kira at the daily shop } }
     market: settings.market,
+    // The same market in gems: { kiraPerGem, prices: { setId: gems }, cardPrices: { rarity: gems } }.
+    gems: gemMarket(),
+    // [{ id, icon, sets, any, gems }]: complete the booster sets `sets` (one of them when `any`) to win `gems`.
+    achievements: achievements.map(({ id, icon, sets, any, gems }) => ({ id, icon, sets, any, gems })),
     // { rewards: [{ superBoosters, kira }, …] }: what the 1st, the 2nd… of the weekly ranking get.
     weekly: settings.weekly,
     // Points of a card by rarity (collection score and weekly ranking), and the share a duplicate is worth.
@@ -645,9 +729,35 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return reply(201, { booster: openedBooster(saved), player: await profile(player) });
   });
 
+  // ── Achievements & gifts ───────────────────────────────────────────────────
+  // The achievements unlock on their own (see profile); the page only tells which
+  // popups were seen. A gift is claimed once, from its popup.
+
+  /** Body: { ids } — the achievements whose popup the player saw. */
+  router.post('/api/players/:playerId/achievements/seen', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
+    if (!Array.isArray(body.ids) || body.ids.some((id) => !achievementIds.includes(id))) {
+      throw new HttpError(400, `"ids" must list achievements among: ${achievementIds.join(', ')}`);
+    }
+    await store.markAchievementsSeen(player.id, [...new Set(body.ids)]);
+    return { ok: true };
+  });
+
+  /** Claims a gift of GIFTS (once per player). Returns { gift: { id, gems }, gems: new balance, player }. */
+  router.post('/api/players/:playerId/gifts/:giftId', async ({ req, params }) => {
+    const player = await requireSelf(req, params.playerId);
+    const gift = Object.hasOwn(GIFTS, params.giftId) ? GIFTS[params.giftId] : null;
+    if (!gift) throw new HttpError(404, 'No such gift', null, 'gift_not_found');
+    const result = await store.claimGift(player.id, params.giftId, gift.gems);
+    if (result.error === 'claimed') throw new HttpError(409, 'This gift is already claimed', null, 'gift_claimed');
+    if (result.error) throw new HttpError(404, 'Player not found');
+    return reply(201, { gift: { id: params.giftId, gems: gift.gems }, gems: result.gems, player: await profile(player) });
+  });
+
   // ── Kira market ────────────────────────────────────────────────────────────
   // Duplicates are recycled into Kira by rarity (a player keeps one copy of each
   // card, and the copies promised in open trades); Kira buys boosters, opened at once.
+  // Gems buy them too (and the cards of the daily shop), at the price in gems (gemMarket).
 
   /** cardId → duplicates the player can recycle. */
   async function spareCopies(playerId) {
@@ -669,7 +779,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return shopCache.cards;
   }
 
-  /** Today's daily shop for a player: { day, nextIn, items: [{ cardId, rarity, price, bought }] }. */
+  /** Today's daily shop for a player: { day, nextIn, items: [{ cardId, rarity, price, gemPrice, bought }] }. */
   async function shopOf(playerId) {
     const { today, nextIn } = rewardDay();
     const bought = await store.shopPurchases(playerId, today);
@@ -680,41 +790,56 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
         cardId: card.id,
         rarity: card.rarity,
         price: settings.market.cardPrices[card.rarity],
+        gemPrice: gemsFor(settings.market.cardPrices[card.rarity]),
         bought: bought.has(card.id),
       })),
     };
   }
 
-  /** { kira, spare: { cardId: duplicates you can recycle }, shop: today's daily shop (see shopOf) } */
+  /** 409 price_changed: the price the player saw (`seen`) is not `price` anymore (an admin changed it). */
+  function checkPrice(seen, price, currency, what) {
+    if (seen === undefined || seen === price) return;
+    throw new HttpError(409, `The price of this ${what} changed: it is now ${price} ${currency === 'gems' ? 'gems' : 'Kira'}`, { price, currency }, 'price_changed');
+  }
+
+  const noGems = (price, gems) =>
+    new HttpError(409, `Not enough gems: it costs ${price}, you have ${gems}`, { price, gems }, 'not_enough_gems');
+
+  /** { kira, gems, spare: { cardId: duplicates you can recycle }, shop: today's daily shop (see shopOf) } */
   router.get('/api/players/:playerId/market', async ({ req, params }) => {
     const player = await requireSelf(req, params.playerId);
-    const [{ kira }, spare, shop] = await Promise.all([store.wallet(player.id), spareCopies(player.id), shopOf(player.id)]);
-    return { kira, spare, shop };
+    const [{ kira, gems }, spare, shop] = await Promise.all([store.wallet(player.id), spareCopies(player.id), shopOf(player.id)]);
+    return { kira, gems, spare, shop };
   });
 
   /**
-   * Body: { cardId, price? } — buys a card of today's daily shop (once per day and card).
-   * `price`: the price the player saw; if an admin changed it since → 409 price_changed.
-   * Returns { cardId, isNew, kira, shop, player }.
+   * Body: { cardId, currency?, price? } — buys a card of today's daily shop (once per day and card),
+   * with Kira (`currency` 'kira', by default) or gems ('gems').
+   * `price`: the price the player saw, in that currency; if an admin changed it since → 409 price_changed.
+   * Returns { cardId, isNew, kira, gems, shop, player }.
    */
   router.post('/api/players/:playerId/market/shop', async ({ req, params, body }) => {
     const player = await requireSelf(req, params.playerId);
+    const currency = oneOf(body.currency, CURRENCIES, 'currency') ?? 'kira';
     const { today } = rewardDay();
     const card = shopCards(today).find((item) => item.id === body.cardId);
     if (!card) throw new HttpError(409, "This card is not in today's shop", null, 'shop_changed');
-    const price = settings.market.cardPrices[card.rarity];
-    if (body.price !== undefined && body.price !== price) {
-      throw new HttpError(409, `The price of this card changed: it is now ${price} Kira`, { price }, 'price_changed');
-    }
-    // The database checks the Kira and the purchases of the day, in the same transaction as the purchase.
-    const result = await store.buyShopCard(player.id, today, card.id, price);
+    const kiraPrice = settings.market.cardPrices[card.rarity];
+    const price = currency === 'gems' ? gemsFor(kiraPrice) : kiraPrice;
+    checkPrice(body.price, price, currency, 'card');
+    // The database checks the Kira (or gems) and the purchases of the day, in the same transaction as the purchase.
+    const result =
+      currency === 'gems'
+        ? await store.buyShopCardWithGems(player.id, today, card.id, price)
+        : await store.buyShopCard(player.id, today, card.id, price);
     if (result.error === 'bought') throw new HttpError(409, 'You already bought this card today', null, 'already_bought');
     if (result.error === 'no_kira') {
       throw new HttpError(409, `Not enough Kira: this card costs ${price}, you have ${result.kira}`, { price, kira: result.kira }, 'not_enough_kira');
     }
+    if (result.error === 'no_gems') throw noGems(price, result.gems);
     if (result.error) throw new HttpError(404, 'Player not found');
     const [me, shop] = await Promise.all([profile(player), shopOf(player.id)]);
-    return reply(201, { cardId: card.id, isNew: result.isNew, kira: result.kira, shop, player: me });
+    return reply(201, { cardId: card.id, isNew: result.isNew, kira: me.kira, gems: me.gems, shop, player: me });
   });
 
   /** Body: { cards: [{ cardId, count }] } — the duplicates to recycle (all of them or none). */
@@ -743,27 +868,32 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   });
 
   /**
-   * Body: { setId, count?, price? } — buys `count` boosters (1 by default, up to BOOSTER.maxPerRequest)
-   * with Kira (settings.market.prices), opened at once.
-   * `price`: the price of one booster the player saw; if an admin changed it since → 409 price_changed.
+   * Body: { setId, count?, currency?, price? } — buys `count` boosters (1 by default, up to BOOSTER.maxPerRequest)
+   * with Kira (`currency` 'kira', by default: settings.market.prices) or gems ('gems': gemMarket().prices),
+   * opened at once. `price`: the price of one booster the player saw, in that currency; if an admin
+   * changed it since → 409 price_changed.
    */
   router.post('/api/players/:playerId/market/buy', async ({ req, params, body }) => {
     const player = await requireSelf(req, params.playerId);
     const set = catalog.getSet(oneOf(body.setId, setIds, 'setId') ?? 'all-stars');
     const count = intParam(body.count, { name: 'count', min: 1, max: BOOSTER.maxPerRequest, fallback: 1 });
-    const price = settings.market.prices[set.id];
-    if (body.price !== undefined && body.price !== price) {
-      throw new HttpError(409, `The price of this booster changed: it is now ${price} Kira`, { price }, 'price_changed');
-    }
+    const currency = oneOf(body.currency, CURRENCIES, 'currency') ?? 'kira';
+    const withGems = currency === 'gems';
+    const price = withGems ? gemsFor(settings.market.prices[set.id]) : settings.market.prices[set.id];
+    checkPrice(body.price, price, currency, 'booster');
     const total = price * count;
     const noKira = (kira) =>
       new HttpError(409, `Not enough Kira: ${count} booster(s) cost ${total}, you have ${kira}`, { price, total, kira }, 'not_enough_kira');
-    const { kira } = await store.wallet(player.id);
-    if (kira < total) throw noKira(kira);
-    // The database checks the Kira again, in the same transaction as the purchase.
+    const wallet = await store.wallet(player.id);
+    if (withGems && wallet.gems < total) throw noGems(total, wallet.gems);
+    if (!withGems && wallet.kira < total) throw noKira(wallet.kira);
+    // The database checks the Kira (or gems) again, in the same transaction as the purchase.
     const opened = Array.from({ length: count }, () => openBooster(set, { rng, rules: boosterRules() }));
-    const saved = await store.buyBoosters(player.id, set.id, opened, price);
+    const saved = withGems
+      ? await store.buyBoostersWithGems(player.id, set.id, opened, price)
+      : await store.buyBoosters(player.id, set.id, opened, price);
     if (saved.error === 'no_kira') throw noKira(saved.kira);
+    if (saved.error === 'no_gems') throw noGems(total, saved.gems);
     if (saved.error) throw new HttpError(404, 'Player not found');
     return reply(201, { boosters: saved.map(openedBooster), player: await profile(player) });
   });
@@ -794,7 +924,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return { settings, defaults, oddsTotal: ODDS_TOTAL };
   });
 
-  /** Body: the sections to change, each whole: { booster, superBooster, market, daily, weekly, events }. */
+  /** Body: the sections to change, each whole: { booster, superBooster, market, gems, daily, weekly, events }. */
   router.patch('/api/admin/settings', async ({ req, body }) => {
     const admin = await requireAdmin(req);
     const next = mergeSettings(settings, body, settingsContext());
@@ -806,11 +936,12 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   /** Every player with their numbers, for the list of the admin panel. */
   router.get('/api/admin/players', async ({ req }) => {
     await requireAdmin(req);
-    const [players, collectors, collections, daily] = await Promise.all([
+    const [players, collectors, collections, daily, badges] = await Promise.all([
       store.allPlayers(),
       store.collectors(),
       store.allCollections(),
       store.allDailyClaims(),
+      store.allAchievements(),
     ]);
     const boosters = new Map(collectors.map((row) => [row.id, row.boostersOpened]));
     const { today } = rewardDay();
@@ -821,6 +952,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
         const claims = daily.get(player.id);
         return {
           ...player,
+          badges: badgesOf(badges.get(player.id)),
           cards: entries.filter((row) => isMainCard(row.cardId)).length,
           copies: entries.reduce((sum, row) => sum + row.count, 0),
           boosters: boosters.get(player.id) ?? 0,
@@ -873,6 +1005,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
         setId: booster.setId,
         openedAt: booster.openedAt,
         kira: booster.kira ?? null,
+        gems: booster.gems ?? null,
         cards: booster.pulls.map((pull) => {
           const card = catalog.getCard(pull.cardId);
           return {
@@ -944,8 +1077,13 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
   /** Best collectors by score (points by rarity, see SCORE in config.js); the admins are left out. */
   router.get('/api/leaderboard', async ({ req, query }) => {
     const limit = intParam(query.get('limit'), { name: 'limit', min: 1, max: 100, fallback: 10 });
-    const [collectors, collections, you] = await Promise.all([store.collectors(), store.allCollections(), currentPlayer(req)]);
-    const ranked = await withoutAdmins(await rank(collectors, collections, you?.id));
+    const [collectors, collections, you, badges] = await Promise.all([
+      store.collectors(),
+      store.allCollections(),
+      currentPlayer(req),
+      store.allAchievements(),
+    ]);
+    const ranked = await withoutAdmins(await rank(collectors, collections, you?.id, badges));
     return { scoring: SCORE, players: ranked.slice(0, limit).map(({ id, ...row }) => row) };
   });
 
@@ -1006,11 +1144,10 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
    */
   router.get('/api/weekly', async ({ req }) => {
     await settleWeeks();
-    const you = await currentPlayer(req);
     const current = rewardWeek();
-    const ranking = await rankWeek(current.week);
+    const [you, ranking, badges] = await Promise.all([currentPlayer(req), rankWeek(current.week), store.allAchievements()]);
     const { rewards } = settings.weekly;
-    const shown = ({ playerId, ...row }) => ({ ...row, you: playerId === you?.id });
+    const shown = ({ playerId, ...row }) => ({ ...row, you: playerId === you?.id, badges: badgesOf(badges.get(playerId)) });
     const yours = ranking.find((row) => row.playerId === you?.id);
     return {
       ...current,
