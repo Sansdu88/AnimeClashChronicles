@@ -22,7 +22,7 @@ import { badgesHTML } from './achievements.js';
 
 let renderId = 0;
 
-const tile = (label, value, hint = '') => html`<div class="stat-tile">
+export const tile = (label, value, hint = '') => html`<div class="stat-tile">
   <span class="stat-tile__value">${value}</span>
   <span class="stat-tile__label">${label}</span>
   ${hint && html`<span class="stat-tile__hint">${hint}</span>`}
@@ -174,6 +174,9 @@ export async function renderStats(main) {
   const { player } = state;
   const stats = player.stats;
   const duplicates = stats.cardsPulled - stats.uniqueCards;
+  // A collection is reset once every cooldownDays at most: the button waits until nextAt.
+  const reset = player.collectionReset ?? { lastAt: null, nextAt: null, cooldownDays: 14 };
+  const resetLocked = Boolean(reset.nextAt) && new Date(reset.nextAt).getTime() > Date.now();
   const bestRarity = [...state.meta.rarities].reverse().find((r) => stats.pullsByRarity[r.id]);
 
   mount(
@@ -229,8 +232,11 @@ export async function renderStats(main) {
             <button class="btn btn--secondary" type="button" data-action="rename">${t('stats.rename')}</button>
             <button class="btn btn--secondary" type="button" data-action="password">${t('stats.changePassword')}</button>
             <button class="btn btn--ghost" type="button" data-action="logout">${t('stats.logout')}</button>
-            <button class="btn btn--danger" type="button" data-action="reset">${t('stats.reset')}</button>
+            <button class="btn btn--danger" type="button" data-action="reset" ${raw(resetLocked ? 'disabled aria-describedby="reset-rule"' : '')}>${t('stats.reset')}</button>
           </div>
+          <p class="muted reset-rule" id="reset-rule">${resetLocked
+            ? t('stats.resetLocked', { last: fmt.date(reset.lastAt), next: fmt.date(reset.nextAt) })
+            : t('stats.resetRule', { days: reset.cooldownDays })}</p>
         </section>
       </div>
     </section>`,
@@ -280,7 +286,7 @@ export async function renderStats(main) {
     } else if (action === 'reset') {
       const ok = await confirmDialog({
         title: t('stats.resetTitle'),
-        message: t('stats.resetText'),
+        message: t('stats.resetText', { days: reset.cooldownDays }),
         confirmLabel: t('stats.resetConfirm'),
         danger: true,
       });
@@ -291,6 +297,8 @@ export async function renderStats(main) {
         renderStats(main);
       } catch (err) {
         toast(errorText(err), 'error');
+        // Reset from another browser in the meantime: the button shows the next date.
+        if (err.code === 'reset_cooldown') renderStats(main);
       }
     }
   });

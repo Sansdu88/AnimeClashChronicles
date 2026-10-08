@@ -3275,3 +3275,176 @@
 .admin-gems__preview {
   margin-bottom: 4px;
 }
+
+/* ── Profile & showcase ─────────────────────────────────────────────────── */
+
+.profile-who {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.profile-who__avatar {
+  width: 72px;
+  height: 72px;
+  font-size: 40px;
+  box-shadow: var(--shadow-sm);
+}
+
+.profile-who .view-title {
+  overflow-wrap: anywhere;
+}
+
+.view-profile .stat-tiles {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.showcase-panel {
+  margin-bottom: 24px;
+}
+
+.showcase-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.showcase-panel__count {
+  padding: 2px 12px;
+  background: var(--ink);
+  color: var(--yellow);
+  border-radius: 99px;
+  font-weight: 900;
+}
+
+.showcase-panel .panel__title {
+  margin-bottom: 6px;
+}
+
+/* 10 slots: two rows of 5 on a computer. */
+.showcase {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 22px 18px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.showcase__slot {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.showcase__add {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 4px;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  padding: 10px;
+  background: var(--paper-2);
+  border: 3px dashed var(--muted);
+  border-radius: 12px;
+  color: var(--muted);
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.showcase__add:hover,
+.showcase__add:focus-visible {
+  background: #fff;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.showcase__plus {
+  font-family: var(--font-display);
+  font-size: 54px;
+  line-height: 1;
+}
+
+.showcase__tools {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.showcase__tool {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 2px 2px 0 var(--ink);
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.showcase__tool:hover:not(:disabled) {
+  background: var(--yellow);
+}
+
+.showcase__tool[data-action='remove']:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+.showcase__tool:disabled {
+  opacity: 0.3;
+  box-shadow: none;
+  cursor: default;
+}
+
+/* Saving: the tools wait. */
+.showcase-mount[aria-busy='true'] {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.showcase__empty {
+  margin: 8px 0 0;
+}
+
+.reset-rule {
+  margin: 12px 0 0;
+  font-size: 14px;
+}
+
+@media (max-width: 860px) {
+  .view-profile .stat-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .showcase {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .profile-who__avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 30px;
+  }
+
+  .showcase {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 14px;
+  }
+
+  /* Phones: one empty slot after the cards, not a column of them. */
+  .showcase__slot--empty ~ .showcase__slot--empty {
+    display: none;
+  }
+}
