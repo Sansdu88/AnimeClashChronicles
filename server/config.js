@@ -105,6 +105,15 @@ export const ACHIEVEMENTS = [
 ];
 
 /**
+ * The showcase of a profile: up to `size` cards the player chooses among the ones they own,
+ * shown on their profile and to their friends (public.players.showcase, 10 at most).
+ */
+export const SHOWCASE = { size: 10 };
+
+/** A player resets their own collection once every `cooldownDays` at most (function reset_own_collection). */
+export const COLLECTION_RESET = { cooldownDays: 14 };
+
+/**
  * The daily shop: 5 cards a day, the same for everyone (drawn from the day), that a
  * player can buy once each with Kira. `slots` give their rarities (`sundaySlots` on
  * Sundays: the last one is a UR), `prices` the Kira of a card by rarity (changed from

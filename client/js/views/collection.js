@@ -8,6 +8,7 @@ import { cardText, eraName, rarityName, t, tHtml, typeName } from '../i18n.js';
 import { byLocalName, byRarity, state } from '../state.js';
 import { cardHTML, lockedCardHTML } from '../components/card.js';
 import { openCardModal } from '../components/card-modal.js';
+import { mountShowcase } from '../components/showcase.js';
 import { PAGE_SIZES, onPageClick, pageCount, pageSize, paginationHTML } from '../components/pagination.js';
 import { toast } from '../ui/toast.js';
 import { EVENT_ICONS, eventCards } from '../events.js';
@@ -126,7 +127,7 @@ function visibleCards() {
     .sort(SORTS[filters.sort] ?? SORTS.number);
 }
 
-/** `player` / `owned` show a friend's collection instead of yours. */
+/** `player` / `owned` show a friend's collection instead of yours, with their showcase on top. */
 export function renderCollection(main, options) {
   const { player = state.player, owned: shown = state.owned } = options ?? {};
   const { meta } = state;
@@ -151,6 +152,11 @@ export function renderCollection(main, options) {
         </div>
         <div class="panel progress-panel">${progressHTML(event ? eventStats(event) : player.stats)}</div>
       </header>
+
+      ${friend && html`<section class="panel showcase-panel">
+        <h2 class="panel__title">✨ ${t('showcase.friendTitle', { name: player.name })}</h2>
+        <div class="showcase-mount"></div>
+      </section>`}
 
       ${books.length > 0 && booksHTML(player, books)}
 
@@ -223,6 +229,8 @@ export function renderCollection(main, options) {
       <div class="pager-slot" data-pager="bottom"></div>
     </section>`,
   );
+
+  if (friend) mountShowcase($('.showcase-mount', main), { cardIds: player.showcase ?? [], name: player.name });
 
   const grid = $('.card-grid', main);
   const count = $('.result-count', main);

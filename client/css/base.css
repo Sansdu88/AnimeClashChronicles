@@ -305,6 +305,11 @@ code {
   background: var(--paper-2);
 }
 
+/* The profile is on screen. */
+.player-chip.is-current {
+  background: var(--yellow);
+}
+
 .player-chip__name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1920,6 +1925,10 @@ body.has-sheet {
   background: var(--paper-2);
   border: 2px solid var(--ink);
   border-radius: 14px;
+}
+
+.sheet__player.is-current {
+  background: var(--yellow);
 }
 
 .sheet__avatar {

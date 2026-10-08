@@ -52,15 +52,16 @@ can take a minute.
 | **Opening** | Shake and tear the pack, then flip 5 face-down cards. Rare cards glow before you flip them, and SSR/UR reveals trigger manga effects (RUMBLE, BOOM!!), confetti and sounds (synthesized, can be muted; on an iPhone they play in silent mode too while the game's sound is on). A REV card gets its own moment: two heartbeats, then the whole screen turns negative for a few seconds under a giant **REVERSE**. |
 | **Cards** | Picture, type (Action, Mecha, Romance…), year, power level, and a one-sentence summary from Wikipedia. SSR, UR and REV are full-art cards with a holographic effect that follows your mouse; REV (Reversed) cards have inverted colors. |
 | **Collection** | A pokédex-style grid: missing cards show up as `???`. Filters, sorting, and completion per rarity, 50 or 100 cards per page with page numbers. Click a card for its full Wikipedia summary. |
-| **Friends** | Every player has a friend code (e.g. `#K7Q2XM`). Send friend requests by code or e-mail, accept or decline them, look at your friends' collections, and compete in the friends ranking. |
+| **Profile & showcase** | The 👤 button of the header (the **Profile** button of the **More** sheet on phones) opens your profile: your name (rename it there), badges, friend code and numbers, and your **showcase**: up to **10 favorite cards** you choose among yours, in the order you want (add a card in an empty slot, move it with the arrows, take it out with ✕; saved at once). Your friends see your showcase at the top of your page; a card a trade takes away leaves the showcase, and resetting your collection empties it. |
+| **Friends** | Every player has a friend code (e.g. `#K7Q2XM`). Send friend requests by code or e-mail, accept or decline them, look at your friends' collections and showcases, and compete in the friends ranking. |
 | **Trades** | Offer one copy of a card to a friend: they choose one of their cards to give back (or decline), then you accept the swap (or cancel it). Each player gives one copy: with ×5 you keep ×4, and trading your only copy removes the card from your collection. The picker shows which cards your friend is missing. |
 | **Stats** | Weekly ranking, luck meter (your pulls compared with the official odds), booster history, global leaderboard, and a button to replay the tutorial. |
 | **Tutorial** | A new player (no booster opened yet) gets a guided tour once, on the Open page: a spotlight goes from the booster stocks to the shelf and each page of the menu, with a speech bubble that explains the goal of the game, the free boosters, the daily reward, the Kira market and its daily shop, the collection, friends, trades, the weekly ranking and the rules (with the live numbers of the admin panel). Computers and phones have their own tour: on a phone it points at the tab bar and opens the **More** sheet. Skip it at any time (Escape works too); the arrow keys go from step to step. Seen once per player in each browser. |
-| **Accounts** | Sign up with an e-mail and a password, log in from any browser with your e-mail or your player name (names are unique), rename yourself, change your password, log out. Several people on the same network can play on one server (see `HOST` below). |
+| **Accounts** | Sign up with an e-mail and a password, log in from any browser with your e-mail or your player name (names are unique), rename yourself, change your password, log out. From the Stats page, a player can reset their own collection, **once every 14 days** at most (`COLLECTION_RESET`): until then the button shows the date of the next possible reset. Several people on the same network can play on one server (see `HOST` below). |
 | **Colorblind mode** | The 👁 button (off by default) switches rarities to colors that stay distinct with every kind of color blindness and adds card-game symbols: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR · ☆☆☆ REV. |
 | **Live drops** | A banner under the menu shows the latest drops of the players of the whole world in an endless carousel: the best card of each of the latest boosters, your friends' first, then the rarest, then the newest (at most 2 per player; yours and the admins' are left out). It stops when hovered, and a click shows the card. |
 | **Admin panel** | For the admins only (set from the database console, see [Admins](#admins)): the limited-time events (on or off for everyone, and the stock of their booster: one every N hours, M at most), the Kira price of each booster, of a card of the daily shop by rarity and the Kira of a recycled duplicate, **how many Kira make a gem** (with a preview of the prices in gems it gives), the rewards of the weekly ranking (Super Boosters and Kira for each of the 10 first), the daily reward (a Super Booster every N daily rewards, the boosters the players can choose, Super Booster event days for everyone), the rarity odds of the boosters and of the Super Booster. Every change applies at once. A list of all the players with a search bar, to give a player their daily reward back, give them a Super Booster for their next one, clear their data (cards, boosters, Kira, friends, trades, daily rewards; the account stays) or delete them. |
-| **Phones** | Below 760px wide, the game looks like an app: a slim bar at the top (logo, Kira and gems), the main pages as tabs at the bottom (Open, Daily, Market, Collection) and a **More** tab whose sheet holds the other pages (Achievements, Events, Forge, Friends, Trades, Stats, Rules, Admin) with their badges, and the settings (language, sound, colorblind mode, name, log out). The two booster stocks sit side by side, and the collection folds its filters behind a button (the search stays). |
+| **Phones** | Below 760px wide, the game looks like an app: a slim bar at the top (logo, Kira and gems), the main pages as tabs at the bottom (Open, Daily, Market, Collection) and a **More** tab whose sheet holds the other pages (Achievements, Events, Forge, Friends, Trades, Stats, Rules, Admin) with their badges, and the settings (language, sound, colorblind mode, profile, log out). The two booster stocks sit side by side, and the collection folds its filters behind a button (the search stays). |
 | **Languages** | An **EN / FR** switch in the header translates the whole interface, and French cards use their French Wikipedia title and text (*Goldorak*, *Ken le Survivant*, *Capitaine Albator*…). The first visit follows the browser's language. |
 
 ## Rarity: how it works
@@ -115,8 +116,8 @@ admin panel (saved in the table `game_settings`), and the game follows at once.
 │   ├── booster.js          booster opening logic, booster stock, daily reward day (pure functions)
 │   ├── settings.js         the game settings changed from the admin panel (checked, over the defaults)
 │   ├── catalog.js          builds the card catalog and booster sets (read from Supabase)
-│   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, daily rewards, Kira, gems, achievements, gifts, friends, trades
-│   └── config.js           rarities, drop rates, booster stocks, Kira market, gems, gifts, achievements, daily reward (defaults), types, eras
+│   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, daily rewards, Kira, gems, achievements, gifts, showcases, friends, trades
+│   └── config.js           rarities, drop rates, booster stocks, Kira market, gems, gifts, achievements, showcase, collection reset, daily reward (defaults), types, eras
 ├── client/                 web UI (HTML/CSS/JS modules, no build step)
 │   ├── index.html
 │   ├── css/                base, card, booster, views, events (the look of each event)
@@ -218,8 +219,9 @@ Players win gems with:
   reads a player's profile (after a booster, a trade, a purchase…); the database pays each one once (function
   `unlock_achievements`). They stay unlocked if cards leave the collection later.
 
-A player who resets their own collection keeps their gems and achievements; an admin who clears a player's data
-removes them too.
+A player who resets their own collection keeps their gems and achievements (they can do it once every 14 days, see
+`COLLECTION_RESET`: the database checks the date of the last reset, function `reset_own_collection`); an admin who
+clears a player's data removes them too.
 
 ## Score and rankings
 
@@ -274,7 +276,8 @@ with the token returned by register/login.
 | POST | `/api/auth/logout` | Log out (ends the session) |
 | GET | `/api/auth/me` | The logged-in player (`{ "player": null }` when logged out) |
 | POST | `/api/auth/password` | Change password. Body: `{ "currentPassword", "newPassword" }` |
-| GET | `/api/players/:playerId` | Profile and stats |
+| GET | `/api/players/:playerId` | Profile and stats. Includes `showcase` (the card ids of the showcase, in their order: the ones the player does not own anymore are left out) and `collectionReset` (`{ lastAt, nextAt, cooldownDays }`: the last time the player reset their collection, and when they can do it again, `null` = now) |
+| PATCH | `/api/players/:playerId/showcase` | Save the whole showcase. Body: `{ "cards": ["naruto", "one-piece"] }` (up to 10 different cards, in their order; `[]` empties it) → `{ showcase }`. Too many or twice the same → 400 `invalid_showcase`, a card you do not own → 409 `card_not_owned`. Friends see it in `player.showcase` of `…/friends/:friendId/collection` |
 | PATCH | `/api/players/:playerId` | Rename. Body: `{ "name": "…" }` (1–24 characters, no `@`; taken → 409 `name_taken`) |
 | POST | `/api/players/:playerId/boosters` | Open boosters from their stock. Body: `{ "setId": "all-stars", "count": 1 }` (`count` 1–10). The era boosters share a stock (+1 every 2 minutes), All-Stars has its own (+1 every 10 minutes), 10 at most each: not enough → 429 `booster_cooldown` with `details.retryIn` (seconds) and `details.stock`. `"setId": "super"` opens Super Boosters won in the weekly ranking (not enough → 409 `no_super_booster`). The booster of an event (`"setId": "halloween"`) comes from its own stock while the event is on (off → 409 `event_over`; admins can always open it). Profiles include `stocks` (`{ "era": { "stock", "nextIn" }, "all-stars": { … }, "halloween": { … } }` (the events on now), `nextIn` = seconds before the next one, 0 when full), `kira`, `gems`, `superBoosters`, `lastWeekly` (what you won when the last week ended, or `null`), `achievements` (`[{ id, gems, unlockedAt, seen }]`: reading a profile unlocks the achievements the collection completes and pays their gems) and `gift` (a gift waiting to be claimed, `{ id, gems }`, or `null`) |
 | GET | `/api/players/:playerId/boosters?limit=20` | Booster history, newest first (`kira`: the price of a booster bought at the market) |
@@ -287,7 +290,7 @@ with the token returned by register/login.
 | GET | `/api/players/:playerId/daily` | Today's daily reward: `{ today, available, claims, day, cycle, super, superReason, choices, nextIn }` (`day` of the cycle, `super` for a Super Booster because of `superReason`: `cycle`, `event` or `gift`, `choices` = the boosters offered, `nextIn` = seconds before the next day). Profiles include it as `daily` |
 | POST | `/api/players/:playerId/daily` | Claim today's daily reward, opened at once. Body: `{ "setId": "heisei" }` (ignored on Super Booster days, when `"super"` is accepted). Returns `{ booster, player }`. Already claimed → 409 `daily_claimed` with `details.nextIn` |
 | GET | `/api/players/:playerId/collection` | Owned cards (with copies, the events' too) and the completion of the main collection; `byEvent`: `{ "halloween": { owned, total } }` |
-| DELETE | `/api/players/:playerId/collection` | Reset the collection (and the Kira) |
+| DELETE | `/api/players/:playerId/collection` | Reset the collection (and the Kira and the showcase), once every 14 days at most: too soon → 429 `reset_cooldown` with `details.nextAt` |
 | GET | `/api/players/:playerId/friends` | Your friend code, friends, requests received/sent and the friends ranking |
 | POST | `/api/players/:playerId/friends` | Send a friend request. Body: `{ "code": "#K7Q2XM" }` (a friend code or an e-mail) |
 | POST | `/api/players/:playerId/friends/:friendId/accept` | Accept a friend request |

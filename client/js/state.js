@@ -334,11 +334,20 @@ export async function renamePlayer(name) {
   emit();
 }
 
+/** Once every player.collectionReset.cooldownDays at most (too soon: reset_cooldown). */
 export async function resetCollection() {
   const result = await api(playerPath('/collection'), { method: 'DELETE' });
   setPlayer(result.player);
   state.owned = new Map();
   emit();
+}
+
+/** Saves the whole showcase of your profile: up to 10 card ids you own, in their order. */
+export async function saveShowcase(cardIds) {
+  const { showcase } = await api(playerPath('/showcase'), { method: 'PATCH', body: { cards: cardIds } });
+  state.player.showcase = showcase;
+  emit();
+  return showcase;
 }
 
 export const fetchHistory = (limit = 12) => api(playerPath(`/boosters?limit=${limit}`));

@@ -572,9 +572,29 @@ export function createSupabaseStore({ url, secretKey }) {
       };
     },
 
-    /** Deletes the player's boosters, traded and recycled cards and Kira, and cancels their open trades (function reset_collection). */
-    async resetCollection(playerId) {
-      return request('POST', 'rpc/reset_collection', { body: { p_player_id: playerId } });
+    /**
+     * Deletes the player's boosters, traded and recycled cards, Kira and showcase, and cancels their open trades,
+     * unless they did it less than `every` seconds ago (function reset_own_collection). Returns { deletedBoosters },
+     * or { error: 'too_soon', nextAt } (the date it can be done again).
+     */
+    async resetCollection(playerId, every) {
+      return request('POST', 'rpc/reset_own_collection', { body: { p_player_id: playerId, p_every: every } });
+    },
+
+    /** When the player last reset their own collection (ISO), or null. */
+    async lastCollectionReset(playerId) {
+      const [row] = await get(`players?select=collection_reset_at&id=${eq(playerId)}`);
+      return row?.collection_reset_at ?? null;
+    },
+
+    /** The card ids of the player's showcase, in their order (the server checks them when they are saved). */
+    async showcase(playerId) {
+      const [row] = await get(`players?select=showcase&id=${eq(playerId)}`);
+      return row?.showcase ?? [];
+    },
+
+    async saveShowcase(playerId, cardIds) {
+      await request('PATCH', `players?id=${eq(playerId)}`, { body: { showcase: cardIds } });
     },
 
     /** Copies of one card the player owns (0 if none). */

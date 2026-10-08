@@ -1,11 +1,10 @@
 import { $, $$, html, mount, storage } from './dom.js';
 import { errorText, getLang, setLang, t, tHtml } from './i18n.js';
-import { loadCatalog, logout, markAchievementsSeen, renamePlayer, restoreSession, state, subscribe } from './state.js';
+import { loadCatalog, logout, markAchievementsSeen, restoreSession, state, subscribe } from './state.js';
 import { enableCardEffects } from './components/card.js';
 import { repaintDrops, startDrops, stopDrops } from './components/drops.js';
 import { openEventsPopup } from './components/events-popup.js';
 import { openGiftPopup } from './components/gift.js';
-import { formDialog } from './components/modal.js';
 import { shouldShowTutorial, startTutorial } from './components/tutorial.js';
 import { closeAllLayers, pushLayer } from './ui/layers.js';
 import { sfx } from './ui/sfx.js';
@@ -21,6 +20,7 @@ import { rollNumber } from './ui/kira.js';
 import { renderCollection } from './views/collection.js';
 import { badgesHTML, openAchievementPopup, renderAchievements } from './views/achievements.js';
 import { renderStats, rewardText } from './views/stats.js';
+import { renderProfile } from './views/profile.js';
 import { renderRules } from './views/rules.js';
 import { renderFriendCollection, renderFriends } from './views/friends.js';
 import { renderTrades } from './views/trades.js';
@@ -38,6 +38,8 @@ const ROUTES = {
   collection: renderCollection,
   achievements: renderAchievements,
   stats: renderStats,
+  // The 👤 button of the header: your name, numbers and showcase.
+  profile: renderProfile,
   rules: renderRules,
   // #/friends, or #/friends/<id> for a friend's collection
   friends: (main, friendId) => (friendId ? renderFriendCollection(main, friendId) : renderFriends(main)),
@@ -334,7 +336,7 @@ function updateHeader() {
 // other ones and the settings of the header (its buttons click the header's).
 
 const sheet = $('#more-sheet');
-const MORE_ROUTES = ['achievements', 'forge', 'friends', 'trades', 'stats', 'rules', 'admin'];
+const MORE_ROUTES = ['achievements', 'forge', 'friends', 'trades', 'stats', 'profile', 'rules', 'admin'];
 let removeSheetLayer = null;
 
 function openSheet() {
@@ -364,7 +366,7 @@ function setupSheet() {
     if (event.target.closest('[data-close-sheet], .sheet__links a')) closeSheet();
     const proxy = event.target.closest('[data-proxy]');
     if (!proxy) return;
-    // Renaming, the events and logging out leave the sheet; sound and colorblind mode keep it open.
+    // The profile, the events and logging out leave the sheet; sound and colorblind mode keep it open.
     if (['player-chip', 'events-button', 'logout'].includes(proxy.dataset.proxy)) closeSheet();
     $(`#${proxy.dataset.proxy}`).click();
   });
@@ -372,13 +374,8 @@ function setupSheet() {
 
 function setupHeader() {
   $('#gem-chip .gem-icon').innerHTML = GEM_SVG;
-  $('#player-chip').addEventListener('click', async () => {
-    const saved = await formDialog({
-      title: t('header.renameTitle'),
-      fields: [{ name: 'name', label: t('header.renameLabel'), value: state.player.name, maxLength: 24 }],
-      onSubmit: ({ name }) => renamePlayer(name),
-    });
-    if (saved) toast(t('header.welcome', { name: state.player.name }), 'success');
+  $('#player-chip').addEventListener('click', () => {
+    location.hash = '#/profile';
   });
 
   $('#colorblind-toggle').addEventListener('click', () => {
@@ -417,6 +414,7 @@ function render({ scroll = true } = {}) {
     if (link.dataset.route === name) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
+  for (const button of [$('#player-chip'), $('[data-proxy="player-chip"]')]) button.classList.toggle('is-current', name === 'profile');
   $('#nav-more').classList.toggle('is-current', MORE_ROUTES.includes(name));
   document.title = `${t(`titles.${name}`)} · Anime Clash Chronicles`;
   main.dataset.view = name;

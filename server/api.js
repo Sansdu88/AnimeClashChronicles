@@ -7,6 +7,7 @@
 import {
   ACHIEVEMENTS,
   BOOSTER,
+  COLLECTION_RESET,
   DAILY,
   ERAS,
   EVENTS,
@@ -15,6 +16,7 @@ import {
   RARITY_IDS,
   RARITY_RANK,
   SCORE,
+  SHOWCASE,
   STOCKS,
   SUPER_BOOSTER,
   TYPES,
@@ -300,13 +302,15 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     stock >= count ? 0 : nextIn + (count - stock - 1) * rules.cooldownSeconds;
 
   async function profile(player) {
-    const [stats, { entries, summary }, wallet, daily, unlocked, claimedGifts] = await Promise.all([
+    const [stats, { entries, summary }, wallet, daily, unlocked, claimedGifts, showcase, lastReset] = await Promise.all([
       store.stats(player.id),
       collectionOf(player.id),
       walletOf(player.id),
       dailyOf(player.id),
       store.achievements(player.id),
       store.claimedGifts(player.id),
+      store.showcase(player.id),
+      store.lastCollectionReset(player.id),
     ]);
     const { kira, superBoosters, stocks } = wallet;
     // A booster, a trade or the daily shop may have completed a booster set: its achievement is unlocked now.
@@ -337,12 +341,31 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
       achievements: done.filter((row) => achievementIds.includes(row.id)),
       // A gift waiting to be claimed from its popup (POST …/gifts/:giftId): { id, gems }, or null.
       gift: nextGift(claimedGifts),
+      // The cards of the showcase (PATCH …/showcase), in their order: the ones a trade took away are left out.
+      showcase: showcaseOf(showcase, entries),
+      // The last time the player reset their own collection, and when they can do it again (null: now).
+      collectionReset: collectionResetOf(lastReset),
     };
   }
 
-  /** What friends can see of a player (no e-mail, admin status, daily reward, Kira, gems nor rewards). */
+  /** The cards of a showcase still in the catalog and in the collection (`entries`). */
+  function showcaseOf(cardIds, entries) {
+    const owned = new Set(entries.map((row) => row.cardId));
+    return cardIds.filter((cardId) => owned.has(cardId) && catalog.getCard(cardId));
+  }
+
+  const RESET_COOLDOWN_SECONDS = COLLECTION_RESET.cooldownDays * 86_400;
+
+  /** { lastAt, nextAt, cooldownDays }: `nextAt` is null when the player can reset their collection now. */
+  function collectionResetOf(lastAt) {
+    const next = lastAt ? new Date(new Date(lastAt).getTime() + RESET_COOLDOWN_SECONDS * 1000) : null;
+    return { lastAt, nextAt: next && next > Date.now() ? next.toISOString() : null, cooldownDays: COLLECTION_RESET.cooldownDays };
+  }
+
+  /** What friends can see of a player (no e-mail, admin status, daily reward, Kira, gems, rewards nor resets). */
   async function publicProfile(player) {
-    const { email, isAdmin, daily, kira, gems, gift, superBoosters, lastWeekly, achievements: done, ...rest } = await profile(player);
+    const { email, isAdmin, daily, kira, gems, gift, superBoosters, lastWeekly, collectionReset, achievements: done, ...rest } =
+      await profile(player);
     return { ...rest, achievements: done.map(({ id, unlockedAt }) => ({ id, unlockedAt })) };
   }
 
@@ -1026,10 +1049,39 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return { ...summary, cards: entries };
   });
 
+  /** Once every COLLECTION_RESET.cooldownDays at most (the database checks it, in the same transaction as the reset). */
   router.delete('/api/players/:playerId/collection', async ({ req, params }) => {
     const player = await requireSelf(req, params.playerId);
-    const deletedBoosters = await store.resetCollection(player.id);
-    return { deletedBoosters, player: await profile(player) };
+    const result = await store.resetCollection(player.id, RESET_COOLDOWN_SECONDS);
+    if (result.error === 'too_soon') {
+      throw new HttpError(
+        429,
+        `You can reset your collection once every ${COLLECTION_RESET.cooldownDays} days: next time on ${result.nextAt}`,
+        { nextAt: result.nextAt },
+        'reset_cooldown',
+      );
+    }
+    if (result.error) throw new HttpError(404, 'Player not found');
+    return { deletedBoosters: result.deletedBoosters, player: await profile(player) };
+  });
+
+  /**
+   * Body: { cards: [cardId, …] } — the whole showcase, in its order: up to SHOWCASE.size different
+   * cards the player owns. Returns { showcase }.
+   */
+  router.patch('/api/players/:playerId/showcase', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
+    if (!Array.isArray(body.cards) || body.cards.length > SHOWCASE.size) {
+      throw new HttpError(400, `"cards" must be a list of at most ${SHOWCASE.size} card ids`, null, 'invalid_showcase');
+    }
+    const cards = body.cards.map(knownCard);
+    if (new Set(cards).size !== cards.length) throw new HttpError(400, 'A card can only be once in the showcase', null, 'invalid_showcase');
+    const entries = await store.collection(player.id);
+    const owned = new Set(entries.map((row) => row.cardId));
+    const missing = cards.find((cardId) => !owned.has(cardId));
+    if (missing) throw new HttpError(409, 'You do not own this card', { cardId: missing }, 'card_not_owned');
+    await store.saveShowcase(player.id, cards);
+    return { showcase: cards };
   });
 
   // ── Latest drops (the banner under the menu) ────────────────────────────────
