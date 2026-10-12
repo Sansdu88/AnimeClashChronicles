@@ -2,9 +2,10 @@
  * Game settings the admins change from the admin panel, saved in the database
  * (table game_settings, see supabase/migrations/): the booster odds, the Kira
  * prices and values (boosters and cards of the daily shop), the value of a gem, the
- * daily reward, the rewards of the weekly ranking and the events. Their defaults come from config.js.
+ * daily reward, the rewards of the weekly ranking, the events, the Forge and the Wheel of Fortune.
+ * Their defaults come from config.js.
  */
-import { BOOSTER, DAILY, EVENTS, GEMS, MARKET, RARITY_IDS, SHOP, SUPER_BOOSTER, WEEKLY, stockOf } from './config.js';
+import { BOOSTER, DAILY, EVENTS, FORGE, GEMS, MARKET, RARITY_IDS, SHOP, SUPER_BOOSTER, WEEKLY, WHEEL, stockOf } from './config.js';
 import { HttpError } from './http.js';
 
 /**
@@ -16,9 +17,13 @@ const MAX_KIRA = 100_000;
 const MAX_SUPER_EVERY = 60;
 const MAX_SUPER_BOOSTERS = 50;
 const MAX_EVENT_HOURS = 168; // the booster of an event: at least one a week
+const MAX_FORGE_CARDS = 20;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 /** The rarities sold at the daily shop. */
 const SHOP_RARITIES = Object.keys(SHOP.prices);
+/** The rarities the Forge melts (each into the next one). */
+const FORGE_RARITIES = Object.keys(FORGE.cards);
+const WHEEL_PRIZES = WHEEL.prizes.map((prize) => prize.id);
 
 /**
  * The defaults, for the booster sets of the shop:
@@ -27,7 +32,9 @@ const SHOP_RARITIES = Object.keys(SHOP.prices);
  *   gems: { kiraPerGem (the Kira a gem is worth: gems prices are the Kira prices divided by it) },
  *   daily: { superEvery, sets: [setId offered], superDays: ['YYYY-MM-DD' everyone gets a Super Booster] },
  *   weekly: { rewards: [{ superBoosters, kira }, …] (the 1st, the 2nd… of the weekly ranking) },
- *   events: { eventId: { enabled, hours, max } (on or off; its booster: one every `hours`, `max` at most) } }
+ *   events: { eventId: { enabled, hours, max } (on or off; its booster: one every `hours`, `max` at most) },
+ *   forge: { cards: { rarity: duplicates a recipe takes }, gems: { rarity: gems for a missing card (0: none) } },
+ *   wheel: { price (Kira of a spin), weights: { prizeId: chance, in ODDS_TOTAL } } }
  */
 export function defaultSettings(shopSets) {
   const weights = (rules) => ({ slotWeights: toOddsTotal(rules.slotWeights), rareSlotWeights: toOddsTotal(rules.rareSlotWeights) });
@@ -44,6 +51,8 @@ export function defaultSettings(shopSets) {
     weekly: { rewards: WEEKLY.rewards.map((reward) => ({ ...reward })) },
     // Every event is off until an admin turns it on.
     events: Object.fromEntries(Object.entries(EVENTS).map(([id, { hours, max }]) => [id, { enabled: false, hours, max }])),
+    forge: { cards: { ...FORGE.cards }, gems: { ...FORGE.gems } },
+    wheel: { price: WHEEL.price, weights: toOddsTotal(Object.fromEntries(WHEEL.prizes.map((prize) => [prize.id, prize.weight]))) },
   };
 }
 
@@ -111,8 +120,35 @@ function cleanEvents(value) {
   );
 }
 
+/** The Forge: { cards: { rarity: 1–20 duplicates }, gems: { rarity: gems for a missing card, 0 = gems cannot } }. */
+function cleanForge(value) {
+  return {
+    cards: Object.fromEntries(
+      FORGE_RARITIES.map((id) => {
+        if (!isInt(value?.cards?.[id], 1, MAX_FORGE_CARDS)) throw invalid(`forge.cards.${id} must be an integer from 1 to ${MAX_FORGE_CARDS}`);
+        return [id, value.cards[id]];
+      }),
+    ),
+    gems: cleanAmounts(value?.gems, FORGE_RARITIES, 'forge.gems'),
+  };
+}
+
+/** The Wheel of Fortune: { price: Kira of a spin, weights: { prizeId: chance } adding up to ODDS_TOTAL }. */
+function cleanWheel(value) {
+  if (!isInt(value?.price, 1, MAX_KIRA)) throw invalid(`wheel.price must be an integer from 1 to ${MAX_KIRA}`);
+  const weights = Object.fromEntries(
+    WHEEL_PRIZES.map((id) => {
+      if (!isInt(value?.weights?.[id], 0, ODDS_TOTAL)) throw invalid(`wheel.weights.${id} must be an integer from 0 to ${ODDS_TOTAL}`);
+      return [id, value.weights[id]];
+    }),
+  );
+  const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+  if (total !== ODDS_TOTAL) throw invalid(`The chances of the wheel add up to ${(total * 100) / ODDS_TOTAL}%, not 100%`);
+  return { price: value.price, weights };
+}
+
 /**
- * `current` with the sections of `patch` ({ booster, superBooster, market, gems, daily, weekly, events },
+ * `current` with the sections of `patch` ({ booster, superBooster, market, gems, daily, weekly, events, forge, wheel },
  * each given whole) checked and changed. `setIds`: the shop sets; `today`: past event days are dropped.
  * Throws a 400 (invalid_settings) on a wrong value.
  */
@@ -140,6 +176,8 @@ export function mergeSettings(current, patch, { setIds, today }) {
   }
   if (patch.weekly !== undefined) next.weekly = { rewards: cleanRewards(patch.weekly?.rewards) };
   if (patch.events !== undefined) next.events = cleanEvents(patch.events);
+  if (patch.forge !== undefined) next.forge = cleanForge(patch.forge);
+  if (patch.wheel !== undefined) next.wheel = cleanWheel(patch.wheel);
   if (patch.daily !== undefined) {
     const { superEvery, sets, superDays } = patch.daily ?? {};
     if (!isInt(superEvery, 1, MAX_SUPER_EVERY)) throw invalid(`daily.superEvery must be an integer from 1 to ${MAX_SUPER_EVERY}`);
@@ -182,6 +220,11 @@ export function loadSettings(saved, defaults, context, log = console) {
     } else if (key === 'events') {
       // An event added since is off.
       section = Object.fromEntries(Object.entries(defaults.events).map(([id, event]) => [id, { ...event, ...value[id] }]));
+    } else if (key === 'forge') {
+      section = { cards: { ...defaults.forge.cards, ...value.cards }, gems: { ...defaults.forge.gems, ...value.gems } };
+    } else if (key === 'wheel') {
+      // A prize added since is never won until an admin gives it a chance (the others still add up to 100%).
+      section = { price: value.price, weights: Object.fromEntries(WHEEL_PRIZES.map((id) => [id, value.weights?.[id] ?? 0])) };
     }
     try {
       settings = mergeSettings(settings, { [key]: section }, context);

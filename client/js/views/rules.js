@@ -1,6 +1,7 @@
 /**
  * "Rules" page: how boosters and rarities work, the events on now, the daily reward, the
- * Kira market and its daily shop, the weekly ranking, types and credits.
+ * Kira market and its daily shop, gems, the Forge, the Wheel of Fortune, the weekly ranking,
+ * types and credits.
  */
 import { fmt, html, mount, raw } from '../dom.js';
 import { rarityName, setName, setTagline, t, tHtml, typeName } from '../i18n.js';
@@ -9,6 +10,7 @@ import { EVENT_ICONS, activeEvents, eventCards } from '../events.js';
 import { gemsHTML } from '../ui/gems.js';
 import { kiraHTML } from '../ui/kira.js';
 import { rewardText } from './stats.js';
+import { prizeName } from './wheel.js';
 
 /** An event on now: its booster, its stock and the rarities of its cards. */
 function eventRulesHTML(event) {
@@ -165,6 +167,25 @@ export function renderRules(main) {
           ${rarities.filter((r) => r.id in meta.gems.cardPrices).map((r) => html`<li class="r-${r.id}" title="${rarityName(r.id)}">
             <span class="rarity-badge">${r.id}</span> ${gemsHTML(meta.gems.cardPrices[r.id])}
           </li>`)}
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel__title">⚒️ ${t('rules.forgeTitle')}</h2>
+        <p>${raw(tHtml('rules.forge'))}</p>
+        <ul class="rules-recipes">
+          ${meta.forge.recipes.map((recipe) => html`<li>
+            <b>${recipe.cards}× <span class="rarity-badge r-${recipe.rarity}">${recipe.rarity}</span> → 1× <span class="rarity-badge r-${recipe.to}">${recipe.to}</span></b>
+            ${recipe.gems > 0 && html`<span class="muted">${t('rules.forgeGems', { count: recipe.gems })}</span>`}
+          </li>`)}
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel__title">🎡 ${t('rules.wheelTitle')}</h2>
+        <p>${raw(tHtml('rules.wheel', { price: fmt.number(meta.wheel.price), gems: fmt.number(meta.wheel.gemPrice) }))}</p>
+        <ul class="rates__list">
+          ${meta.wheel.prizes.filter((prize) => prize.chance > 0).map((prize) => html`<li>${prizeName(prize)} <b>${fmt.percent(prize.chance, 0, 3)}</b></li>`)}
         </ul>
       </section>
 

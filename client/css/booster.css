@@ -392,6 +392,11 @@
   width: 100%;
 }
 
+/* A single card (forged at the Forge, won at the Wheel of Fortune). */
+.reveal--one .reveal__row {
+  grid-template-columns: minmax(0, 260px);
+}
+
 .flip {
   position: relative;
   aspect-ratio: 5 / 7;

@@ -41,10 +41,11 @@ can take a minute.
 |---|---|
 | **Boosters** | 4 boosters: *All-Stars* (every card) and one per Japanese era: *Shōwa* (before 1989), *Heisei* (1989–2018), *Reiwa* (2019+). Two stocks fill up on their own: the era boosters share one (+1 every 2 minutes) and All-Stars has its own, slower one (+1 every 10 minutes), up to 10 boosters each. Open them one by one, or several in a row with their own show (the packs burst one after the other, then all the cards flip in a cascade). A full stock of 10 gets the **×10 show**: a booster display (like the display boxes of the Pokémon card game) whose seal breaks in 3 taps or with the Skip button, with manga cut-ins of the favorite anime of that booster (Dragon Ball and Akira for Shōwa, One Piece and Naruto for Heisei, Demon Slayer and Jujutsu Kaisen for Reiwa, Pokémon and Sailor Moon for All-Stars…), a different theme per booster and a confetti storm. The server keeps the stocks; the page shows them with a countdown. An empty stock offers to buy a booster with Kira. |
 | **Kira market** | Kira (✦) is the money of the game (in Japan, *kira* cards are the shiny ones). Recycle your duplicates for Kira by rarity: you always keep one copy of each card, and the copies promised in open trades. One card at a time or all the duplicates of the rarities you tick; each recycled copy bursts into sparkles that fly to your wallet. Kira buys boosters, opened at once: one, up to 10 in a row, or as many as your Kira pays for (Max); an era booster costs less than All-Stars. Your Kira is in the header. |
-| **Gems** | **Gems (💎)** are the rare money of the game (see [Gems & achievements](#gems--achievements)). Kira cannot buy them: players win them with the **achievements** and the **gifts**, so each one is worth a lot (**1 💎 = 50 ✦** by default, set from the admin panel). At the market they buy the same boosters and daily shop cards as Kira, at the Kira price divided by that value, rounded up (an era booster costs 1 💎, All-Stars 3 💎, a UR of the daily shop 30 💎). The gems show next to the Kira in the header, with their own wallet at the market. |
+| **Gems** | **Gems (💎)** are the rare money of the game (see [Gems & achievements](#gems--achievements)). Kira cannot buy them: players win them with the **achievements** and the **gifts**, so each one is worth a lot (**1 💎 = 50 ✦** by default, set from the admin panel). At the market they buy the same boosters and daily shop cards as Kira, at the Kira price divided by that value, rounded up (an era booster costs 1 💎, All-Stars 3 💎, a UR of the daily shop 30 💎); they also pay for the missing cards of the **Forge** and for spins of the **Wheel of Fortune**. The gems show next to the Kira in the header, with their own wallet at the market. |
 | **Gift** | At their next visit every player gets a popup with a **gift of 50 gems**, which explains what gems are, what they buy and how to win more. Claimed once (closed without claiming, it comes back at the next visit); the gems fly to the wallet of the header. |
 | **Achievements** | A page of its own (**Achievements**): collect every card of a booster to unlock an achievement, worth **200 gems** and a **badge** next to your name (in the header, the rankings, the friends list and the admin panel). 5 for now: the first booster completed (Shōwa, Heisei, Reiwa or Halloween), then one for each of them (All-Stars, which holds every card, is not one of them). The page shows how close you are; a new achievement gets a popup with confetti once the booster stage is closed. They stay unlocked even if cards leave the collection later. |
-| **Forge** | A new page, announced for a future update (nothing to do there yet). |
+| **Forge** | Melt **5 duplicates of one rarity into a random card of the next one** (N → R → SR → SSR → UR → REV), from the booster of your choice (All-Stars, Shōwa, Heisei or Reiwa: handy to complete one). Put copies on the anvil one by one or fill it at once with the cards you have the most copies of; **gems pay for the missing ones** (1 💎 a missing N, 2 an R, 5 an SR, 12 an SSR, 30 a UR, by default). Only true duplicates can be melted: you always keep one copy of each card, and the copies promised in open trades. The hammer strikes three times, then the forged card is flipped on the booster stage. See [The Forge & the Wheel of Fortune](#the-forge--the-wheel-of-fortune). |
+| **Wheel of Fortune** | A page of its own (**Wheel**): a spin costs **1,000 Kira** (or its price in gems, 20 💎 by default) and wins **5 or 10 All-Stars boosters** (opened at once, 10 with the ×10 show), **1 or 3 Super Boosters** (opened at once from the shelf) or a random **SSR, UR or REV card**. Each slice of the wheel is as wide as its chance, listed next to it. The server draws the prize while the wheel spins up, then the wheel slows down until its slice stops under the pointer. |
 | **Daily shop** | At the market, 5 cards picked for everyone, new ones every day at midnight (Paris time): 3 R, 1 SR and 1 SSR, and on Sundays a **UR** instead of the SSR. Buy one copy of each with Kira (R 100 ✦, SR 250 ✦, SSR 600 ✦, UR 1,500 ✦ by default) or gems; the money flies from the wallet to the card. |
 | **Weekly ranking** | On the Stats page: from Monday to Sunday, every card you pull earns points (a new card is worth the points of its rarity, a duplicate 10%). On Sunday at midnight the best players get their reward: 5 Super Boosters for the 1st, 3 for the 2nd, 1 for the 3rd, Kira from the 4th to the 10th (by default). The Super Boosters wait on the player's shelf; the ranking starts again from zero. The weeks are ended by the server (when it starts, every minute and when the ranking is shown), each one only once. |
 | **Daily reward** | Once a day, a **free booster of your choice** (one of the 4), opened at once: it does not use the stock. Every 5th daily reward is a **Super Booster**, a booster of every card with much better odds (see below), with its own entrance: it drops in a rainbow halo, charges up and blows. The first visit of the day opens a popup to claim it, then the **Daily** page (a 5-day stamp card with a countdown to the next day) and a badge on its link remind you. Missing a day loses nothing: it is your 5th reward that is the Super Booster, not your 5th day in a row. The day changes at midnight, Paris time (`DAILY.timeZone`). |
@@ -60,8 +61,8 @@ can take a minute.
 | **Accounts** | Sign up with an e-mail and a password, log in from any browser with your e-mail or your player name (names are unique), rename yourself, change your password, log out. From the Stats page, a player can reset their own collection, **once every 14 days** at most (`COLLECTION_RESET`): until then the button shows the date of the next possible reset. Several people on the same network can play on one server (see `HOST` below). |
 | **Colorblind mode** | The 👁 button (off by default) switches rarities to colors that stay distinct with every kind of color blindness and adds card-game symbols: ● N · ◆ R · ★ SR · ★★ SSR · ★★★ UR · ☆☆☆ REV. |
 | **Live drops** | A banner under the menu shows the latest drops of the players of the whole world in an endless carousel: the best card of each of the latest boosters, your friends' first, then the rarest, then the newest (at most 2 per player; yours and the admins' are left out). It stops when hovered, and a click shows the card. |
-| **Admin panel** | For the admins only (set from the database console, see [Admins](#admins)): the limited-time events (on or off for everyone, and the stock of their booster: one every N hours, M at most), the Kira price of each booster, of a card of the daily shop by rarity and the Kira of a recycled duplicate, **how many Kira make a gem** (with a preview of the prices in gems it gives), the rewards of the weekly ranking (Super Boosters and Kira for each of the 10 first), the daily reward (a Super Booster every N daily rewards, the boosters the players can choose, Super Booster event days for everyone), the rarity odds of the boosters and of the Super Booster. Every change applies at once. A list of all the players with a search bar, to give a player their daily reward back, give them a Super Booster for their next one, clear their data (cards, boosters, Kira, friends, trades, daily rewards; the account stays) or delete them. |
-| **Phones** | Below 760px wide, the game looks like an app: a slim bar at the top (logo, Kira and gems), the main pages as tabs at the bottom (Open, Daily, Market, Collection) and a **More** tab whose sheet holds the other pages (Achievements, Events, Forge, Friends, Trades, Stats, Rules, Admin) with their badges, and the settings (language, sound, colorblind mode, profile, log out). The two booster stocks sit side by side, and the collection folds its filters behind a button (the search stays). |
+| **Admin panel** | For the admins only (set from the database console, see [Admins](#admins)): the limited-time events (on or off for everyone, and the stock of their booster: one every N hours, M at most), the Kira price of each booster, of a card of the daily shop by rarity and the Kira of a recycled duplicate, **how many Kira make a gem** (with a preview of the prices in gems it gives), the rewards of the weekly ranking (Super Boosters and Kira for each of the 10 first), the daily reward (a Super Booster every N daily rewards, the boosters the players can choose, Super Booster event days for everyone), the rarity odds of the boosters and of the Super Booster, the recipes of the Forge (the duplicates each one melts, the gems for a missing one) and the Wheel of Fortune (the price of a spin, the chance of each prize). Every change applies at once. A list of all the players with a search bar, to give a player their daily reward back, give them a Super Booster for their next one, clear their data (cards, boosters, Kira, friends, trades, daily rewards; the account stays) or delete them. |
+| **Phones** | Below 760px wide, the game looks like an app: a slim bar at the top (logo, Kira and gems), the main pages as tabs at the bottom (Open, Daily, Market, Collection) and a **More** tab whose sheet holds the other pages (Achievements, Events, Forge, Wheel, Friends, Trades, Stats, Rules, Admin) with their badges, and the settings (language, sound, colorblind mode, profile, log out). The two booster stocks sit side by side, and the collection folds its filters behind a button (the search stays). |
 | **Languages** | An **EN / FR** switch in the header translates the whole interface, and French cards use their French Wikipedia title and text (*Goldorak*, *Ken le Survivant*, *Capitaine Albator*…). The first visit follows the browser's language. |
 
 ## Rarity: how it works
@@ -100,8 +101,8 @@ rarest: full-art cards with inverted colors, about 30 of them in the whole catal
   | R | 50% | — | guaranteed |
 
 The rules live in [server/config.js](server/config.js) (`BOOSTER`, `DAILY`, `SUPER_BOOSTER`): these are the
-defaults. The admins change the odds, the Kira prices and values, the value of a gem and the daily reward from the
-admin panel (saved in the table `game_settings`), and the game follows at once.
+defaults. The admins change the odds, the Kira prices and values, the value of a gem, the daily reward, the Forge and
+the Wheel of Fortune from the admin panel (saved in the table `game_settings`), and the game follows at once.
 
 ## Project structure
 
@@ -116,8 +117,8 @@ admin panel (saved in the table `game_settings`), and the game follows at once.
 │   ├── booster.js          booster opening logic, booster stock, daily reward day (pure functions)
 │   ├── settings.js         the game settings changed from the admin panel (checked, over the defaults)
 │   ├── catalog.js          builds the card catalog and booster sets (read from Supabase)
-│   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, daily rewards, Kira, gems, achievements, gifts, showcases, friends, trades
-│   └── config.js           rarities, drop rates, booster stocks, Kira market, gems, gifts, achievements, showcase, collection reset, daily reward (defaults), types, eras
+│   ├── supabase-store.js   database access (Supabase REST API): cards, accounts, sessions, boosters, daily rewards, Kira, gems, achievements, gifts, showcases, forges, spins of the wheel, friends, trades
+│   └── config.js           rarities, drop rates, booster stocks, Kira market, gems, Forge, Wheel of Fortune, gifts, achievements, showcase, collection reset, daily reward (defaults), types, eras
 ├── client/                 web UI (HTML/CSS/JS modules, no build step)
 │   ├── index.html
 │   ├── css/                base, card, booster, views, events (the look of each event)
@@ -139,7 +140,8 @@ admin panel (saved in the table `game_settings`), and the game follows at once.
 Everything is stored in a **Supabase** (PostgreSQL) database: the card catalog (`cards`,
 `booster_sets`, `catalog_info`; the cards and boosters of the events have their `event` column set) and the
 players (with their Kira and gems), sessions, boosters, daily rewards, the stocks of the events' boosters (`event_stocks`),
-the achievements unlocked (`player_achievements`), the gifts claimed (`player_gifts`), friends and trades.
+the achievements unlocked (`player_achievements`), the gifts claimed (`player_gifts`), the forges (`forges`), the spins of the
+Wheel of Fortune (`wheel_spins`), friends and trades.
 The database is described by the SQL files of [supabase/migrations/](supabase/migrations/): the
 tables first, then the card catalog. The project is linked to Supabase with the **GitHub
 integration**, which applies new migrations when they are pushed on `main`. Without it, paste the
@@ -219,9 +221,47 @@ Players win gems with:
   reads a player's profile (after a booster, a trade, a purchase…); the database pays each one once (function
   `unlock_achievements`). They stay unlocked if cards leave the collection later.
 
+Gems also pay for the missing duplicates of the [Forge](#the-forge--the-wheel-of-fortune) and for spins of the Wheel of Fortune.
+
 A player who resets their own collection keeps their gems and achievements (they can do it once every 14 days, see
 `COLLECTION_RESET`: the database checks the date of the last reset, function `reset_own_collection`); an admin who
 clears a player's data removes them too.
+
+## The Forge & the Wheel of Fortune
+
+**The Forge** melts duplicates of one rarity into a random card of the next rarity, from the booster the player
+chooses (a card of the main collection: All-Stars, or the era boosters to complete one). The defaults (`FORGE` in
+[server/config.js](server/config.js)):
+
+| Recipe | N → R | R → SR | SR → SSR | SSR → UR | UR → REV |
+|---|---|---|---|---|---|
+| Duplicates melted | 5 | 5 | 5 | 5 | 5 |
+| Gems for a missing one | 1 | 2 | 5 | 12 | 30 |
+
+Only duplicates can be melted, as at the market: a player keeps one copy of each card, and the copies promised in open
+trades. Gems stand in for the missing duplicates (an admin can set it to 0: then the recipe needs all its cards), so
+a recipe can be paid with gems only. The database melts the copies, adds the card and takes the gems in one transaction
+(function `forge_card`), and checks the duplicates and the gems again. A forge is a row of `forges`; its cards are card
+moves (`card_moves.forge_id`).
+
+**The Wheel of Fortune**: a spin costs **1,000 Kira** (`WHEEL.price`), or its price in gems (the Kira price divided by
+the value of a gem, rounded up: 20 💎 by default). Its prizes, each a slice of the wheel as wide as its chance:
+
+| Prize | Chance |
+|---|---|
+| 5 All-Stars boosters, opened at once | 30% |
+| A random SSR card | 22% |
+| 1 Super Booster (on the shelf, opened at once) | 14% |
+| 10 All-Stars boosters, opened at once (×10 show) | 18% |
+| A random UR card | 9% |
+| 3 Super Boosters | 4% |
+| A random REV card | 3% |
+
+The server draws the prize and opens its boosters; the database takes the Kira (or gems) and gives the prize in one
+transaction (function `spin_wheel`). A spin is a row of `wheel_spins`; the boosters it gave have `boosters.spin_id`
+(the booster history shows 🎡 next to them), the card a card move (`card_moves.spin_id`). The admins change the price
+and the chances (each to 0.001%, adding up to 100%) from the admin panel. A player who resets their collection loses
+their forges and spins with it.
 
 ## Score and rankings
 
@@ -267,7 +307,7 @@ with the token returned by register/login.
 | Method | Route | Description |
 |---|---|---|
 | GET | `/api/health` | Server status |
-| GET | `/api/meta` | Rarities (with odds), types, eras, booster sets, the booster stocks (`stocks`, the events' on now too), the events (`events: [{ id, active, hours, max, set }]`), the Kira market (`market`), the same market in gems (`gems: { kiraPerGem, prices: { setId: gems }, cardPrices: { rarity: gems } }`) and the achievements (`achievements: [{ id, icon, sets, any, gems }]`: complete the booster sets `sets`, one of them when `any`) |
+| GET | `/api/meta` | Rarities (with odds), types, eras, booster sets, the booster stocks (`stocks`, the events' on now too), the events (`events: [{ id, active, hours, max, set }]`), the Kira market (`market`), the same market in gems (`gems: { kiraPerGem, prices: { setId: gems }, cardPrices: { rarity: gems } }`), the achievements (`achievements: [{ id, icon, sets, any, gems }]`: complete the booster sets `sets`, one of them when `any`), the Forge (`forge: { recipes: [{ rarity, to, cards, gems }] }`: `cards` duplicates of `rarity`, `gems` for a missing one, make a card of `to`) and the Wheel of Fortune (`wheel: { price, gemPrice, prizes: [{ id, type, setId?, count?, rarity?, chance }] }`, `type`: `boosters`, `super` or `card`) |
 | GET | `/api/cards` | All the cards of the main collection. Filters: `rarity`, `type`, `era`, `set`, `q` (search), `sort` (`number`, `rarity`, `name`, `year`, `power`). The cards of an event: `set=<its booster>`, e.g. `?set=halloween` (they have `"event": "halloween"`) |
 | GET | `/api/cards/:cardId` | One card |
 | GET | `/api/sets` · `/api/sets/:setId` | Booster sets (with their cards) |
@@ -280,11 +320,13 @@ with the token returned by register/login.
 | PATCH | `/api/players/:playerId/showcase` | Save the whole showcase. Body: `{ "cards": ["naruto", "one-piece"] }` (up to 10 different cards, in their order; `[]` empties it) → `{ showcase }`. Too many or twice the same → 400 `invalid_showcase`, a card you do not own → 409 `card_not_owned`. Friends see it in `player.showcase` of `…/friends/:friendId/collection` |
 | PATCH | `/api/players/:playerId` | Rename. Body: `{ "name": "…" }` (1–24 characters, no `@`; taken → 409 `name_taken`) |
 | POST | `/api/players/:playerId/boosters` | Open boosters from their stock. Body: `{ "setId": "all-stars", "count": 1 }` (`count` 1–10). The era boosters share a stock (+1 every 2 minutes), All-Stars has its own (+1 every 10 minutes), 10 at most each: not enough → 429 `booster_cooldown` with `details.retryIn` (seconds) and `details.stock`. `"setId": "super"` opens Super Boosters won in the weekly ranking (not enough → 409 `no_super_booster`). The booster of an event (`"setId": "halloween"`) comes from its own stock while the event is on (off → 409 `event_over`; admins can always open it). Profiles include `stocks` (`{ "era": { "stock", "nextIn" }, "all-stars": { … }, "halloween": { … } }` (the events on now), `nextIn` = seconds before the next one, 0 when full), `kira`, `gems`, `superBoosters`, `lastWeekly` (what you won when the last week ended, or `null`), `achievements` (`[{ id, gems, unlockedAt, seen }]`: reading a profile unlocks the achievements the collection completes and pays their gems) and `gift` (a gift waiting to be claimed, `{ id, gems }`, or `null`) |
-| GET | `/api/players/:playerId/boosters?limit=20` | Booster history, newest first (`kira`: the price of a booster bought at the market) |
+| GET | `/api/players/:playerId/boosters?limit=20` | Booster history, newest first (`kira`: the price of a booster bought at the market; `wheel`: won at the Wheel of Fortune) |
 | GET | `/api/players/:playerId/market` | `{ kira, gems, spare, shop }`: your Kira and gems, for each card the duplicates you can recycle, and today's daily shop `{ day, nextIn, items: [{ cardId, rarity, price, gemPrice, bought }] }` |
 | POST | `/api/players/:playerId/market/shop` | Buy a card of today's daily shop. Body: `{ "cardId": "naruto", "currency": "gems", "price": 12 }` (`currency`: `kira` by default, or `gems`; `price`: optional, in that currency, as for boosters). Returns `{ cardId, isNew, kira, gems, shop, player }`. Not in today's shop → 409 `shop_changed`, already bought today (whatever the currency) → 409 `already_bought`, not enough Kira → 409 `not_enough_kira`, not enough gems → 409 `not_enough_gems` |
 | POST | `/api/players/:playerId/market/recycle` | Recycle duplicates into Kira. Body: `{ "cards": [{ "cardId": "naruto", "count": 2 }] }` (all of them or none). Returns `{ recycled, earned, kira, spare, player }`. Too many → 409 `not_enough_copies` |
 | POST | `/api/players/:playerId/market/buy` | Buy boosters with Kira or gems, opened at once. Body: `{ "setId": "showa", "count": 3, "currency": "kira", "price": 50 }` (`count`: 1 to 10, 1 by default; `currency`: `kira` by default, or `gems`; `price`: optional, the price of one booster the player saw, in that currency: if an admin changed it → 409 `price_changed`). Returns `{ boosters, player }`. Not enough Kira for all of them → 409 `not_enough_kira` with `details.price`, `details.total` and `details.kira`; not enough gems → 409 `not_enough_gems` with `details.price` (the total) and `details.gems` |
+| POST | `/api/players/:playerId/forge` | Melt duplicates into a card of the next rarity. Body: `{ "rarity": "N", "cards": [{ "cardId": "naruto", "count": 2 }], "setId": "heisei", "gems": 3 }` (`cards`: duplicates of `rarity`, at most the recipe's count; the missing ones are paid with gems; `setId`: the booster the card comes from, All-Stars by default; `gems`: optional, the gems the player saw → 409 `price_changed` if the recipe changed). Returns `{ card (with isNew), gems, player }`. Not enough duplicates → 409 `not_enough_copies`, not enough gems → 409 `not_enough_gems`, a card of another rarity → 400 `forge_wrong_rarity`, too many cards → 400 `forge_too_many`, gems not allowed for this recipe → 409 `forge_need_cards`, no card of that rarity in the booster → 409 `forge_no_card` |
+| POST | `/api/players/:playerId/wheel` | Spin the Wheel of Fortune. Body: `{ "currency": "kira", "price": 1000 }` (`currency`: `kira` by default, or `gems`; `price`: optional, in that currency → 409 `price_changed` if an admin changed it). Returns `{ prize, boosters (the boosters won, opened), card (the card won, with isNew, or null), superBoosters (won, on the shelf), kira, gems, player }`. Not enough Kira → 409 `not_enough_kira`, not enough gems → 409 `not_enough_gems` |
 | POST | `/api/players/:playerId/gifts/:giftId` | Claim a gift (`player.gift.id`, e.g. `gems-launch`): `{ gift: { id, gems }, gems, player }`. Already claimed → 409 `gift_claimed`, unknown → 404 `gift_not_found` |
 | POST | `/api/players/:playerId/achievements/seen` | Body: `{ "ids": ["complete-showa"] }`: the player saw the popup of these achievements (`seen` becomes true) |
 | GET | `/api/players/:playerId/daily` | Today's daily reward: `{ today, available, claims, day, cycle, super, superReason, choices, nextIn }` (`day` of the cycle, `super` for a Super Booster because of `superReason`: `cycle`, `event` or `gift`, `choices` = the boosters offered, `nextIn` = seconds before the next day). Profiles include it as `daily` |
@@ -314,8 +356,8 @@ Admin routes (an admin's session only, 403 `not_admin` otherwise):
 
 | Method | Route | Description |
 |---|---|---|
-| GET | `/api/admin/settings` | `{ settings, defaults }`: `{ booster, superBooster: { slotWeights, rareSlotWeights }, market: { prices, recycle, cardPrices }, gems: { kiraPerGem }, daily: { superEvery, sets, superDays }, weekly: { rewards: [{ superBoosters, kira }, …] }, events: { halloween: { enabled, hours, max } } }`; odds in thousandths of a percent (each slot adds up to 100000, so 0.001% is the smallest step); `oddsTotal` |
-| PATCH | `/api/admin/settings` | Change sections of the settings (each given whole), e.g. `{ "market": { "prices": {…}, "recycle": {…}, "cardPrices": {…} } }`, `{ "gems": { "kiraPerGem": 50 } }` (1–100000), `{ "weekly": { "rewards": [10 × { "superBoosters", "kira" }] } }` or `{ "events": { "halloween": { "enabled": true, "hours": 8, "max": 10 } } }` (`hours` 1–168, `max` 1–10). Wrong values → 400 `invalid_settings` |
+| GET | `/api/admin/settings` | `{ settings, defaults }`: `{ booster, superBooster: { slotWeights, rareSlotWeights }, market: { prices, recycle, cardPrices }, gems: { kiraPerGem }, daily: { superEvery, sets, superDays }, weekly: { rewards: [{ superBoosters, kira }, …] }, events: { halloween: { enabled, hours, max } }, forge: { cards: { rarity }, gems: { rarity } }, wheel: { price, weights: { prizeId } } }`; odds in thousandths of a percent (each slot adds up to 100000, so 0.001% is the smallest step); `oddsTotal` |
+| PATCH | `/api/admin/settings` | Change sections of the settings (each given whole), e.g. `{ "market": { "prices": {…}, "recycle": {…}, "cardPrices": {…} } }`, `{ "gems": { "kiraPerGem": 50 } }` (1–100000), `{ "weekly": { "rewards": [10 × { "superBoosters", "kira" }] } }`, `{ "events": { "halloween": { "enabled": true, "hours": 8, "max": 10 } } }` (`hours` 1–168, `max` 1–10), `{ "forge": { "cards": { "N": 5, … "UR": 5 }, "gems": { "N": 1, … "UR": 30 } } }` (cards 1–20, gems 0–100000, 0 = gems cannot replace them) or `{ "wheel": { "price": 1000, "weights": { "boosters-5": 30000, … } } }` (price 1–100000, chances in thousandths of a percent adding up to 100000). Wrong values → 400 `invalid_settings` |
 | GET | `/api/admin/players` | Every player with their cards, boosters, Kira, gems, badges and daily reward |
 | POST | `/api/admin/players/:id/daily/reset` | The player can claim today's daily reward again |
 | POST | `/api/admin/players/:id/daily/gift` | Body: `{ "super": true }`: their next daily reward is a Super Booster (`false` takes it back) |

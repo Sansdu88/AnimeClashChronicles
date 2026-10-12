@@ -11,6 +11,8 @@
  * the Super Boosters won in the weekly ranking (views/stats.js), from the shelf.
  * While an event is on (events.js), its booster has a spotlight above the shelf and
  * a stock of its own; it cannot be bought, and its stage wears the event's theme.
+ * The prizes of the Wheel of Fortune open here too (openPrize), and a card forged at the
+ * Forge or won at the wheel is flipped here (revealCard).
  */
 import { $, $$, escapeHtml, everySecond, fmt, html, mount, raw, wait } from '../dom.js';
 import { cardText, errorText, has, rarityName, setName, setTagline, t, tHtml } from '../i18n.js';
@@ -153,9 +155,14 @@ function startOpening(setId, count, stage, source = null) {
   else openSingle(setId, stage, source);
 }
 
-/** Asks for `count` boosters: from the stock, or bought at the market (`source`: { price, currency }). */
-const askBoosters = (setId, count, source) =>
-  source?.price ? () => buyBoosters(setId, count, source.currency) : () => openBoosters(setId, count);
+/**
+ * Asks for `count` boosters: from the stock, bought at the market (`source`: { price, currency }), or
+ * already opened by the server (`source`: { won, boosters }, a prize of the Wheel of Fortune).
+ */
+function askBoosters(setId, count, source) {
+  if (source?.boosters) return () => Promise.resolve(source.boosters);
+  return source?.price ? () => buyBoosters(setId, count, source.currency) : () => openBoosters(setId, count);
+}
 
 /** A booster bought at the market (the `source` of openSingle): its price in `currency`, 'kira' or 'gems'. */
 const bought = (setId, currency = 'kira') => ({ price: priceIn(currency, setId), currency });
@@ -441,9 +448,19 @@ function nextButtons(slot, set, stage) {
 
 // ── Single booster ──────────────────────────────────────────────────────────
 
+/** The texts above a prize (`won`, see openPrize): its title and what it is. */
+const wonIntroHTML = (won) => html`<div class="stage-intro">
+  <p class="mega__title mega__title--small">${won.title}</p>
+  <p class="giant__sub">${won.sub}</p>
+</div>`;
+
+/** The button that goes back where a prize was won (`won.again`: { href, label }). */
+const againHTML = (won) => html`<a class="btn btn--primary btn--big" href="${won.again.href}">${won.again.label}</a>`;
+
 /**
  * One booster from its stock, or from `source`: { daily: { day, cycle } } for the
- * daily reward, { price, currency } for a booster bought with Kira or gems (see bought).
+ * daily reward, { price, currency } for a booster bought with Kira or gems (see bought),
+ * { won, boosters } for a prize of the Wheel of Fortune (see openPrize).
  * Either is claimed or paid when the pack is torn open (closing the stage before keeps it).
  */
 async function openSingle(setId, stage = createStage(), source = null) {
@@ -465,6 +482,7 @@ async function openSingle(setId, stage = createStage(), source = null) {
         <p class="mega__title mega__title--small">${source.currency === 'gems' ? '💎' : '✦'} ${t('market.stageTitle')}</p>
         <p class="giant__sub">${costText(source)}</p>
       </div>`}
+      ${source?.won && wonIntroHTML(source.won)}
       <button class="stage-pack" type="button" aria-label="${t('stage.tearLabel', { set: setName(set.id) })}">
         ${tearablePackHTML(set)}
       </button>
@@ -507,7 +525,8 @@ async function openSingle(setId, stage = createStage(), source = null) {
 
 /**
  * `source` (see openSingle): the daily reward ends with a link to the shelf, a booster
- * bought with Kira with "Buy another", instead of "Open another".
+ * bought with Kira with "Buy another", a prize with the button that goes back where it was
+ * won, instead of "Open another". { won, card: true }: a single card won (see revealCard).
  */
 function showReveal(stage, set, booster, run, source = null) {
   const cards = booster.cards;
@@ -516,8 +535,9 @@ function showReveal(stage, set, booster, run, source = null) {
 
   mount(
     stage.content,
-    html`<div class="reveal">
-      <p class="stage__hint bubble">${t('stage.clickCards')}</p>
+    html`<div class="reveal${cards.length === 1 ? ' reveal--one' : ''}">
+      ${source?.card && wonIntroHTML(source.won)}
+      <p class="stage__hint bubble">${t(cards.length === 1 ? 'stage.clickCard' : 'stage.clickCards')}</p>
       <div class="reveal__row">
         ${cards.map(
           (card, i) => html`<div class="flip" role="button" tabindex="0" data-index="${i}" data-rarity="${card.rarity}"
@@ -530,7 +550,7 @@ function showReveal(stage, set, booster, run, source = null) {
         )}
       </div>
       <div class="reveal__footer">
-        <button class="btn btn--ghost-light" type="button" data-action="reveal-all">${t('stage.revealAll')}</button>
+        ${cards.length > 1 && html`<button class="btn btn--ghost-light" type="button" data-action="reveal-all">${t('stage.revealAll')}</button>`}
       </div>
     </div>`,
   );
@@ -584,10 +604,11 @@ function showReveal(stage, set, booster, run, source = null) {
       $('.reveal__footer', stage.content),
       html`<p class="reveal__summary">
           ${newCount ? html`<strong class="new-pill">${t('stage.newCards', { count: newCount })}</strong>` : t('stage.noNew')}
-          ${t('stage.best')} <strong class="rarity-text r-${best.rarity}">${best.rarity}</strong> ${cardText(best).name}
+          ${cards.length > 1 && html`${t('stage.best')} <strong class="rarity-text r-${best.rarity}">${best.rarity}</strong> ${cardText(best).name}`}
         </p>
         <div class="btn-row">
           ${source?.daily && html`<a class="btn btn--primary btn--big" href="#/">${t('daily.openStock')}</a>`}
+          ${source?.won && againHTML(source.won)}
           ${source?.price && html`${buyButtonHTML(set, t('market.buyAnother'), 1, source.currency)}<a class="btn btn--ghost-light" href="#/market">${t('nav.market')}</a>`}
           ${!source && html`<span class="btn-row" data-slot="next"></span>`}
           <a class="btn btn--ghost-light" href="#/collection">${t('stage.myCollection')}</a>
@@ -640,10 +661,34 @@ export function openBought(setId, count = 1, currency = 'kira') {
 }
 
 /**
- * The Super Booster drops from the sky in a rainbow halo; one tap charges it up until it blows.
- * `daily`: { day, cycle, reason } for the daily reward's, else one won in the weekly ranking.
+ * A prize of the Wheel of Fortune, opened at once. `won`: { title, sub, again: { href, label } }, the texts
+ * above the packs and the button that goes back. `boosters`: the boosters the server opened already (their
+ * cards are revealed here); without them, `count` boosters of `setId` come from the shelf (the Super Boosters won).
  */
-async function openSuper(stage = createStage(), daily = null) {
+export function openPrize(setId, { boosters = null, count = boosters?.length ?? 1, won }) {
+  const stage = createStage();
+  if (!boosters && count === 1 && isSuper(setOf(setId))) openSuper(stage, null, won);
+  else startOpening(setId, count, stage, { won, boosters });
+}
+
+/**
+ * A card forged at the Forge or won at the Wheel of Fortune: it waits face down on the stage under the
+ * texts of `won` ({ title, sub, again: { href, label } }), charges up when tapped and flips with the
+ * effects of its rarity. `colors`: the two colors of the stage.
+ */
+export function revealCard(card, won, colors) {
+  const stage = createStage();
+  stage.element.style.cssText = `--c1:${colors[0]};--c2:${colors[1]}`;
+  sfx.theme = themeEvent();
+  showReveal(stage, null, { cards: [card] }, ++stage.run, { won, card: true });
+}
+
+/**
+ * The Super Booster drops from the sky in a rainbow halo; one tap charges it up until it blows.
+ * `daily`: { day, cycle, reason } for the daily reward's, else one of the shelf: won in the weekly
+ * ranking, or at the Wheel of Fortune (`won`, see openPrize).
+ */
+async function openSuper(stage = createStage(), daily = null, won = null) {
   const set = setOf(state.meta.daily.superSet.id);
   const run = ++stage.run;
   const stale = () => stage.closed || stage.run !== run;
@@ -655,7 +700,7 @@ async function openSuper(stage = createStage(), daily = null) {
     stage.content,
     html`<div class="super">
       <p class="mega__title super__title">${t('daily.stageSuper')}</p>
-      <p class="giant__sub">${daily ? ({ event: t('daily.stageEvent'), gift: t('daily.stageGift') }[daily.reason] ?? t('daily.stageDay', daily)) : `🏆 ${t('weekly.stageWon')}`} · ${t('daily.stageSuperSub')}</p>
+      <p class="giant__sub">${daily ? ({ event: t('daily.stageEvent'), gift: t('daily.stageGift') }[daily.reason] ?? t('daily.stageDay', daily)) : won ? won.sub : `🏆 ${t('weekly.stageWon')}`} · ${t('daily.stageSuperSub')}</p>
       <div class="super__scene">
         <div class="giant__rays" aria-hidden="true"></div>
         <span class="super__aura" aria-hidden="true"></span>
@@ -696,12 +741,12 @@ async function openSuper(stage = createStage(), daily = null) {
   onomatopoeia(t('daily.superBoom'), { x: box.left + box.width / 2, y: box.top + box.height * 0.25, color: '#ffd23f', size: 'xl', tilt: -8 });
   await wait(1100);
   if (stale()) return;
-  showReveal(stage, set, booster, run, daily && { daily });
+  showReveal(stage, set, booster, run, daily ? { daily } : won && { won });
 }
 
 // ── Several boosters in a row ───────────────────────────────────────────────
 
-/** `source`: { price, currency } for boosters bought at the market (see openSingle). */
+/** `source`: { price, currency } for boosters bought at the market, { won, boosters } for a prize (see openSingle). */
 async function openMany(setId, count, stage = createStage(), source = null) {
   const set = setOf(setId);
   const run = ++stage.run;
@@ -716,6 +761,7 @@ async function openMany(setId, count, stage = createStage(), source = null) {
     html`<div class="mega">
       <p class="mega__title">${t('mega.title', { count })}</p>
       ${source?.price && html`<p class="giant__sub">${costText(source, count)}</p>`}
+      ${source?.won && html`<p class="giant__sub">${source.won.sub}</p>`}
       <button class="mega__packs" type="button" style="--n:${count}" aria-label="${t('mega.tearLabel', { count, set: setName(set.id) })}">
         ${Array.from({ length: count }, (_, i) => html`<span class="mega-pack" style="--i:${i}">${tearablePackHTML(set)}</span>`)}
       </button>
@@ -723,7 +769,7 @@ async function openMany(setId, count, stage = createStage(), source = null) {
     </div>`,
   );
   const packs = $('.mega__packs', stage.content);
-  if (source) sfx.play('coin');
+  if (source) sfx.play(source.won ? 'fanfare' : 'coin');
   packs.focus({ preventScroll: true });
   await nextClick(packs);
   if (stale()) return;
@@ -799,7 +845,7 @@ function displayHTML(set, count) {
   </span>`;
 }
 
-/** `source`: { price, currency } for boosters bought at the market (see openSingle). */
+/** `source`: { price, currency } for boosters bought at the market, { won, boosters } for a prize (see openSingle). */
 async function openTen(setId, count, stage = createStage(), source = null) {
   const set = setOf(setId);
   const show = showFor(set);
@@ -813,7 +859,7 @@ async function openTen(setId, count, stage = createStage(), source = null) {
     stage.content,
     html`<div class="giant" data-hit="0">
       <p class="mega__title giant__title">${t('show.title', { count })}</p>
-      <p class="giant__sub">${t(`show.sub.${show.theme}`)}${source?.price ? ` · ${costText(source, count)}` : ''}</p>
+      <p class="giant__sub">${t(`show.sub.${show.theme}`)}${source?.price ? ` · ${costText(source, count)}` : ''}${source?.won ? ` · ${source.won.sub}` : ''}</p>
       <div class="giant__scene">
         <div class="giant__rays" aria-hidden="true"></div>
         <button class="display" type="button" aria-label="${t('show.tearLabel', { set: setName(set.id) })}">${displayHTML(set, count)}</button>
@@ -917,7 +963,8 @@ async function openTen(setId, count, stage = createStage(), source = null) {
 
 /**
  * `show` (×10 only): the finale gets a confetti storm and a cut-in of the best card.
- * `source`: { price, currency } for boosters bought at the market, which end with "Buy ×N again" instead of "Open another".
+ * `source`: { price, currency } for boosters bought at the market, which end with "Buy ×N again" instead of "Open another",
+ * { won } for a prize, which ends with the button that goes back where it was won.
  */
 function showManyReveal(stage, set, boosters, run, show = null, source = null) {
   const cards = boosters.flatMap((booster) => booster.cards);
@@ -1066,7 +1113,9 @@ function showManyReveal(stage, set, boosters, run, show = null, source = null) {
         <div class="btn-row">
           ${source?.price
             ? html`${buyButtonHTML(set, t('market.buyAgain', { count: boosters.length }), boosters.length, source.currency)}<a class="btn btn--ghost-light" href="#/market">${t('nav.market')}</a>`
-            : html`<span class="btn-row" data-slot="next"></span>`}
+            : source?.won
+              ? againHTML(source.won)
+              : html`<span class="btn-row" data-slot="next"></span>`}
           <a class="btn btn--ghost-light" href="#/collection">${t('stage.myCollection')}</a>
         </div>`,
     );

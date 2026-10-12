@@ -3,7 +3,8 @@
  * checks it on every call): the game settings, which apply at once (the limited-time
  * events such as Halloween, Kira prices and values, daily shop prices, the Kira a gem
  * is worth, rewards of the weekly ranking, daily reward, Super Booster event days, rarity
- * odds), and the list of players with their tools (give the daily back,
+ * odds, the recipes of the Forge, the price and the chances of the Wheel of Fortune), and the
+ * list of players with their tools (give the daily back,
  * Super Booster gift, clear their data, delete them).
  */
 import { $, $$, fmt, html, mount } from '../dom.js';
@@ -27,6 +28,7 @@ import { gemIconHTML, gemsHTML } from '../ui/gems.js';
 import { coinHTML, kiraHTML } from '../ui/kira.js';
 import { toast } from '../ui/toast.js';
 import { badgesHTML } from './achievements.js';
+import { prizeName } from './wheel.js';
 
 // Odds are weights adding up to `oddsTotal` (100%) in each column, given by the server
 // (thousandths of a percent: odds as small as 0.001%, see server/settings.js).
@@ -165,6 +167,35 @@ function limitedFieldsHTML(events) {
   });
 }
 
+/** The recipes of the Forge: the duplicates each one melts, and the gems for a missing one. */
+function forgeRowsHTML(forge) {
+  return state.meta.forge.recipes.map(({ rarity, to }) => html`<tr>
+    <th scope="row"><span class="rarity-badge r-${rarity}">${rarity}</span> → <span class="rarity-badge r-${to}">${to}</span></th>
+    <td>${numberField(`cards:${rarity}`, forge.cards[rarity], { min: 1, max: 20 })}</td>
+    <td><span class="input-kira">${numberField(`gems:${rarity}`, forge.gems[rarity])}${gemIconHTML()}</span></td>
+  </tr>`);
+}
+
+/** The price of a spin of the wheel, and the chance (%) of each of its prizes. */
+function wheelFieldsHTML(wheel) {
+  return html`<label class="field admin-field--short">
+      <span class="field__label">${t('admin.wheelPrice')}</span>
+      <span class="input-kira">${numberField('wheelPrice', wheel.price, { min: 1 })}${coinHTML()}</span>
+    </label>
+    <div class="table-wrap">
+      <table class="odds admin-wheel">
+        <thead><tr><th scope="col">${t('admin.wheelPrize')}</th><th scope="col">${t('admin.wheelChance')}</th></tr></thead>
+        <tbody>
+          ${state.meta.wheel.prizes.map((prize) => html`<tr>
+            <th scope="row">${prizeName(prize)}</th>
+            <td><span class="input-percent">${numberField(`chance:${prize.id}`, percent(wheel.weights[prize.id] ?? 0), { max: 100, step: 0.001 })}%</span></td>
+          </tr>`)}
+        </tbody>
+        <tfoot><tr><th scope="row">${t('admin.total')}</th><td data-wheel-total></td></tr></tfoot>
+      </table>
+    </div>`;
+}
+
 function oddsRowsHTML(settings) {
   return rarestFirst().map((id) => html`<tr class="r-${id}">
     <td><span class="rarity-badge">${id}</span> ${rarityName(id)}</td>
@@ -291,6 +322,36 @@ export async function renderAdmin(main) {
         </div>
       </div>
 
+      <div class="admin-columns">
+        <form class="panel admin-form" data-form="forge" novalidate>
+          <h2 class="panel__title">⚒️ ${t('admin.forge')}</h2>
+          <p class="muted">${t('admin.forgeText')}</p>
+          <div class="table-wrap">
+            <table class="odds admin-forge">
+              <thead><tr>
+                <th scope="col">${t('admin.forgeRecipe')}</th>
+                <th scope="col">🃏 ${t('admin.forgeCards')}</th>
+                <th scope="col">💎 ${t('admin.forgeGems')}</th>
+              </tr></thead>
+              <tbody data-fields></tbody>
+            </table>
+          </div>
+          <div class="btn-row btn-row--end">
+            <button class="btn btn--ghost" type="button" data-defaults>${t('admin.defaults')}</button>
+            <button class="btn btn--primary" type="submit">${t('admin.save')}</button>
+          </div>
+        </form>
+        <form class="panel admin-form" data-form="wheel" novalidate>
+          <h2 class="panel__title">🎡 ${t('admin.wheel')}</h2>
+          <p class="muted">${t('admin.wheelText')}</p>
+          <div data-fields></div>
+          <div class="btn-row btn-row--end">
+            <button class="btn btn--ghost" type="button" data-defaults>${t('admin.defaults')}</button>
+            <button class="btn btn--primary" type="submit">${t('admin.save')}</button>
+          </div>
+        </form>
+      </div>
+
       <form class="panel admin-form" data-form="odds" novalidate>
         <h2 class="panel__title">🎲 ${t('admin.odds')}</h2>
         <p class="muted">${t('admin.oddsText')}</p>
@@ -346,7 +407,21 @@ export async function renderAdmin(main) {
       mount(fieldsOf('odds'), oddsRowsHTML(values));
       paintTotals();
     },
+    forge: (values) => mount(fieldsOf('forge'), forgeRowsHTML(values.forge)),
+    wheel: (values) => {
+      mount(fieldsOf('wheel'), wheelFieldsHTML(values.wheel));
+      paintWheelTotal();
+    },
   };
+
+  /** The total of the wheel's chances: it must be 100%, else the form cannot be saved. */
+  function paintWheelTotal() {
+    const total = state.meta.wheel.prizes.reduce((sum, prize) => sum + weightOf(forms.wheel.elements[`chance:${prize.id}`].value || 0), 0);
+    const cell = $('[data-wheel-total]', forms.wheel);
+    cell.textContent = `${percent(total)}%`;
+    cell.classList.toggle('is-wrong', total !== oddsTotal);
+    $('[type="submit"]', forms.wheel).disabled = total !== oddsTotal;
+  }
 
   /** The gems prices the value typed gives, with the Kira prices saved (they follow as it is typed). */
   function paintGemsPreview() {
@@ -399,6 +474,22 @@ export async function renderAdmin(main) {
       if (!sets.length) throw new Error(t('admin.needOne'));
       return { daily: { ...settings.daily, superEvery: Number(form.elements.superEvery.value), sets } };
     },
+    forge(form) {
+      const value = (name) => Number(form.elements[name].value);
+      const rarities = state.meta.forge.recipes.map((recipe) => recipe.rarity);
+      return {
+        forge: {
+          cards: Object.fromEntries(rarities.map((id) => [id, value(`cards:${id}`)])),
+          gems: Object.fromEntries(rarities.map((id) => [id, value(`gems:${id}`)])),
+        },
+      };
+    },
+    wheel(form) {
+      // Prizes the catalog cannot give are not on the page: they keep their chance.
+      const weights = { ...settings.wheel.weights };
+      for (const prize of state.meta.wheel.prizes) weights[prize.id] = weightOf(form.elements[`chance:${prize.id}`].value || 0);
+      return { wheel: { price: Number(form.elements.wheelPrice.value), weights } };
+    },
     odds(form) {
       const sections = { booster: {}, superBooster: {} };
       ODDS_COLUMNS.forEach(({ section, slot }, column) => {
@@ -444,6 +535,7 @@ export async function renderAdmin(main) {
       if (await save(sections, savedMessage[name]?.(sections) || undefined)) paint[name](settings);
       submit.disabled = false;
       if (name === 'odds') paintTotals();
+      if (name === 'wheel') paintWheelTotal();
       // New Kira prices give new gems prices.
       if (name === 'market') paintGemsPreview();
     });
@@ -451,6 +543,7 @@ export async function renderAdmin(main) {
     $('[data-defaults]', form).addEventListener('click', () => paint[name](defaults));
   }
   forms.odds.addEventListener('input', paintTotals);
+  forms.wheel.addEventListener('input', paintWheelTotal);
   forms.gems.addEventListener('input', paintGemsPreview);
 
   // Super Booster events are saved at once.

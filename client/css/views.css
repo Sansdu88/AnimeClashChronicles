@@ -2655,6 +2655,48 @@
   font-size: 18px;
 }
 
+/* ── Admin: the Forge and the Wheel of Fortune ──────────────────────────── */
+
+.admin-forge .input,
+.admin-wheel .input {
+  width: 96px;
+  min-height: 36px;
+  padding: 4px 8px;
+}
+
+.admin-forge th[scope='row'],
+.admin-wheel th[scope='row'] {
+  text-align: left;
+  white-space: nowrap;
+}
+
+.admin-wheel {
+  margin-top: 14px;
+}
+
+.admin-wheel [data-wheel-total].is-wrong {
+  color: var(--red-dark);
+}
+
+/* The recipes of the Forge, on the Rules page. */
+.rules-recipes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 18px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rules-recipes li {
+  display: grid;
+  gap: 2px;
+}
+
+.rules-recipes .muted {
+  font-size: 13px;
+}
+
 @media (max-width: 1100px) {
   .daily-shop__cards {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2994,7 +3036,7 @@
   margin-top: 16px;
 }
 
-/* ── Forge (coming in a future update) ──────────────────────────────────── */
+/* ── Forge ──────────────────────────────────────────────────────────────── */
 
 /* A smithy at night: iron grey, glowing embers. */
 .hero--forge {
@@ -3073,22 +3115,647 @@
   }
 }
 
-.forge-soon {
-  margin: 0 0 6px;
-  padding: 4px 16px 2px;
-  font-family: var(--font-display);
-  font-size: 24px;
-  letter-spacing: 1px;
-  color: var(--ink);
-  background: var(--yellow);
-  border: var(--border);
-  border-radius: 999px;
-  box-shadow: var(--shadow-sm);
-  transform: rotate(-2deg);
+.view-forge,
+.view-wheel {
+  display: grid;
+  gap: 24px;
 }
 
-.forge-back {
-  margin-top: 18px;
+/* The recipes: N → R … UR → REV, with the duplicates you have of each rarity. */
+.forge-recipes__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.forge-recipe {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 12px 8px 10px;
+  color: var(--ink);
+  background: var(--panel);
+  border: var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  font-weight: 900;
+  transition: transform 0.1s, box-shadow 0.1s, background 0.15s;
+}
+
+.forge-recipe:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.forge-recipe[aria-pressed='true'] {
+  background: linear-gradient(160deg, #ffe7c2, #ffb347);
+}
+
+.forge-recipe__formula {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 1px;
+}
+
+.forge-recipe__arrow {
+  color: var(--red);
+}
+
+.forge-recipe__spare {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* The anvil: the copies (or the gems that replace them) → the hammer → the card it gives. */
+.forge-bench {
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(255, 106, 0, 0.22), transparent 60%),
+    var(--panel);
+}
+
+.forge-bench__stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(110px, 160px);
+  align-items: center;
+  gap: 18px;
+}
+
+.forge-slots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.forge-slot {
+  position: relative;
+  width: clamp(76px, 11vw, 118px);
+  aspect-ratio: 5 / 7;
+  padding: 0;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 10px;
+}
+
+.forge-slot.is-empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 4px;
+  border: 3px dashed rgba(22, 19, 15, 0.35);
+  background: repeating-linear-gradient(45deg, rgba(22, 19, 15, 0.04) 0 8px, transparent 8px 16px);
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--muted);
+}
+
+/* An empty slot that a gem pays for. */
+.forge-slot.is-gem {
+  border-color: #2aa3dc;
+  background:
+    radial-gradient(rgba(168, 240, 255, 0.35) 1.1px, transparent 1.5px) 0 0 / 10px 10px,
+    linear-gradient(160deg, #eafbff, #d2f1fb);
+  color: #1471b8;
+}
+
+.forge-slot.is-gem .gem-icon {
+  font-size: 28px;
+}
+
+.forge-slot.is-filled {
+  cursor: pointer;
+  animation: forge-slot-in 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+@keyframes forge-slot-in {
+  from {
+    transform: translateY(-16px) scale(0.85);
+    opacity: 0;
+  }
+}
+
+.forge-slot__remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.forge-slot.is-filled:hover .forge-slot__remove,
+.forge-slot.is-filled:focus-visible .forge-slot__remove {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .forge-slot__remove {
+    opacity: 1;
+  }
+}
+
+/* Forging: each copy glows and slides into the card it gives. */
+.forge-slot.is-melting {
+  z-index: 2;
+  pointer-events: none;
+  animation: forge-melt 0.75s cubic-bezier(0.5, 0, 0.75, 0) forwards;
+  animation-delay: calc(var(--i) * 70ms);
+}
+
+@keyframes forge-melt {
+  30% {
+    transform: translateY(-12px) scale(1.05);
+    filter: brightness(1.4) sepia(0.4);
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(0.2) rotate(30deg);
+    filter: brightness(3) sepia(1) saturate(4) blur(2px);
+    opacity: 0;
+  }
+}
+
+.forge-bench__hammer {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+}
+
+.forge-bench__glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255, 140, 0, 0.45), transparent 65%);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.view-forge.is-forging .forge-bench__glow {
+  opacity: 1;
+}
+
+.forge-bench__icon {
+  font-size: 54px;
+  line-height: 1;
+  filter: drop-shadow(3px 3px 0 var(--ink));
+  transform-origin: 75% 80%;
+  animation: forge-hammer-idle 2.6s ease-in-out infinite;
+}
+
+@keyframes forge-hammer-idle {
+  50% {
+    transform: rotate(-10deg) translateY(-3px);
+  }
+}
+
+.forge-bench__hammer.is-striking .forge-bench__icon {
+  animation: forge-hammer-strike 0.5s cubic-bezier(0.5, 0, 0.5, 1);
+}
+
+@keyframes forge-hammer-strike {
+  45% {
+    transform: rotate(-50deg) translateY(-6px);
+  }
+  60% {
+    transform: rotate(28deg) translateX(14px);
+  }
+}
+
+.forge-bench__result {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+/* The card the recipe gives: face down, glowing in the color of its rarity. */
+.forge-result {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 150px;
+  aspect-ratio: 5 / 7;
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.25) 1.1px, transparent 1.5px) 0 0 / 9px 9px,
+    radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--rc) 45%, #fff), color-mix(in srgb, var(--rc) 75%, #16130f));
+  border: var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow), 0 0 26px color-mix(in srgb, var(--rc) 60%, transparent);
+  animation: forge-result-glow 2.2s ease-in-out infinite;
+}
+
+@keyframes forge-result-glow {
+  50% {
+    box-shadow: var(--shadow), 0 0 42px color-mix(in srgb, var(--rc) 85%, transparent);
+  }
+}
+
+.forge-result__q {
+  font-family: var(--font-display);
+  font-size: 76px;
+  line-height: 1;
+  color: #fff;
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 3px 3px 0 var(--ink);
+}
+
+.forge-result .rarity-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+/* Under the hammer: red-hot. */
+.forge-bench__result.is-hot .forge-result {
+  animation: forge-result-hot 0.4s ease-out;
+  filter: brightness(1.25) saturate(1.3);
+}
+
+@keyframes forge-result-hot {
+  30% {
+    transform: scale(1.06) rotate(-2deg);
+    filter: brightness(2) sepia(0.6);
+  }
+}
+
+.forge-result__name {
+  margin: 0;
+  font-weight: 900;
+}
+
+.forge-from {
+  margin-top: 22px;
+}
+
+.forge-from__sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+/* A booster the card is forged from, in its colors. */
+.forge-set {
+  display: grid;
+  gap: 2px;
+  padding: 7px 14px 6px 12px;
+  text-align: left;
+  color: var(--ink);
+  background: var(--panel);
+  border: 2px solid var(--ink);
+  border-left: 10px solid var(--c1);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+  font-size: 15px;
+}
+
+.forge-set span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.forge-set[aria-pressed='true'] {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c1) 28%, #fff), color-mix(in srgb, var(--c2) 28%, #fff));
+  box-shadow: 0 0 0 3px var(--yellow), 3px 3px 0 3px var(--ink);
+}
+
+.forge-set:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.forge-cost {
+  margin: 16px 0 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.forge-cost .gem-amount {
+  vertical-align: -0.15em;
+}
+
+.forge-cost__blocked {
+  display: block;
+  margin-top: 4px;
+  color: var(--red-dark);
+}
+
+.forge-go {
+  min-width: 220px;
+}
+
+.forge-pick__used {
+  color: #c45a00;
+}
+
+/* ── Wheel of Fortune ───────────────────────────────────────────────────── */
+
+/* A fairground at night: magenta, violet, golden lights. */
+.hero--wheel {
+  background:
+    radial-gradient(rgba(255, 210, 63, 0.25) 1.2px, transparent 1.6px) 0 0 / 11px 11px,
+    repeating-conic-gradient(from 0deg at 50% 60%, rgba(255, 255, 255, 0.12) 0deg 7deg, transparent 7deg 15deg),
+    linear-gradient(160deg, #ff2e88, #5a189a);
+}
+
+.hero--wheel .hero__title {
+  color: var(--yellow);
+}
+
+.wheel-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.wheel-panel {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding-top: 46px;
+  background:
+    radial-gradient(circle at 50% 40%, #fff3c4, transparent 65%),
+    var(--panel);
+}
+
+/* The wheel: the slices turn (--rotation), the rim, the pointer and the hub do not. */
+.wheel {
+  position: relative;
+  width: min(100%, 470px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 6px var(--ink),
+    0 0 0 14px var(--yellow),
+    0 0 0 17px var(--ink),
+    10px 12px 0 17px rgba(22, 19, 15, 0.2);
+}
+
+.wheel__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(var(--rotation, 0deg));
+}
+
+.wheel__slice path {
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  transition: filter 0.2s;
+}
+
+.wheel__slice.is-hovered path {
+  filter: brightness(1.25);
+}
+
+.wheel__slice.is-won path {
+  animation: wheel-won 0.45s ease-in-out 6 alternate;
+}
+
+@keyframes wheel-won {
+  to {
+    filter: brightness(1.7) saturate(1.2);
+  }
+}
+
+.wheel__icon {
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.wheel__label {
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-family: var(--font-display);
+  letter-spacing: 1px;
+  fill: #fff;
+  stroke: var(--ink);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+
+.wheel__slice.r-REV .wheel__label {
+  fill: #00d177;
+}
+
+.wheel__peg {
+  fill: #fff;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+
+/* The pointer, at the top: it flicks on every peg. */
+.wheel__pointer {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  z-index: 2;
+  width: 46px;
+  height: 58px;
+  transform: translateX(-50%);
+  transform-origin: 50% 18%;
+  filter: drop-shadow(3px 3px 0 rgba(22, 19, 15, 0.35));
+}
+
+.wheel__pointer::before,
+.wheel__pointer::after {
+  content: '';
+  position: absolute;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.wheel__pointer::before {
+  inset: 0;
+  background: var(--ink);
+}
+
+.wheel__pointer::after {
+  inset: 4px 7px 11px;
+  background: linear-gradient(180deg, #ff5a6a, var(--red-dark));
+}
+
+.wheel__pointer.is-ticking {
+  animation: wheel-tick 0.14s ease-out;
+}
+
+@keyframes wheel-tick {
+  40% {
+    transform: translateX(-50%) rotate(-16deg);
+  }
+}
+
+.wheel__hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 21%;
+  aspect-ratio: 1;
+  background: radial-gradient(circle at 35% 30%, #fff8d6, #ffd23f 55%, #f4a100);
+  border: 4px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 3px 3px 0 var(--ink);
+  transform: translate(-50%, -50%);
+}
+
+.wheel__hub .kira-coin--big {
+  font-size: clamp(22px, 4.5vw, 40px);
+}
+
+.view-wheel.is-spinning .wheel__hub .kira-coin {
+  animation: wheel-hub 0.7s linear infinite;
+}
+
+@keyframes wheel-hub {
+  to {
+    transform: rotateY(360deg);
+  }
+}
+
+.wheel__result {
+  min-height: 1.3em;
+  margin: 10px 0 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.wheel__buttons {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.wheel__spin.btn--big {
+  min-height: 60px;
+  padding-inline: 34px;
+  font-size: 28px;
+}
+
+.wheel-side {
+  display: grid;
+  gap: 24px;
+}
+
+.wallet__gems {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px !important;
+  font-weight: 900;
+  color: #1471b8;
+}
+
+.wheel-prizes__list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wheel-prize {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 2px 2px 0 var(--ink);
+  transition: background 0.2s;
+}
+
+.wheel-prize.is-won {
+  background: #fff3b0;
+  animation: wheel-prize-won 0.45s ease-in-out 4 alternate;
+}
+
+@keyframes wheel-prize-won {
+  to {
+    transform: scale(1.03);
+  }
+}
+
+.wheel-prize__swatch {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  font-size: 19px;
+  background: var(--fill);
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+}
+
+.wheel-prize__text {
+  display: grid;
+  line-height: 1.25;
+}
+
+.wheel-prize__text .muted {
+  font-size: 13px;
+}
+
+.wheel-prize__chance {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 1px;
+}
+
+@media (max-width: 860px) {
+  .forge-bench__stage {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .forge-bench__hammer {
+    transform: rotate(90deg);
+  }
+
+  .forge-result {
+    max-width: 120px;
+  }
+
+  .wheel-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .forge-go,
+  .forge-actions .btn {
+    width: 100%;
+  }
+
+  .wheel-panel {
+    padding-top: 40px;
+  }
+
+  .wheel__spin.btn--big {
+    font-size: 24px;
+  }
 }
 
 /* ── Events (the popup of the "Events" button) ──────────────────────────── */

@@ -11,6 +11,7 @@ import {
   DAILY,
   ERAS,
   EVENTS,
+  FORGE,
   GIFTS,
   RARITIES,
   RARITY_IDS,
@@ -20,7 +21,9 @@ import {
   STOCKS,
   SUPER_BOOSTER,
   TYPES,
+  WHEEL,
   gemPrice,
+  nextRarity,
   stockOf,
 } from './config.js';
 import {
@@ -34,6 +37,7 @@ import {
   rewardDay,
   rewardWeek,
   weekRange,
+  weightedPick,
   weeklyRanking,
 } from './booster.js';
 import { ODDS_TOTAL, defaultSettings, loadSettings, mergeSettings } from './settings.js';
@@ -147,6 +151,25 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     prices: Object.fromEntries(Object.entries(settings.market.prices).map(([id, kira]) => [id, gemsFor(kira)])),
     cardPrices: Object.fromEntries(Object.entries(settings.market.cardPrices).map(([rarity, kira]) => [rarity, gemsFor(kira)])),
   });
+
+  /** The cards of the main collection, by rarity (the Forge and the Wheel give one of them). */
+  const mainByRarity = Object.fromEntries(RARITY_IDS.map((id) => [id, catalog.cards.filter((card) => card.rarity === id)]));
+  /** The rarities the Forge melts, each into the next one (N → R … UR → REV). */
+  const forgeRarities = Object.keys(FORGE.cards);
+  /** The recipes of the Forge: [{ rarity, to, cards: duplicates it takes, gems: for a missing card (0: none) }]. */
+  const forgeRecipes = () =>
+    forgeRarities.map((rarity) => ({ rarity, to: nextRarity(rarity), cards: settings.forge.cards[rarity], gems: settings.forge.gems[rarity] }));
+
+  /** A prize of the wheel can be given: its booster set, the Super Booster or cards of its rarity are in the catalog. */
+  function inCatalog(prize) {
+    if (prize.type === 'boosters') return setIds.includes(prize.setId);
+    if (prize.type === 'super') return Boolean(superSet);
+    return mainByRarity[prize.rarity]?.length > 0;
+  }
+  /** The prizes of the wheel, in the order of its slices, with their chance (settings.wheel, in ODDS_TOTAL): [{ id, type, …, weight }]. */
+  const wheelPrizes = () => WHEEL.prizes.filter(inCatalog).map((prize) => ({ ...prize, weight: settings.wheel.weights[prize.id] ?? 0 }));
+  /** A prize as the API shows it: `chance` from 0 to 1 instead of its weight. */
+  const publicPrize = ({ weight, ...prize }) => ({ ...prize, chance: weight / ODDS_TOTAL });
 
   // The achievements whose booster sets are in the catalog (ACHIEVEMENTS in config.js).
   const achievements = ACHIEVEMENTS.map((achievement) => ({
@@ -514,6 +537,10 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     gems: gemMarket(),
     // [{ id, icon, sets, any, gems }]: complete the booster sets `sets` (one of them when `any`) to win `gems`.
     achievements: achievements.map(({ id, icon, sets, any, gems }) => ({ id, icon, sets, any, gems })),
+    // The Forge: [{ rarity, to, cards, gems }]: `cards` duplicates of `rarity` (gems for a missing one) make a card of `to`.
+    forge: { recipes: forgeRecipes() },
+    // The Wheel of Fortune: a spin costs `price` Kira or `gemPrice` gems; [{ id, type, setId?, count?, rarity?, chance }].
+    wheel: { price: settings.wheel.price, gemPrice: gemsFor(settings.wheel.price), prizes: wheelPrizes().map(publicPrize) },
     // { rewards: [{ superBoosters, kira }, …] }: what the 1st, the 2nd… of the weekly ranking get.
     weekly: settings.weekly,
     // Points of a card by rarity (collection score and weekly ranking), and the share a duplicate is worth.
@@ -921,6 +948,112 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return reply(201, { boosters: saved.map(openedBooster), player: await profile(player) });
   });
 
+  // ── Forge ──────────────────────────────────────────────────────────────────
+  // Duplicates of one rarity are melted into a random card of the next one (settings.forge), from
+  // the booster set the player chooses. Gems stand in for the missing duplicates.
+
+  /**
+   * Body: { rarity, cards: [{ cardId, count }], setId?, gems? } — melts these duplicates of `rarity` (at most
+   * the cards of its recipe; gems pay for the missing ones) into a random card of the next rarity from
+   * `setId` (All-Stars by default). `gems`: the gems the player saw; if it changed since → 409 price_changed.
+   * Returns { card (with isNew), gems, player }.
+   */
+  router.post('/api/players/:playerId/forge', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
+    const rarity = oneOf(body.rarity, forgeRarities, 'rarity');
+    if (!rarity) throw new HttpError(400, `"rarity" must be one of: ${forgeRarities.join(', ')}`);
+    const set = catalog.getSet(oneOf(body.setId, setIds, 'setId') ?? 'all-stars');
+    const to = nextRarity(rarity);
+    const pool = set.byRarity[to];
+    if (!pool.length) throw new HttpError(409, `The ${set.name} booster has no ${to} card`, { setId: set.id, rarity: to }, 'forge_no_card');
+    const needed = settings.forge.cards[rarity];
+    if (!Array.isArray(body.cards) || body.cards.length > needed) {
+      throw new HttpError(400, `"cards" must be a list of { cardId, count }: ${needed} cards at most`);
+    }
+    const counts = new Map();
+    for (const item of body.cards) {
+      const cardId = knownCard(item?.cardId);
+      if (catalog.getCard(cardId).rarity !== rarity) throw new HttpError(400, `"${cardId}" is not a ${rarity} card`, { cardId }, 'forge_wrong_rarity');
+      counts.set(cardId, (counts.get(cardId) ?? 0) + intParam(item.count, { name: 'count', min: 1, max: needed, fallback: 1 }));
+    }
+    const given = [...counts.values()].reduce((sum, count) => sum + count, 0);
+    if (given > needed) throw new HttpError(400, `This recipe takes ${needed} cards`, { needed }, 'forge_too_many');
+    const perCard = settings.forge.gems[rarity];
+    if (given < needed && perCard === 0) {
+      throw new HttpError(409, `This recipe takes ${needed} ${rarity} cards: gems cannot replace them`, { needed }, 'forge_need_cards');
+    }
+    const gems = (needed - given) * perCard;
+    checkPrice(body.gems, gems, 'gems', 'forge');
+    const notEnough = (cardId, spare) =>
+      new HttpError(409, `Not enough duplicates of "${cardId}" to forge`, { cardId, spare }, 'not_enough_copies');
+    const [spare, wallet] = await Promise.all([spareCopies(player.id), store.wallet(player.id)]);
+    for (const [cardId, count] of counts) if ((spare[cardId] ?? 0) < count) throw notEnough(cardId, spare[cardId] ?? 0);
+    if (wallet.gems < gems) throw noGems(gems, wallet.gems);
+
+    // The database checks the duplicates and the gems again, in the same transaction as the forge.
+    const card = pool[Math.floor(rng() * pool.length)];
+    const cards = [...counts].map(([cardId, count]) => ({ cardId, count }));
+    const result = await store.forgeCard(player.id, { rarity, cards, cardId: card.id, gems });
+    if (result.error === 'not_enough') throw notEnough(result.id, (await spareCopies(player.id))[result.id] ?? 0);
+    if (result.error === 'no_gems') throw noGems(gems, result.gems);
+    if (result.error) throw new HttpError(404, 'Player not found');
+    return reply(201, { card: { ...card, isNew: result.isNew }, gems: result.gems, player: await profile(player) });
+  });
+
+  // ── Wheel of Fortune ───────────────────────────────────────────────────────
+  // A spin costs settings.wheel.price Kira (or its price in gems) and wins one of the prizes of
+  // WHEEL with the chances of settings.wheel: boosters opened at once, Super Boosters for the
+  // shelf, or a random card of a rarity.
+
+  /**
+   * Body: { currency?, price? } — spins the wheel, paid with Kira ('kira', by default) or gems ('gems').
+   * `price`: the price the player saw, in that currency; if an admin changed it since → 409 price_changed.
+   * Returns { prize: { id, type, setId?, count?, rarity?, chance }, boosters: the boosters won (opened),
+   * card: the card won (with isNew) or null, superBoosters: won, kira, gems, player }.
+   */
+  router.post('/api/players/:playerId/wheel', async ({ req, params, body }) => {
+    const player = await requireSelf(req, params.playerId);
+    const currency = oneOf(body.currency, CURRENCIES, 'currency') ?? 'kira';
+    const withGems = currency === 'gems';
+    const price = withGems ? gemsFor(settings.wheel.price) : settings.wheel.price;
+    checkPrice(body.price, price, currency, 'spin');
+    const noKira = (kira) => new HttpError(409, `Not enough Kira: a spin costs ${price}, you have ${kira}`, { price, kira }, 'not_enough_kira');
+    const prizes = wheelPrizes();
+    if (!prizes.some((each) => each.weight > 0)) throw new HttpError(409, 'The wheel has no prize to win', null, 'wheel_empty');
+    const wallet = await store.wallet(player.id);
+    if (withGems && wallet.gems < price) throw noGems(price, wallet.gems);
+    if (!withGems && wallet.kira < price) throw noKira(wallet.kira);
+
+    const prize = prizes.find((each) => each.id === weightedPick(Object.fromEntries(prizes.map((each) => [each.id, each.weight])), rng));
+    const won = { prize: prize.id, kira: withGems ? 0 : price, gems: withGems ? price : 0 };
+    let card = null;
+    if (prize.type === 'boosters') {
+      const set = catalog.getSet(prize.setId);
+      won.setId = set.id;
+      won.boosters = Array.from({ length: prize.count }, () => openBooster(set, { rng, rules: boosterRules() }));
+    } else if (prize.type === 'super') {
+      won.superBoosters = prize.count;
+    } else {
+      const pool = mainByRarity[prize.rarity];
+      card = pool[Math.floor(rng() * pool.length)];
+      won.cardId = card.id;
+    }
+    // The database checks the Kira (or gems) again, in the same transaction as the prize.
+    const result = await store.spinWheel(player.id, won);
+    if (result.error === 'no_kira') throw noKira(result.kira);
+    if (result.error === 'no_gems') throw noGems(price, result.gems);
+    if (result.error) throw new HttpError(404, 'Player not found');
+    return reply(201, {
+      prize: publicPrize(prize),
+      boosters: result.boosters.map(openedBooster),
+      card: card && { ...card, isNew: result.isNew },
+      superBoosters: won.superBoosters ?? 0,
+      kira: result.kira,
+      gems: result.gems,
+      player: await profile(player),
+    });
+  });
+
   // ── Admin panel ────────────────────────────────────────────────────────────
   // Only for the players whose is_admin is set in the database. The settings
   // apply at once; the tools on players never touch another admin.
@@ -947,7 +1080,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
     return { settings, defaults, oddsTotal: ODDS_TOTAL };
   });
 
-  /** Body: the sections to change, each whole: { booster, superBooster, market, gems, daily, weekly, events }. */
+  /** Body: the sections to change, each whole: { booster, superBooster, market, gems, daily, weekly, events, forge, wheel }. */
   router.patch('/api/admin/settings', async ({ req, body }) => {
     const admin = await requireAdmin(req);
     const next = mergeSettings(settings, body, settingsContext());
@@ -1029,6 +1162,7 @@ export function createApi({ catalog, store, rng = Math.random, secureCookies = f
         openedAt: booster.openedAt,
         kira: booster.kira ?? null,
         gems: booster.gems ?? null,
+        wheel: booster.wheel === true,
         cards: booster.pulls.map((pull) => {
           const card = catalog.getCard(pull.cardId);
           return {
