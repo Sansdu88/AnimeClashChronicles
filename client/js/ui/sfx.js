@@ -276,6 +276,14 @@ const SOUNDS = {
     arpeggio([392, 523, 659, 784], { duration: 0.22, type: 'square', gain: 0.045, step: 0.11 });
     [523, 659, 784, 1047].forEach((note) => tone(note, { start: 0.48, duration: 1, type: 'triangle', gain: 0.07 }));
   },
+  // The Forge: the hammer strikes the anvil (a thud, then the metal rings).
+  clang: () => {
+    noise({ duration: 0.12, gain: 0.22, from: 8000, to: 2500 });
+    tone(95, { duration: 0.2, gain: 0.3, slideTo: 50 });
+    [1250, 1830, 2610].forEach((note, i) => tone(note, { duration: 0.9 - i * 0.2, type: 'triangle', gain: 0.05 }));
+  },
+  // The Wheel of Fortune: the pointer clicks over a peg.
+  tick: () => tone(2300, { duration: 0.025, type: 'square', gain: 0.025 }),
 
   // ── Halloween (THEMES.halloween uses them too) ──
   // A ghost's wail: up, then a long fall, over a breath of wind.

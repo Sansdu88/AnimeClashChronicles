@@ -55,7 +55,8 @@ function historyHTML(boosters) {
     ${boosters.map((booster) => html`<li class="history__item">
       <div class="history__head">
         <strong>${setName(booster.setId)}${booster.kira ? html` <span class="history__price" title="${t('stats.bought')}">${kiraHTML(booster.kira)}</span>` : ''}${
-          booster.gems ? html` <span class="history__price" title="${t('stats.boughtGems')}">${gemsHTML(booster.gems)}</span>` : ''}</strong>
+          booster.gems ? html` <span class="history__price" title="${t('stats.boughtGems')}">${gemsHTML(booster.gems)}</span>` : ''}${
+          booster.wheel ? html` <span class="history__price" title="${t('stats.wonWheel')}" aria-label="${t('stats.wonWheel')}">🎡</span>` : ''}</strong>
         <time datetime="${booster.openedAt}" title="${fmt.date(booster.openedAt)}">${fmt.timeAgo(booster.openedAt)}</time>
       </div>
       <div class="history__cards">

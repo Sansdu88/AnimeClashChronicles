@@ -14,6 +14,7 @@ import { renderOpen } from './views/open.js';
 import { openDailyPopup, renderDaily } from './views/daily.js';
 import { renderMarket } from './views/market.js';
 import { renderForge } from './views/forge.js';
+import { renderWheel } from './views/wheel.js';
 import { renderAdmin } from './views/admin.js';
 import { GEM_SVG } from './ui/gems.js';
 import { rollNumber } from './ui/kira.js';
@@ -31,8 +32,10 @@ const ROUTES = {
   open: renderOpen,
   daily: renderDaily,
   market: renderMarket,
-  // Announced for a future update.
+  // Duplicates melted into a card of the next rarity.
   forge: renderForge,
+  // The Wheel of Fortune: Kira (or gems) for boosters, Super Boosters or cards.
+  wheel: renderWheel,
   // Shown in the menu to admins only (the server checks every admin call).
   admin: renderAdmin,
   collection: renderCollection,
@@ -336,7 +339,7 @@ function updateHeader() {
 // other ones and the settings of the header (its buttons click the header's).
 
 const sheet = $('#more-sheet');
-const MORE_ROUTES = ['achievements', 'forge', 'friends', 'trades', 'stats', 'profile', 'rules', 'admin'];
+const MORE_ROUTES = ['achievements', 'forge', 'wheel', 'friends', 'trades', 'stats', 'profile', 'rules', 'admin'];
 let removeSheetLayer = null;
 
 function openSheet() {

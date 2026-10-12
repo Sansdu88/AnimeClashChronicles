@@ -1,7 +1,7 @@
 /**
  * Data storage in Supabase (PostgreSQL): the card catalog, and the players'
  * accounts, sessions, boosters, daily rewards, Kira and gems, collections, achievements,
- * gifts, friends and the game settings. It talks to the Supabase REST API (PostgREST) with
+ * gifts, forges, spins of the wheel, friends and the game settings. It talks to the Supabase REST API (PostgREST) with
  * fetch and the secret key from .env, so the project has no dependency.
  *
  * The tables are created by the SQL files of supabase/migrations/.
@@ -330,11 +330,11 @@ export function createSupabaseStore({ url, secretKey }) {
 
     /**
      * Latest boosters first: [{ id, setId, openedAt, kira, gems (paid at the market, or null),
-     * pulls: [{ cardId, rarity, isNew }] }]
+     * wheel (won at the Wheel of Fortune), pulls: [{ cardId, rarity, isNew }] }]
      */
     async history(playerId, limit) {
       const rows = await get(
-        `boosters?select=id,set_id,opened_at,kira,gems,pulls(position,card_id,rarity,is_new)&player_id=${eq(playerId)}` +
+        `boosters?select=id,set_id,opened_at,kira,gems,spin_id,pulls(position,card_id,rarity,is_new)&player_id=${eq(playerId)}` +
           `&order=id.desc&limit=${Number(limit)}&pulls.order=position.asc`,
       );
       return rows.map((booster) => ({
@@ -343,6 +343,7 @@ export function createSupabaseStore({ url, secretKey }) {
         openedAt: booster.opened_at,
         kira: booster.kira,
         gems: booster.gems,
+        wheel: booster.spin_id != null,
         pulls: booster.pulls.map((pull) => ({ cardId: pull.card_id, rarity: pull.rarity, isNew: pull.is_new })),
       }));
     },
@@ -443,6 +444,59 @@ export function createSupabaseStore({ url, secretKey }) {
       return request('POST', 'rpc/buy_shop_card_with_gems', {
         body: { p_player_id: playerId, p_day: day, p_card_id: cardId, p_price: price },
       });
+    },
+
+    // ── Forge & Wheel of Fortune ─────────────────────────────────────────────
+
+    /**
+     * Melts duplicates into a card, in one transaction (function forge_card): `cards` = [{ cardId, count }]
+     * of `rarity` (one entry per card), `cardId` the card forged, `gems` paid for the missing cards.
+     * Returns { gems: new balance, isNew }, or { error: 'not_enough', id } when a card has fewer duplicates,
+     * or { error: 'no_gems', gems }.
+     */
+    async forgeCard(playerId, { rarity, cards, cardId, gems }) {
+      return request('POST', 'rpc/forge_card', {
+        body: {
+          p_player_id: playerId,
+          p_rarity: rarity,
+          p_cards: cards.map(({ cardId: id, count }) => ({ id, count })),
+          p_card_id: cardId,
+          p_gems: gems,
+        },
+      });
+    },
+
+    /**
+     * Pays a spin of the wheel (`kira` or `gems`) and gives its prize, in one transaction (function spin_wheel):
+     * `boosters` of `setId` (lists of their cards), a card (`cardId`) or `superBoosters`. Returns
+     * { kira, gems: new balances, boosters: the saved boosters (like openBoosters), isNew: the card's (or null) },
+     * or { error: 'no_kira', kira } / { error: 'no_gems', gems }.
+     */
+    async spinWheel(playerId, { prize, kira, gems, setId = null, boosters = [], cardId = null, superBoosters = 0 }) {
+      const result = await request('POST', 'rpc/spin_wheel', {
+        body: {
+          p_player_id: playerId,
+          p_prize: prize,
+          p_kira: kira,
+          p_gems: gems,
+          p_set_id: setId,
+          p_boosters: boosters.map((cards) => cards.map((card) => ({ id: card.id, rarity: card.rarity }))),
+          p_card_id: cardId,
+          p_super: superBoosters,
+        },
+      });
+      if (result.error) return result;
+      return {
+        kira: result.kira,
+        gems: result.gems,
+        isNew: result.isNew,
+        boosters: result.boosters.map((booster, i) => ({
+          id: booster.id,
+          setId,
+          openedAt: booster.openedAt,
+          pulls: boosters[i].map((card, j) => ({ card, isNew: booster.pulls[j].isNew })),
+        })),
+      };
     },
 
     // ── Achievements & gifts ─────────────────────────────────────────────────

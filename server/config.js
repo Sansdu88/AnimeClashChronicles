@@ -85,6 +85,41 @@ export const GEMS = { kiraPerGem: 50 };
 /** Gems price of something that costs `kira` Kira (0 stays free). */
 export const gemPrice = (kira, kiraPerGem = GEMS.kiraPerGem) => (kira > 0 ? Math.max(1, Math.ceil(kira / kiraPerGem)) : 0);
 
+/**
+ * The Forge: duplicates of one rarity are melted into a random card of the next one
+ * (N → R → SR → SSR → UR → REV). A recipe takes `cards[rarity]` duplicates (a player keeps one
+ * copy of each card, and the copies promised in open trades); gems stand in for the missing ones,
+ * `gems[rarity]` each (0: they cannot). The forged card is a card of the main collection, from the
+ * booster set the player chooses. Both are changed from the admin panel.
+ */
+export const FORGE = {
+  cards: { N: 5, R: 5, SR: 5, SSR: 5, UR: 5 },
+  gems: { N: 1, R: 2, SR: 5, SSR: 12, UR: 30 },
+};
+
+/** The rarity a recipe of the Forge gives: the next one (null for the rarest). */
+export const nextRarity = (rarity) => RARITY_IDS[RARITY_IDS.indexOf(rarity) + 1] ?? null;
+
+/**
+ * The Wheel of Fortune: a spin costs `price` Kira (or its price in gems, see GEMS) and wins one of
+ * the `prizes`, `weight` % of the time: boosters of `setId` opened at once ('boosters'), Super
+ * Boosters that wait on the shelf ('super'), or a random card of `rarity` of the main collection
+ * ('card'). The price and the chances are changed from the admin panel. The prizes are the slices
+ * of the wheel, in this order, each as wide as its chance.
+ */
+export const WHEEL = {
+  price: 1000,
+  prizes: [
+    { id: 'boosters-5', type: 'boosters', setId: 'all-stars', count: 5, weight: 30 },
+    { id: 'card-ssr', type: 'card', rarity: 'SSR', weight: 22 },
+    { id: 'super-1', type: 'super', count: 1, weight: 14 },
+    { id: 'boosters-10', type: 'boosters', setId: 'all-stars', count: 10, weight: 18 },
+    { id: 'card-ur', type: 'card', rarity: 'UR', weight: 9 },
+    { id: 'super-3', type: 'super', count: 3, weight: 4 },
+    { id: 'card-rev', type: 'card', rarity: 'REV', weight: 3 },
+  ],
+};
+
 /** Gifts, each claimed once per player from a popup at their next visit: `gems` given. */
 export const GIFTS = {
   'gems-launch': { gems: 50 },

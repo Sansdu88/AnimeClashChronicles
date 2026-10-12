@@ -247,22 +247,6 @@ code {
   margin-left: auto;
 }
 
-/* "Coming soon" (the Forge): a small sign after its name in the menu, on the corner of its tile in the "More" sheet. */
-.nav a[data-route='forge'] > [data-i18n]::after {
-  content: '🚧';
-  margin-left: 4px;
-  font-size: 0.7em;
-  vertical-align: 0.2em;
-}
-
-.nav__soon {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  font-size: 12px;
-  line-height: 1;
-}
-
 /* The badges of the achievements, after a player's name (views/achievements.js). */
 .badges {
   display: inline-flex;
@@ -1760,6 +1744,7 @@ body.has-tour {
   }
 
   .nav a[data-route='forge'],
+  .nav a[data-route='wheel'],
   .nav a[data-route='achievements'],
   .nav a[data-route='friends'],
   .nav a[data-route='trades'],

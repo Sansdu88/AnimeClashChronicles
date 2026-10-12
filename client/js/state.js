@@ -309,6 +309,40 @@ export async function buyShopCard(cardId, price, currency = 'kira') {
   return result;
 }
 
+// ── Forge & Wheel of Fortune ─────────────────────────────────────────────────
+
+/**
+ * Melts duplicates of `rarity` (`cards` = [{ cardId, count }]) into a random card of the next rarity
+ * from the booster set `setId`; `gems`: the gems shown for the missing duplicates (if an admin changed
+ * the recipe, the server refuses: price_changed). Returns the card forged (with isNew).
+ */
+export async function forgeCard({ rarity, cards, setId, gems }) {
+  const result = await api(playerPath('/forge'), { method: 'POST', body: { rarity, cards, setId, gems } });
+  for (const { cardId, count } of cards) {
+    const entry = state.owned.get(cardId);
+    if (entry) entry.count -= count;
+  }
+  setPlayer(result.player);
+  addCopy(result.card.id, new Date().toISOString());
+  emit();
+  return result.card;
+}
+
+/**
+ * Spins the Wheel of Fortune, paid with Kira or gems (`currency`) at the price shown (if an admin
+ * changed it, the server refuses: price_changed). Returns { prize, boosters, card, superBoosters }:
+ * the boosters won are opened already, and the card won is in the collection.
+ */
+export async function spinWheel(currency = 'kira') {
+  const { price, gemPrice } = state.meta.wheel;
+  const result = await api(playerPath('/wheel'), { method: 'POST', body: { currency, price: currency === 'gems' ? gemPrice : price } });
+  setPlayer(result.player);
+  for (const booster of result.boosters) for (const card of booster.cards) addCopy(card.id, booster.openedAt);
+  if (result.card) addCopy(result.card.id, new Date().toISOString());
+  emit();
+  return result;
+}
+
 /** How many boosters of `setId` the player's Kira (or gems: `currency`) buys at once (up to the most boosters per request). */
 export const affordable = (setId, currency = 'kira') =>
   Math.min(Math.floor(state.player[currency] / priceIn(currency, setId)), state.meta.booster.maxPerRequest);
@@ -404,7 +438,7 @@ export async function syncCollection() {
 /** { settings, defaults }: the game settings (see server/settings.js). */
 export const fetchAdminSettings = () => api('/admin/settings');
 
-/** Changes some sections of the settings ({ booster, superBooster, market, daily }); the game follows at once. */
+/** Changes some sections of the settings ({ booster, superBooster, market, daily, forge, wheel… }); the game follows at once. */
 export async function saveAdminSettings(sections) {
   const result = await api('/admin/settings', { method: 'PATCH', body: sections });
   await Promise.all([refreshMeta(), refreshDaily()]);

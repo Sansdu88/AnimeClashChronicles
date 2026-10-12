@@ -4,7 +4,7 @@
 import { BOOSTER, DAILY, RARITY_IDS, RARITY_RANK, SCORE, SHOP, STOCKS } from './config.js';
 
 /** Picks a key of `weights` ({ key: relativeWeight }) at random. */
-function weightedPick(weights, rng = Math.random) {
+export function weightedPick(weights, rng = Math.random) {
   const entries = Object.entries(weights).filter(([, weight]) => weight > 0);
   if (entries.length === 0) throw new Error('Nothing to pick from');
   const total = entries.reduce((sum, [, weight]) => sum + weight, 0);
